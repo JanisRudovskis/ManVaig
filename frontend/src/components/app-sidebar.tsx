@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, PlusCircle, Bell, LogIn } from "lucide-react";
+import { Home, Search, PlusCircle, Bell, LogIn, PanelLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
@@ -15,6 +15,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const navItems = [
@@ -23,6 +24,19 @@ const navItems = [
   { label: "Sell", href: "/sell", icon: PlusCircle },
   { label: "Notifications", href: "/notifications", icon: Bell },
 ];
+
+function SidebarCollapseButton() {
+  const { toggleSidebar, state } = useSidebar();
+  return (
+    <SidebarMenuButton
+      tooltip={state === "expanded" ? "Collapse" : "Expand"}
+      onClick={toggleSidebar}
+    >
+      <PanelLeft />
+      <span>{state === "expanded" ? "Collapse" : "Expand"}</span>
+    </SidebarMenuButton>
+  );
+}
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -74,6 +88,9 @@ export function AppSidebar() {
               <LogIn />
               <span>Login</span>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarCollapseButton />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
