@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManVaig — Roadmap</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2026;
+    --border: #2a2d35;
+    --text: #e8eaf0;
+    --muted: #6b7080;
+    --accent: #7c6af7;
+    --accent-dim: #3d3580;
+    --done: #2dd4a0;
+    --done-dim: #143d2e;
+    --inprogress: #f5a623;
+    --inprogress-dim: #3d2a0a;
+    --planned: #4a8fff;
+    --planned-dim: #0d2240;
+    --future: #6b7080;
+    --future-dim: #1e2026;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+
+  .header {
+    max-width: 860px;
+    margin: 0 auto 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .header-left h1 span { color: var(--accent); }
+
+  .header-left p {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    text-align: center;
+    min-width: 72px;
+  }
+
+  .stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .progress-bar-wrap {
+    max-width: 860px;
+    margin: 0 auto 48px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+
+  .progress-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-track {
+    background: var(--border);
+    border-radius: 99px;
+    height: 6px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--done));
+    transition: width 0.5s ease;
+  }
+
+  .phase {
+    max-width: 860px;
+    margin: 0 auto 32px;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .phase-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-weight: 500;
+  }
+
+  .phase-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .phase-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .tasks {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .task:last-child { border-bottom: none; }
+  .task:hover { background: var(--surface2); }
+
+  .task-check {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 11px;
+  }
+
+  .task[data-status="done"] .task-check {
+    background: var(--done);
+    border-color: var(--done);
+    color: #0e0f11;
+  }
+
+  .task[data-status="progress"] .task-check {
+    background: var(--inprogress-dim);
+    border-color: var(--inprogress);
+    color: var(--inprogress);
+  }
+
+  .task[data-status="planned"] .task-check {
+    border-color: var(--planned);
+  }
+
+  .task[data-status="future"] .task-check {
+    border-color: var(--future);
+    opacity: 0.5;
+  }
+
+  .task-text {
+    font-size: 14px;
+    font-weight: 400;
+    flex: 1;
+    line-height: 1.4;
+    transition: color 0.15s;
+  }
+
+  .task[data-status="done"] .task-text {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--done);
+  }
+
+  .task[data-status="future"] .task-text {
+    color: var(--muted);
+  }
+
+  .task-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .badge-done    { background: var(--done-dim);       color: var(--done);       }
+  .badge-progress{ background: var(--inprogress-dim); color: var(--inprogress); }
+  .badge-planned { background: var(--planned-dim);    color: var(--planned);    }
+  .badge-future  { background: var(--future-dim);     color: var(--future);     border: 1px solid var(--border); }
+
+  .legend {
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Man<span>Vaig</span> Roadmap</h1>
+    <p>// click any task to toggle status · last updated 2026-03-17</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
+    <div class="stat"><div class="stat-num" id="count-progress" style="color:var(--inprogress)">0</div><div class="stat-label">Active</div></div>
+    <div class="stat"><div class="stat-num" id="count-planned" style="color:var(--planned)">0</div><div class="stat-label">Planned</div></div>
+    <div class="stat"><div class="stat-num" id="count-future" style="color:var(--future)">0</div><div class="stat-label">Future</div></div>
+  </div>
+</div>
+
+<div class="progress-bar-wrap">
+  <div class="progress-label">
+    <span>MVP Progress</span>
+    <span id="progress-pct">0%</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- PHASE 1 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 01</span>
+    <span class="phase-title">Project scaffolding</span>
+    <span class="phase-count" id="ph1-count"></span>
+  </div>
+  <div class="tasks" id="ph1">
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Create GitHub repo + folder structure</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Init Next.js project (TypeScript + Tailwind)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Init ASP.NET Core Web API project (C#)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Set up PostgreSQL + EF Core, first migration</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Railway project setup + deploy pipeline</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Connect frontend to API (env vars, CORS)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="1" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Serilog setup → Railway logs</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 2 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 02</span>
+    <span class="phase-title">Authentication</span>
+    <span class="phase-count" id="ph2-count"></span>
+  </div>
+  <div class="tasks" id="ph2">
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">ASP.NET Identity setup + User model</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Register endpoint (email + password)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Login endpoint + JWT token generation</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Auth middleware + protected routes</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Register / Login pages (Next.js)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">User profile page (view + edit)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="2" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">OAuth — Google / Facebook login</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="2" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Email verification on registration</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 3 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 03</span>
+    <span class="phase-title">Shop management</span>
+    <span class="phase-count" id="ph3-count"></span>
+  </div>
+  <div class="tasks" id="ph3">
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Shop model + migration (1 per user)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Create / edit shop API endpoints</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Shop banner image upload (Cloudinary)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Public shop page (Next.js, SSR)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Shop dashboard (owner view)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Shop contact details (WhatsApp / email / Facebook / other — min 1 required)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="3" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Shop ratings and reviews</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="3" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Multiple shops per user</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 4 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 04</span>
+    <span class="phase-title">Item listings</span>
+    <span class="phase-count" id="ph4-count"></span>
+  </div>
+  <div class="tasks" id="ph4">
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item + Category + Tag models + migrations</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Seed starter categories (Electronics, Clothing, etc.)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Add / edit / delete item API endpoints</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item image upload — max 5, compressed (Cloudinary)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item visibility enum (Public / RegisteredOnly / LinkOnly / Private)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Public item detail page (Next.js, SSR)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item status flow: Available → Under Offer → Sold</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">ItemImage table — sort order, primary image, per-image delete</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Optional minimum offer price per item</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item location (free text) + can ship flag</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Allow anonymous offers toggle per item (default off)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Unlock RegisteredOnly / LinkOnly / Private in UI</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Advanced filters (condition, price range, location)</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 5 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 05</span>
+    <span class="phase-title">Offer system</span>
+    <span class="phase-count" id="ph5-count"></span>
+  </div>
+  <div class="tasks" id="ph5">
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Offer model + migration (with Currency field, default EUR)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Make offer API endpoint (price + optional message)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Anonymous offer — popup collects phone / email / messenger (min 1)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">API guard — reject anonymous offer if item has AllowAnonymousOffers = false</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Enforce minimum offer price if set by seller</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Block seller from making offer on own item (API guard)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">New offer from same buyer replaces previous (old auto-declined)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Accept / decline / counter offer API endpoints</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Counter offer → buyer can accept or decline (CounterPending status)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">On accept → all other pending offers silently declined</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">On item deletion → all pending offers cancelled</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Post-acceptance: buyer sees seller contact details + item ID</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Offer history view for item owner</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Make offer UI (item detail page)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Buyer offer status tracking dashboard</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Offer expiry — auto-decline after X days</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Built-in messaging system (replaces external contact in v2)</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Contact blacklist — block phone / email / messenger values per shop</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Fake offer / abuse detection + rate limiting</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 6 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 06</span>
+    <span class="phase-title">Notifications</span>
+    <span class="phase-count" id="ph6-count"></span>
+  </div>
+  <div class="tasks" id="ph6">
+    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Notification model + migration</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">SignalR hub setup in ASP.NET Core</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Real-time offer alert (push to shop owner)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Email on new offer received (Resend)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Notification bell UI (Next.js, mark as read)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="6" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Daily email digest</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 7 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 07</span>
+    <span class="phase-title">Homepage & Browse</span>
+    <span class="phase-count" id="ph7-count"></span>
+  </div>
+  <div class="tasks" id="ph7">
+    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Latest items feed (homepage, SSR)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Browse all items page (paginated)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Filter by category</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Search / filter by tags</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="future" data-phase="7" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Full-text search</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="7" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Trending / featured items algorithm</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 8 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-num">PHASE 08</span>
+    <span class="phase-title">Polish & launch prep</span>
+    <span class="phase-count" id="ph8-count"></span>
+  </div>
+  <div class="tasks" id="ph8">
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Loading states + skeleton screens</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Error handling (API errors, form validation)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Mobile-first responsive design — all pages work on 320px+</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Mobile navigation (bottom nav bar / hamburger menu)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Touch-friendly tap targets (min 44px on all interactive elements)</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Image upload works on mobile camera</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">SEO meta tags on item + shop pages</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Domain setup + Vercel + Railway deploy</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--done)"></div> Done</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--inprogress)"></div> In progress</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--planned)"></div> Planned (MVP)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--future)"></div> Future</div>
+</div>
+
+<script>
+  const CYCLE = { planned: 'progress', progress: 'done', done: 'planned', future: 'future' };
+  const LABELS = { done: 'done', progress: 'in progress', planned: 'planned', future: 'future' };
+  const BADGE  = { done: 'badge-done', progress: 'badge-progress', planned: 'badge-planned', future: 'badge-future' };
+
+  function cycle(el) {
+    const cur = el.dataset.status;
+    const next = CYCLE[cur];
+    el.dataset.status = next;
+    const badge = el.querySelector('.task-badge');
+    badge.className = 'task-badge ' + BADGE[next];
+    badge.textContent = LABELS[next];
+    updateStats();
+  }
+
+  function updateStats() {
+    const all = document.querySelectorAll('.task');
+    let done = 0, progress = 0, planned = 0, future = 0, mvpTotal = 0, mvpDone = 0;
+
+    all.forEach(t => {
+      const s = t.dataset.status;
+      if (s === 'done')     done++;
+      if (s === 'progress') progress++;
+      if (s === 'planned')  planned++;
+      if (s === 'future')   future++;
+      if (t.dataset.mvp === '1') {
+        mvpTotal++;
+        if (s === 'done') mvpDone++;
+      }
+    });
+
+    document.getElementById('count-done').textContent     = done;
+    document.getElementById('count-progress').textContent = progress;
+    document.getElementById('count-planned').textContent  = planned;
+    document.getElementById('count-future').textContent   = future;
+
+    const pct = mvpTotal ? Math.round((mvpDone / mvpTotal) * 100) : 0;
+    document.getElementById('progress-pct').textContent   = pct + '%';
+    document.getElementById('progress-fill').style.width  = pct + '%';
+
+    // per-phase counts
+    for (let i = 1; i <= 8; i++) {
+      const tasks = document.querySelectorAll(`.task[data-phase="${i}"]`);
+      const pDone = [...tasks].filter(t => t.dataset.status === 'done').length;
+      const pMvp  = [...tasks].filter(t => t.dataset.mvp === '1').length;
+      const el = document.getElementById(`ph${i}-count`);
+      if (el) el.textContent = `${pDone} / ${pMvp} MVP tasks done`;
+    }
+  }
+
+  updateStats();
+</script>
+</body>
+</html>

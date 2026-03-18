@@ -1,0 +1,25 @@
+# === Node / Next.js ===
+node_modules/
+.next/
+out/
+frontend/.env*.local
+
+# === .NET ===
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+backend/ManVaig.Api/appsettings.*.json
+!backend/ManVaig.Api/appsettings.json
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === IDE ===
+.idea/
+*.swp
+*.swo
