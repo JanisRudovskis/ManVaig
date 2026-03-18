@@ -175,6 +175,7 @@ Shop
   - ContactEmail (string, nullable)
   - ContactFacebook (string, nullable)
   - ContactOther (string, nullable)    ← free text, e.g. "Telegram: @username"
+  - MaxItems (int, default 10)         ← free tier limit, enforced at API level
   - CreatedAt
   NOTE: FK is one-to-many in DB to allow future multi-shop expansion
   NOTE: at least one contact method required at shop creation
@@ -288,6 +289,9 @@ Notification
 | 30 | Anonymous offers supported (seller opt-in per item) | Lower barrier to buy = more offers; seller controls exposure | 2026-03-17 |
 | 31 | Anonymous offer contact stored as snapshot on Offer | No account needed; contact (phone/email/messenger) captured at offer time, visible to seller immediately | 2026-03-17 |
 | 32 | Contact blacklist deferred to post-v1 | Blacklist targets contact values not accounts; noted for future, not blocking v1 | 2026-03-17 |
+| 33 | Free tier with item limit: 10 items per shop (v1) | No payments in v1; MaxItems on Shop enforced at API level. Will reduce to 5 when paid plans are added. | 2026-03-18 |
+| 34 | Monetization deferred to post-v1 | Tiered plans (Basic/Pro) likely model; need real users before deciding pricing. DB ready with MaxItems field. | 2026-03-18 |
+| 35 | UI/UX pages designed separately | Every frontend page gets its own design discussion before implementation — no rushed UI | 2026-03-18 |
 
 ---
 
