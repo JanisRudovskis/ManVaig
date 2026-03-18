@@ -293,7 +293,7 @@ Notification
 
 ## 7. Build Order (MVP)
 
-1. Project scaffolding — repo structure, Next.js init, ASP.NET Core init, DB connection
+1. ✅ Project scaffolding — repo structure, Next.js init, ASP.NET Core init, DB connection
 2. Auth — register, login, JWT
 3. Shop — create, edit, public page
 4. Items — add, edit, delete, public item page, categories + tags
