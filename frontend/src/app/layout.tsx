@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/app-layout";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -27,8 +27,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider>

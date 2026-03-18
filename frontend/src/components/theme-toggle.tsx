@@ -14,7 +14,7 @@ export function ThemeToggle() {
 
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <Button variant="ghost" size="icon" disabled />;
+  if (!mounted) return <Button variant="ghost" size="icon" disabled aria-label="Theme" />;
 
   const current = (theme ?? "system") as (typeof themes)[number];
   const next = themes[(themes.indexOf(current) + 1) % themes.length];
