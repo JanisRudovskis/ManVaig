@@ -291,27 +291,14 @@ Notification
 
 ---
 
-## 7. Build Order (MVP)
-
-1. ✅ Project scaffolding — repo structure, Next.js init, ASP.NET Core init, DB connection
-2. Auth — register, login, JWT
-3. Shop — create, edit, public page
-4. Items — add, edit, delete, public item page, categories + tags
-5. Offers — make offer, receive/manage offers
-6. Notifications — SignalR real-time + email
-7. Homepage + Browse — listings feed, category filter, tag search
-8. Polish — loading states, error handling, responsive design (mobile-first throughout)
-
----
-
-## 8. Open Questions
+## 7. Open Questions
 
 - [ ] Confirm or adjust the starter root category list
 - [ ] Target market / geography? (Latvia? Europe? Global?)
 - [ ] Public platform name / domain?
 - [ ] Frontend state management — decide at Phase 2 (Zustand + TanStack Query vs simpler approach)
 
-## 9. Resolved Decisions (from open questions)
+## 8. Resolved Decisions (from open questions)
 
 - [x] Tags: autocomplete from existing + allow new ones. Normalized on save (lowercase, trimmed). Future: admin tag merge tool.
 - [x] Category structure: tree (adjacency list), DB-managed, UI max 3 levels
