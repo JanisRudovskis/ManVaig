@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-03-17 (rev 8 — anonymous offer flow added)
-> **Status:** 🟢 Planning complete — ready for Phase 1 scaffolding
+> **Last updated:** 2026-03-18 (rev 9 — i18n, theme, monetization, report feature)
+> **Status:** 🟢 Phase 1 done, Phase 2 backend done, UI foundation in progress
 
 ---
 
@@ -103,9 +103,22 @@
 - 💡 Email digest
 - 💡 Push notifications
 
+### UI Foundation
+- ✅ Collapsible sidebar (Claude-style, shadcn/ui)
+- ✅ Dark / light theme toggle (2-state, respects OS default)
+- ✅ Inter font, warm dark theme
+- ✅ i18n — English + Latvian (next-intl, cookie-based, no URL prefixes)
+- ✅ Language switcher (popover dropdown, scalable)
+
+### Monetization
+- Free tier: 10 items per shop (reduced to 5 when paid plans launch)
+- 💡 Paid plans (tiered: Basic / Pro) — details TBD when user base exists
+- No payment processing in v1
+
 ### Admin / Moderation
 - 💡 Admin panel
 - 💡 User ban system
+- 💡 Report shop / item (scam, misleading, inappropriate) — admin queue
 - 💡 Reported listings queue
 
 ### Payments — not in scope for v1

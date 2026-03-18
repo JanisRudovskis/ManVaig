@@ -277,6 +277,7 @@
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
     <p>// click any task to toggle status · last updated 2026-03-18</p>
+    <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -433,7 +434,12 @@
     </div>
     <div class="task" data-status="future" data-phase="3" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
-      <div class="task-text">Shop ratings and reviews</div>
+      <div class="task-text">Report shop / item (scam, misleading, inappropriate)</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="3" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Shop ratings and reviews (requires transaction verification)</div>
       <div class="task-badge badge-future">future</div>
     </div>
     <div class="task" data-status="future" data-phase="3" data-mvp="0" onclick="cycle(this)">
@@ -716,6 +722,31 @@
     <span class="phase-count" id="ph8-count"></span>
   </div>
   <div class="tasks" id="ph8">
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Collapsible sidebar layout (Claude-style, shadcn/ui)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Dark / light theme toggle (2-state, OS default)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Inter font + sidebar UI polish</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">i18n — English + Latvian (next-intl, cookie-based)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Language switcher (popover dropdown, scalable to more languages)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
     <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Loading states + skeleton screens</div>

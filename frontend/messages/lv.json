@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "home": "Sākums",
+    "browse": "Pārlūkot",
+    "sell": "Pārdot",
+    "notifications": "Paziņojumi",
+    "login": "Ielogoties"
+  },
+  "home": {
+    "title": "Laipni lūgti ManVaig",
+    "subtitle": "Lombardu tirgus — ievieto priekšmetus, saņem piedāvājumus."
+  },
+  "language": {
+    "switchTo": "Mainīt valodu"
+  },
+  "theme": {
+    "light": "Gaišs",
+    "dark": "Tumšs",
+    "switchTo": "Mainīt motīvu"
+  }
+}

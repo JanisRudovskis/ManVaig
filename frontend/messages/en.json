@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "home": "Home",
+    "browse": "Browse",
+    "sell": "Sell",
+    "notifications": "Notifications",
+    "login": "Login"
+  },
+  "home": {
+    "title": "Welcome to ManVaig",
+    "subtitle": "Pawn-shop marketplace — list items, receive offers."
+  },
+  "language": {
+    "switchTo": "Switch language"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "switchTo": "Switch theme"
+  }
+}

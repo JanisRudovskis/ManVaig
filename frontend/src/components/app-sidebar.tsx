@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Home, Search, PlusCircle, Bell, LogIn, PanelLeftClose, PanelLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -19,10 +21,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Browse", href: "/browse", icon: Search },
-  { label: "Sell", href: "/sell", icon: PlusCircle },
-  { label: "Notifications", href: "/notifications", icon: Bell },
+  { key: "home", href: "/", icon: Home },
+  { key: "browse", href: "/browse", icon: Search },
+  { key: "sell", href: "/sell", icon: PlusCircle },
+  { key: "notifications", href: "/notifications", icon: Bell },
 ];
 
 /* Match Claude's sidebar nav button style exactly:
@@ -64,6 +66,7 @@ function SidebarHeaderContent() {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const t = useTranslations("nav");
 
   return (
     <Sidebar collapsible="icon">
@@ -80,11 +83,11 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     className={navButtonClass}
                     isActive={pathname === item.href}
-                    tooltip={item.label}
+                    tooltip={t(item.key)}
                     render={<Link href={item.href} />}
                   >
                     <item.icon className="!size-4 shrink-0" aria-hidden="true" />
-                    <span>{item.label}</span>
+                    <span>{t(item.key)}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -100,9 +103,12 @@ export function AppSidebar() {
             <ThemeToggle />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton className={navButtonClass} tooltip="Login" render={<Link href="/login" />}>
+            <LanguageSwitcher />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton className={navButtonClass} tooltip={t("login")} render={<Link href="/login" />}>
               <LogIn className="!size-4 shrink-0" aria-hidden="true" />
-              <span>Login</span>
+              <span>{t("login")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

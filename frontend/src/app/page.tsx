@@ -1,9 +1,13 @@
-export default function Home() {
+import { getTranslations } from "next-intl/server";
+
+export default async function Home() {
+  const t = await getTranslations("home");
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-wrap-balance">Welcome to ManVaig</h1>
+      <h1 className="text-2xl font-bold text-wrap-balance">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">
-        Pawn-shop marketplace — list items, receive offers.
+        {t("subtitle")}
       </p>
     </div>
   );
