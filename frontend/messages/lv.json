@@ -4,7 +4,8 @@
     "browse": "Pārlūkot",
     "sell": "Pārdot",
     "notifications": "Paziņojumi",
-    "login": "Ielogoties"
+    "login": "Ielogoties",
+    "logout": "Izlogoties"
   },
   "home": {
     "title": "Laipni lūgti ManVaig",
@@ -17,5 +18,42 @@
     "light": "Gaišs",
     "dark": "Tumšs",
     "switchTo": "Mainīt motīvu"
+  },
+  "login": {
+    "title": "ManVaig",
+    "email": "E-pasts",
+    "password": "Parole",
+    "submit": "Ielogoties",
+    "orContinueWith": "vai turpināt ar",
+    "google": "Google",
+    "facebook": "Facebook",
+    "comingSoon": "drīzumā",
+    "noAccount": "Nav konta?",
+    "register": "Reģistrēties",
+    "errorInvalid": "Nepareizs e-pasts vai parole",
+    "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
+  },
+  "register": {
+    "title": "ManVaig",
+    "displayName": "Vārds",
+    "email": "E-pasts",
+    "password": "Parole",
+    "confirmPassword": "Apstiprināt paroli",
+    "submit": "Izveidot kontu",
+    "orContinueWith": "vai turpināt ar",
+    "google": "Google",
+    "facebook": "Facebook",
+    "comingSoon": "drīzumā",
+    "hasAccount": "Jau ir konts?",
+    "login": "Ielogoties",
+    "termsCheckbox": "Piekrītu <terms>Lietošanas noteikumiem</terms> un <privacy>Privātuma politikai</privacy>",
+    "required": "*",
+    "errorDisplayNameLength": "Vārdam jābūt vismaz 3 rakstzīmēm",
+    "errorEmailFormat": "Lūdzu, ievadiet derīgu e-pasta adresi",
+    "errorPasswordLength": "Parolei jābūt vismaz 8 rakstzīmēm",
+    "errorPasswordMismatch": "Paroles nesakrīt",
+    "errorTermsRequired": "Jums jāpiekrīt Lietošanas noteikumiem un Privātuma politikai",
+    "errorDuplicateEmail": "Konts ar šo e-pastu jau pastāv",
+    "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
   }
 }

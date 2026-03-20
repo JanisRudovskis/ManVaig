@@ -4,7 +4,8 @@
     "browse": "Browse",
     "sell": "Sell",
     "notifications": "Notifications",
-    "login": "Login"
+    "login": "Login",
+    "logout": "Logout"
   },
   "home": {
     "title": "Welcome to ManVaig",
@@ -17,5 +18,42 @@
     "light": "Light",
     "dark": "Dark",
     "switchTo": "Switch theme"
+  },
+  "login": {
+    "title": "ManVaig",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Log in",
+    "orContinueWith": "or continue with",
+    "google": "Google",
+    "facebook": "Facebook",
+    "comingSoon": "coming soon",
+    "noAccount": "Don't have an account?",
+    "register": "Register",
+    "errorInvalid": "Invalid email or password",
+    "errorGeneric": "Something went wrong. Please try again."
+  },
+  "register": {
+    "title": "ManVaig",
+    "displayName": "Display name",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "submit": "Create account",
+    "orContinueWith": "or continue with",
+    "google": "Google",
+    "facebook": "Facebook",
+    "comingSoon": "coming soon",
+    "hasAccount": "Already have an account?",
+    "login": "Log in",
+    "termsCheckbox": "I agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>",
+    "required": "*",
+    "errorDisplayNameLength": "Display name must be at least 3 characters",
+    "errorEmailFormat": "Please enter a valid email address",
+    "errorPasswordLength": "Password must be at least 8 characters",
+    "errorPasswordMismatch": "Passwords do not match",
+    "errorTermsRequired": "You must agree to the Terms of Service and Privacy Policy",
+    "errorDuplicateEmail": "An account with this email already exists",
+    "errorGeneric": "Something went wrong. Please try again."
   }
 }

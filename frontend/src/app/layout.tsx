@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/lib/auth-context";
 import { AppLayout } from "@/components/app-layout";
 import "./globals.css";
 
@@ -42,9 +43,11 @@ export default async function RootLayout({
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <TooltipProvider>
-              <AppLayout>
-                {children}
-              </AppLayout>
+              <AuthProvider>
+                <AppLayout>
+                  {children}
+                </AppLayout>
+              </AuthProvider>
             </TooltipProvider>
           </ThemeProvider>
         </NextIntlClientProvider>

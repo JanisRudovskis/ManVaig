@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-03-18 (rev 9 — i18n, theme, monetization, report feature)
-> **Status:** 🟢 Phase 1 done, Phase 2 backend done, UI foundation in progress
+> **Last updated:** 2026-03-20 (rev 10 — register page, login/register dialogs)
+> **Status:** 🟢 Phase 1 done, Phase 2 auth nearly complete (profile page remaining)
 
 ---
 
@@ -39,12 +39,13 @@
 > Legend: ✅ Done · 🔨 In progress · 🕐 Planned (MVP) · 💡 Future
 
 ### Authentication & Accounts
-- 🕐 User registration (email + password)
-- 🕐 User login / logout
-- 🕐 JWT token auth
-- 🕐 User profile page (avatar, bio, location)
+- ✅ User registration (email + password + display name, client-side validation, terms checkbox)
+- ✅ User login / logout (dedicated page + modal dialog for contextual login)
+- ✅ JWT token auth (7-day expiry, localStorage)
+- 🕐 User profile page (avatar, bio, location, communication platforms with predefined toggles)
 - 💡 OAuth (Google / Facebook login)
 - 💡 Email verification
+- 💡 Forgot password (reset via email)
 
 ### Shop Management
 - 🕐 Create a shop (name, description, banner image) — 1 shop per user

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, Search, PlusCircle, Bell, LogIn, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Home, Search, PlusCircle, Bell, LogIn, LogOut, PanelLeftClose, PanelLeft, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { useAuth } from "@/lib/auth-context";
 import {
   Sidebar,
   SidebarContent,
@@ -64,6 +65,39 @@ function SidebarHeaderContent() {
   );
 }
 
+function AuthButton() {
+  const t = useTranslations("nav");
+  const { isLoggedIn, user, logout } = useAuth();
+
+  if (isLoggedIn) {
+    return (
+      <>
+        <SidebarMenuItem>
+          <SidebarMenuButton className={navButtonClass} tooltip={user?.displayName ?? ""}>
+            <User className="!size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{user?.displayName}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton className={navButtonClass} tooltip={t("logout")} onClick={logout}>
+            <LogOut className="!size-4 shrink-0" aria-hidden="true" />
+            <span>{t("logout")}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </>
+    );
+  }
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton className={navButtonClass} tooltip={t("login")} render={<Link href="/login" />}>
+        <LogIn className="!size-4 shrink-0" aria-hidden="true" />
+        <span>{t("login")}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar() {
   const pathname = usePathname();
   const t = useTranslations("nav");
@@ -105,12 +139,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <LanguageSwitcher />
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton className={navButtonClass} tooltip={t("login")} render={<Link href="/login" />}>
-              <LogIn className="!size-4 shrink-0" aria-hidden="true" />
-              <span>{t("login")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <AuthButton />
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
