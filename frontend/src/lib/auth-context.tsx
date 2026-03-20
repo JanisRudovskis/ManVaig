@@ -26,7 +26,7 @@ function parseToken(token: string): User | null {
     return {
       userId: payload.sub ?? payload.nameid,
       email: payload.email,
-      displayName: payload.display_name ?? payload.email,
+      displayName: payload.displayName ?? payload.display_name ?? payload.email,
     };
   } catch {
     return null;

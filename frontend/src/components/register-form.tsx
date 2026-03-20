@@ -53,7 +53,7 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
       setUser(res);
       onSuccess?.(res);
     } catch (err) {
-      if (err instanceof Error && err.message.toLowerCase().includes("duplicate")) {
+      if (err instanceof Error && (err.message.toLowerCase().includes("duplicate") || err.message.toLowerCase().includes("already taken"))) {
         setError(t("errorDuplicateEmail"));
       } else {
         setError(t("errorGeneric"));
