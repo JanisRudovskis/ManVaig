@@ -26,6 +26,12 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!email.trim() || !password.trim()) {
+      setError(t("errorInvalid"));
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -53,10 +59,9 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
           <Label htmlFor="login-email">{t("email")}</Label>
           <Input
             id="login-email"
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
             autoComplete="email"
           />
         </div>
@@ -68,7 +73,6 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
             autoComplete="current-password"
           />
         </div>

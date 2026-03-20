@@ -54,6 +54,26 @@
     "errorPasswordMismatch": "Paroles nesakrīt",
     "errorTermsRequired": "Jums jāpiekrīt Lietošanas noteikumiem un Privātuma politikai",
     "errorDuplicateEmail": "Konts ar šo e-pastu jau pastāv",
+    "errorPasswordDigit": "Parolē jābūt vismaz vienam ciparam (0-9)",
+    "errorPasswordUppercase": "Parolē jābūt vismaz vienam lielajam burtam (A-Z)",
     "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
+  },
+  "emailConfirmation": {
+    "title": "Pārbaudiet savu e-pastu",
+    "description": "Mēs nosūtījām apstiprinājuma saiti. Noklikšķiniet uz tās, lai verificētu savu e-pastu un atbloķētu visas funkcijas.",
+    "descriptionWithEmail": "Mēs nosūtījām apstiprinājuma saiti uz {email}. Noklikšķiniet uz tās, lai verificētu savu e-pastu un atbloķētu visas funkcijas.",
+    "resend": "Atkārtoti nosūtīt apstiprinājuma e-pastu",
+    "resent": "Apstiprinājuma e-pasts nosūtīts!",
+    "resendError": "Nevarēja nosūtīt e-pastu. Lūdzu, mēģiniet vēlreiz.",
+    "checkSpam": "Neredzat? Pārbaudiet mēstuļu mapi.",
+    "confirming": "Apstiprinām jūsu e-pastu...",
+    "confirmed": "E-pasts apstiprināts!",
+    "confirmedDescription": "Jūsu e-pasts ir verificēts. Tagad jums ir pilna piekļuve visām funkcijām.",
+    "errorTitle": "Apstiprināšana neizdevās",
+    "errorDescription": "Apstiprinājuma saite ir nederīga vai ir beigusies tās derīguma termiņš. Lūdzu, pieprasiet jaunu.",
+    "goToLogin": "Doties uz ielogošanos",
+    "goHome": "Doties uz sākumlapu",
+    "inlineTitle": "E-pasts nav apstiprināts",
+    "inlineDescription": "Lūdzu, apstipriniet savu e-pastu, lai piekļūtu šai funkcijai."
   }
 }

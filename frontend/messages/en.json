@@ -54,6 +54,26 @@
     "errorPasswordMismatch": "Passwords do not match",
     "errorTermsRequired": "You must agree to the Terms of Service and Privacy Policy",
     "errorDuplicateEmail": "An account with this email already exists",
+    "errorPasswordDigit": "Password must contain at least one digit (0-9)",
+    "errorPasswordUppercase": "Password must contain at least one uppercase letter (A-Z)",
     "errorGeneric": "Something went wrong. Please try again."
+  },
+  "emailConfirmation": {
+    "title": "Check your email",
+    "description": "We sent you a confirmation link. Click it to verify your email and unlock all features.",
+    "descriptionWithEmail": "We sent a confirmation link to {email}. Click it to verify your email and unlock all features.",
+    "resend": "Resend confirmation email",
+    "resent": "Confirmation email sent!",
+    "resendError": "Could not resend email. Please try again.",
+    "checkSpam": "Don't see it? Check your spam folder.",
+    "confirming": "Confirming your email...",
+    "confirmed": "Email confirmed!",
+    "confirmedDescription": "Your email has been verified. You now have full access to all features.",
+    "errorTitle": "Confirmation failed",
+    "errorDescription": "The confirmation link is invalid or has expired. Please request a new one.",
+    "goToLogin": "Go to login",
+    "goHome": "Go to homepage",
+    "inlineTitle": "Email not confirmed",
+    "inlineDescription": "Please confirm your email to access this feature."
   }
 }

@@ -7,6 +7,7 @@ export interface AuthResponse {
   userId: string;
   email: string;
   displayName: string;
+  emailConfirmed: boolean;
 }
 
 export async function login(
@@ -60,4 +61,40 @@ export function getToken(): string | null {
 
 export function logout() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function confirmEmail(
+  userId: string,
+  token: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/api/v1/auth/confirm-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, token }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "confirmation_failed");
+  }
+
+  return res.json();
+}
+
+export async function resendConfirmation(): Promise<{ message: string }> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/v1/auth/resend-confirmation`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "resend_failed");
+  }
+
+  return res.json();
 }

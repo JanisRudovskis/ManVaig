@@ -8,6 +8,7 @@ interface User {
   userId: string;
   email: string;
   displayName: string;
+  emailConfirmed: boolean;
 }
 
 interface AuthContextValue {
@@ -27,6 +28,7 @@ function parseToken(token: string): User | null {
       userId: payload.sub ?? payload.nameid,
       email: payload.email,
       displayName: payload.displayName ?? payload.display_name ?? payload.email,
+      emailConfirmed: payload.emailConfirmed === "true",
     };
   } catch {
     return null;
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: data.userId,
       email: data.email,
       displayName: data.displayName,
+      emailConfirmed: data.emailConfirmed,
     });
   }, []);
 

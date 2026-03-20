@@ -1,10 +1,12 @@
 using System.Text;
 using ManVaig.Api.Data;
 using ManVaig.Api.Models;
+using ManVaig.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Resend;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -69,6 +71,16 @@ try
                 .AllowAnyMethod();
         });
     });
+
+    // Resend email service
+    builder.Services.AddOptions();
+    builder.Services.AddHttpClient<ResendClient>();
+    builder.Services.Configure<ResendClientOptions>(o =>
+    {
+        o.ApiToken = builder.Configuration["Resend:ApiKey"] ?? "";
+    });
+    builder.Services.AddTransient<IResend, ResendClient>();
+    builder.Services.AddTransient<IEmailService, ResendEmailService>();
 
     builder.Services.AddControllers();
 

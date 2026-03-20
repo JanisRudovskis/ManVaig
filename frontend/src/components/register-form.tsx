@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register, saveToken, type AuthResponse } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
+import { EmailConfirmationPrompt } from "@/components/email-confirmation-prompt";
 
 interface RegisterFormContentProps {
   onSuccess?: (data: AuthResponse) => void;
@@ -30,6 +31,8 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return t("errorEmailFormat");
     if (password.length < 8) return t("errorPasswordLength");
+    if (!/[0-9]/.test(password)) return t("errorPasswordDigit");
+    if (!/[A-Z]/.test(password)) return t("errorPasswordUppercase");
     if (password !== confirmPassword) return t("errorPasswordMismatch");
     if (!termsAccepted) return t("errorTermsRequired");
     return null;
@@ -53,8 +56,17 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
       setUser(res);
       onSuccess?.(res);
     } catch (err) {
-      if (err instanceof Error && (err.message.toLowerCase().includes("duplicate") || err.message.toLowerCase().includes("already taken"))) {
-        setError(t("errorDuplicateEmail"));
+      if (err instanceof Error) {
+        const msg = err.message.toLowerCase();
+        if (msg.includes("duplicate") || msg.includes("already taken")) {
+          setError(t("errorDuplicateEmail"));
+        } else if (msg.includes("digit")) {
+          setError(t("errorPasswordDigit"));
+        } else if (msg.includes("uppercase")) {
+          setError(t("errorPasswordUppercase"));
+        } else {
+          setError(t("errorGeneric"));
+        }
       } else {
         setError(t("errorGeneric"));
       }
@@ -78,9 +90,6 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            required
-            minLength={3}
-            maxLength={100}
             autoComplete="name"
           />
         </div>
@@ -92,10 +101,9 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
           </label>
           <Input
             id="register-email"
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
             autoComplete="email"
           />
         </div>
@@ -110,8 +118,6 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
             autoComplete="new-password"
           />
         </div>
@@ -126,8 +132,6 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
             autoComplete="new-password"
           />
         </div>
@@ -209,10 +213,21 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
 
 export function RegisterForm() {
   const router = useRouter();
+  const [registered, setRegistered] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
+  if (registered) {
+    return <EmailConfirmationPrompt email={registeredEmail} variant="page" />;
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center">
-      <RegisterFormContent onSuccess={() => router.push("/")} />
+      <RegisterFormContent
+        onSuccess={(data) => {
+          setRegisteredEmail(data.email);
+          setRegistered(true);
+        }}
+      />
     </div>
   );
 }
