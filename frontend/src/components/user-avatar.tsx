@@ -27,9 +27,9 @@ function getInitial(name: string): string {
 }
 
 const sizeClasses = {
-  sm: "!size-8 text-xs",
-  md: "!size-16 text-xl",
-  lg: "!size-24 text-3xl",
+  sm: { container: "!size-8", text: "!text-xs" },
+  md: { container: "!size-16", text: "!text-xl" },
+  lg: { container: "!size-24", text: "!text-5xl" },
 };
 
 interface UserAvatarProps {
@@ -49,13 +49,15 @@ export function UserAvatar({
 }: UserAvatarProps) {
   const colorClass = getColorForName(displayName);
 
+  const s = sizeClasses[size];
+
   return (
     <Avatar
-      className={cn(sizeClasses[size], onClick && "cursor-pointer", className)}
+      className={cn(s.container, onClick && "cursor-pointer", className)}
       onClick={onClick}
     >
       {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
-      <AvatarFallback className={cn(colorClass, "text-white font-semibold")}>
+      <AvatarFallback className={cn(colorClass, s.text, "text-white font-semibold")}>
         {getInitial(displayName)}
       </AvatarFallback>
     </Avatar>

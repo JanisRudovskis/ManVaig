@@ -13,6 +13,7 @@ import { AvatarUpload } from "@/components/avatar-upload";
 import { BadgeDisplay } from "@/components/badge-display";
 import { updateProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth";
+import { useLocale } from "next-intl";
 import {
   Mail,
   Phone,
@@ -45,6 +46,7 @@ export function ProfileCard({
   onProfileUpdated,
 }: ProfileCardProps) {
   const t = useTranslations("profile");
+  const locale = useLocale();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -110,13 +112,15 @@ export function ProfileCard({
     setChannels((prev) => (prev & flag ? prev & ~flag : prev | flag));
   }
 
-  const memberDate = new Date(profile.memberSince).toLocaleDateString(
-    undefined,
-    { year: "numeric", month: "long" }
-  );
+  const memberDateObj = new Date(profile.memberSince);
+  const localeTag = locale === "lv" ? "lv-LV" : "en-US";
+  const monthName = memberDateObj.toLocaleDateString(localeTag, { month: "long" });
+  const year = memberDateObj.getFullYear();
+  // Capitalize first letter for Latvian
+  const memberDate = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`;
 
-  const hasWhatsApp = (editing ? channels : profile.enabledChannels) & CHANNEL_WHATSAPP;
-  const hasTelegram = (editing ? channels : profile.enabledChannels) & CHANNEL_TELEGRAM;
+  const hasWhatsApp = !!((editing ? channels : profile.enabledChannels) & CHANNEL_WHATSAPP);
+  const hasTelegram = !!((editing ? channels : profile.enabledChannels) & CHANNEL_TELEGRAM);
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -255,51 +259,53 @@ export function ProfileCard({
           )}
         </div>
 
-        {/* Communication Channels */}
-        <div className="mt-4">
-          {editing ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                {t("communicationChannels")}
-              </Label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch
-                    checked={!!(channels & CHANNEL_WHATSAPP)}
-                    onCheckedChange={() => toggleChannel(CHANNEL_WHATSAPP)}
-                  />
-                  <MessageCircle className="size-4 text-green-500" />
-                  <span className="text-sm">{t("whatsapp")}</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch
-                    checked={!!(channels & CHANNEL_TELEGRAM)}
-                    onCheckedChange={() => toggleChannel(CHANNEL_TELEGRAM)}
-                  />
-                  <Send className="size-4 text-blue-500" />
-                  <span className="text-sm">{t("telegram")}</span>
-                </label>
-              </div>
-            </div>
-          ) : (
-            (hasWhatsApp || hasTelegram) && (
-              <div className="flex gap-3">
-                {hasWhatsApp && (
-                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        {/* Communication Channels — hidden for non-owners when phone unverified */}
+        {(isOwner || profile.phoneVerified) && (
+          <div className="mt-4">
+            {editing ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  {t("communicationChannels")}
+                </Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Switch
+                      checked={!!(channels & CHANNEL_WHATSAPP)}
+                      onCheckedChange={() => toggleChannel(CHANNEL_WHATSAPP)}
+                    />
                     <MessageCircle className="size-4 text-green-500" />
-                    {t("whatsapp")}
-                  </span>
-                )}
-                {hasTelegram && (
-                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="text-sm">{t("whatsapp")}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Switch
+                      checked={!!(channels & CHANNEL_TELEGRAM)}
+                      onCheckedChange={() => toggleChannel(CHANNEL_TELEGRAM)}
+                    />
                     <Send className="size-4 text-blue-500" />
-                    {t("telegram")}
-                  </span>
-                )}
+                    <span className="text-sm">{t("telegram")}</span>
+                  </label>
+                </div>
               </div>
-            )
-          )}
-        </div>
+            ) : (
+              (hasWhatsApp || hasTelegram) && (
+                <div className="flex gap-3">
+                  {hasWhatsApp && (
+                    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <MessageCircle className="size-4 text-green-500" />
+                      {t("whatsapp")}
+                    </span>
+                  )}
+                  {hasTelegram && (
+                    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Send className="size-4 text-blue-500" />
+                      {t("telegram")}
+                    </span>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+        )}
 
         {/* Profile Visibility (editing only) */}
         {editing && (
