@@ -82,6 +82,9 @@ try
     builder.Services.AddTransient<IResend, ResendClient>();
     builder.Services.AddTransient<IEmailService, ResendEmailService>();
 
+    // Cloudinary image service
+    builder.Services.AddSingleton<IImageService, CloudinaryImageService>();
+
     builder.Services.AddControllers();
 
     var app = builder.Build();

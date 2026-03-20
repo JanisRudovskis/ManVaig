@@ -73,7 +73,7 @@ function AuthButton() {
     return (
       <>
         <SidebarMenuItem>
-          <SidebarMenuButton className={navButtonClass} tooltip={user?.displayName ?? ""}>
+          <SidebarMenuButton className={navButtonClass} tooltip={user?.displayName ?? ""} render={<Link href="/profile" />}>
             <User className="!size-4 shrink-0" aria-hidden="true" />
             <span className="truncate">{user?.displayName}</span>
           </SidebarMenuButton>

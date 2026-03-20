@@ -279,6 +279,7 @@
     <p>// click any task to toggle status · last updated 2026-03-20</p>
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
+    <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -382,10 +383,15 @@
       <div class="task-text">Register page + register dialog modal (Next.js)</div>
       <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="2" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">User profile page (view + edit)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="future" data-phase="2" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Phone verification flow</div>
+      <div class="task-badge badge-future">future</div>
     </div>
     <div class="task" data-status="future" data-phase="2" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>

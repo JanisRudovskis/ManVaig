@@ -98,3 +98,101 @@ export async function resendConfirmation(): Promise<{ message: string }> {
 
   return res.json();
 }
+
+// --- Profile API ---
+
+export interface Badge {
+  id: number;
+  key: string;
+  name: string;
+  iconUrl: string | null;
+}
+
+export interface UserProfile {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  emailConfirmed: boolean | null;
+  phone: string | null;
+  phoneVerified: boolean | null;
+  avatarUrl: string | null;
+  bio: string | null;
+  location: string | null;
+  isProfilePublic: boolean;
+  enabledChannels: number;
+  memberSince: string;
+  displayedBadges: Badge[];
+}
+
+export interface UpdateProfileData {
+  bio?: string;
+  location?: string;
+  phone?: string;
+  isProfilePublic?: boolean;
+  enabledChannels?: number;
+  displayedBadgeIds?: number[];
+}
+
+export async function getMyProfile(): Promise<UserProfile> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/v1/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) throw new Error("profile_fetch_failed");
+  return res.json();
+}
+
+export async function updateProfile(
+  data: UpdateProfileData
+): Promise<UserProfile> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/v1/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "profile_update_failed");
+  }
+  return res.json();
+}
+
+export async function uploadAvatar(
+  file: File
+): Promise<{ avatarUrl: string }> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/v1/profile/avatar`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "avatar_upload_failed");
+  }
+  return res.json();
+}
+
+export async function getPublicProfile(
+  displayName: string
+): Promise<UserProfile> {
+  const res = await fetch(
+    `${API_URL}/api/v1/users/${encodeURIComponent(displayName)}`
+  );
+
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("profile_not_found");
+    throw new Error("profile_fetch_failed");
+  }
+  return res.json();
+}

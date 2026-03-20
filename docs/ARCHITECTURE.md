@@ -20,13 +20,15 @@
 
 ### Entry Point: `Program.cs`
 
-DI registration order: EF Core → Identity → JWT → CORS → Resend → Controllers
+DI registration order: EF Core → Identity → JWT → CORS → Resend → Cloudinary/ImageService → Controllers
 
 - `AppDbContext` — Npgsql, connection string from `ConnectionStrings:DefaultConnection`
 - Identity config: `RequireDigit=true, RequiredLength=8, RequireNonAlphanumeric=false, RequireUniqueEmail=true`
 - JWT: reads `Jwt:Secret`, `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpirationDays` from config
 - Resend: `ResendClient` via HttpClient, API key from `Resend:ApiKey`
 - DI: `IEmailService → ResendEmailService` (transient)
+- Cloudinary: `CloudinaryImageService` via `IImageService` (singleton), graceful no-op if credentials missing
+
 
 ### Database: `Data/AppDbContext.cs`
 
@@ -38,7 +40,16 @@ DI registration order: EF Core → Identity → JWT → CORS → Resend → Cont
 
 Extends `IdentityUser<Guid>` — inherits `Id`, `Email`, `UserName`, `EmailConfirmed`, `PasswordHash`, etc.
 
-Custom fields: `DisplayName`, `AvatarUrl`, `Bio`, `Location`, `IsActive` (bool), `CreatedAt`
+Custom fields: `DisplayName` (unique), `AvatarUrl`, `Bio`, `Location`, `Phone`, `IsProfilePublic` (default true), `EnabledChannels` (flags enum: WhatsApp=1, Telegram=2), `IsActive` (bool), `CreatedAt`
+
+Navigation properties: `UserBadges`, `DisplayedBadges`
+
+### Badge System
+
+Three tables:
+- `BadgeDefinition` — catalog (Id, Key unique, Name, Description, IconUrl). Seeded with "top_1000".
+- `UserBadge` — which badges a user has earned (composite key: UserId+BadgeDefinitionId)
+- `UserDisplayedBadge` — which 3 badges the user chose to show (composite key + SortOrder 0-2)
 
 ### DTOs: `Models/Dto/AuthDtos.cs`
 
@@ -46,6 +57,12 @@ Custom fields: `DisplayName`, `AvatarUrl`, `Bio`, `Location`, `IsActive` (bool),
 - `LoginRequest` — Email, Password
 - `AuthResponse` — Token, ExpiresAt, UserId, Email, DisplayName, EmailConfirmed
 - `ConfirmEmailRequest` — UserId, Token
+
+### DTOs: `Models/Dto/ProfileDtos.cs`
+
+- `UserProfileResponse` — all profile fields + displayed badges (email/phone nulled for public view)
+- `UpdateProfileRequest` — partial update: bio, location, phone, isProfilePublic, enabledChannels, displayedBadgeIds (max 3)
+- `BadgeDto` — id, key, name, iconUrl
 
 ### Controller: `Controllers/V1/AuthController.cs`
 
@@ -62,6 +79,24 @@ All routes under `/api/v1/auth/`:
 
 Token contains: `sub` (userId), `email`, `jti`, `displayName`, `emailConfirmed` (string `"true"`/`"false"`)
 
+### Controller: `Controllers/V1/ProfileController.cs`
+
+All routes under `/api/v1/`:
+
+| Endpoint | Auth | What it does |
+|----------|------|-------------|
+| `GET profile` | Bearer | Returns full profile (email, phone visible) |
+| `PUT profile` | Bearer | Partial update (null fields skipped). Validates badge ownership. |
+| `POST profile/avatar` | Bearer | Multipart upload, 2MB limit, resizes to 256x256 WebP, uploads to Cloudinary |
+| `GET users/{displayName}` | Public | Public profile (email/phone hidden). 404 if private/inactive/not found. Case-insensitive lookup. |
+
+### Image Service: `Services/CloudinaryImageService.cs`
+
+- Implements `IImageService.UploadAvatarAsync(stream, fileName, userId)`
+- SixLabors.ImageSharp: resize to 256x256, center crop, encode as WebP (quality 80)
+- Uploads to Cloudinary as `manvaig/avatars/{userId}`, returns secure URL
+- Gracefully handles missing Cloudinary credentials (logs warning, throws on upload attempt)
+
 ### Email Service: `Services/ResendEmailService.cs`
 
 - Implements `IEmailService.SendEmailConfirmationAsync(email, confirmationLink)`
@@ -72,8 +107,8 @@ Token contains: `sub` (userId), `email`, `jti`, `displayName`, `emailConfirmed` 
 ### Config Files
 
 - `appsettings.json` — tracked in git, has empty `Resend:ApiKey`, local DB connection string
-- `appsettings.Development.json` — gitignored, has real Resend API key
-- Production will need env vars for: DB connection, JWT secret, Resend API key
+- `appsettings.Development.json` — gitignored, has real Resend API key + Cloudinary keys
+- Production will need env vars for: DB connection, JWT secret, Resend API key, Cloudinary credentials
 
 ---
 
@@ -98,7 +133,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `profile`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -109,6 +144,10 @@ html (lang={locale} from cookie)
 - `confirmEmail(userId, token)` → `{ message }`
 - `resendConfirmation()` → `{ message }` (sends Bearer token)
 - `saveToken(token)` / `getToken()` / `logout()` — localStorage (`manvaig_token`)
+- `getMyProfile()` → `UserProfile` (authorized)
+- `updateProfile(data)` → `UserProfile` (authorized, partial update)
+- `uploadAvatar(file)` → `{ avatarUrl }` (authorized, FormData)
+- `getPublicProfile(displayName)` → `UserProfile` (anonymous)
 
 **`lib/auth-context.tsx`** — React context:
 - On mount: reads token from localStorage, parses JWT via `atob(token.split(".")[1])`
@@ -135,6 +174,8 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/login` | `LoginForm` | Client component |
 | `/register` | `RegisterForm` → `EmailConfirmationPrompt` | Client component |
 | `/confirm-email?userId=...&token=...` | `app/confirm-email/page.tsx` | Client component |
+| `/profile` | `ProfileCard` (inline edit) | Client component, auth required |
+| `/user/[displayName]` | `ProfileCard` (read-only) | Client component, public |
 
 ### Component Map
 
@@ -149,27 +190,33 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | LanguageSwitcher | `components/language-switcher.tsx` | Popover dropdown, sets NEXT_LOCALE cookie |
 | ThemeToggle | `components/theme-toggle.tsx` | Sun/Moon toggle in sidebar |
 | ThemeProvider | `components/theme-provider.tsx` | next-themes wrapper |
+| ProfileCard | `components/profile-card.tsx` | ID card layout with inline edit mode |
+| UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color |
+| AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload |
+| BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
 
 ### shadcn/ui Components Installed
 
-button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dialog
+button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dialog, avatar, badge, switch, textarea, card
 
 ---
 
 ## Phase Completion
 
 - **Phase 1** (Scaffolding): 6/7 done — Railway deploy pending
-- **Phase 2** (Auth): 7/11 done — profile page planned; forgot-password, OAuth, show/hide future
+- **Phase 2** (Auth): 8/12 done — profile page done; phone verification, forgot-password, OAuth, show/hide future
 - **Phase 3–8**: Not started
 
 ## What's Next
 
-1. User profile page (view + edit) — Phase 2
-2. Phase 3: Shop management (model, CRUD, dashboard, contact details)
-3. Phase 4: Item listings
+1. Phase 3: Shop management (model, CRUD, dashboard, contact details)
+2. Phase 4: Item listings
+3. Cloudinary configuration for avatar uploads
 
 ## Known Issues
 
 - Console warnings "Functions are not valid as React child" from sidebar Label components (low priority)
 - `appsettings.json` has local DB password — needs env var for production
 - Resend sender is `onboarding@resend.dev` (dev domain) — need custom domain for production
+- Cloudinary credentials empty in `appsettings.json` — avatar upload won't work until configured in `appsettings.Development.json`
+- Phone verification is stubbed (always shows "unverified") — needs implementation later
