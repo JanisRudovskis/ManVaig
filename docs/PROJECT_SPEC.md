@@ -1,7 +1,7 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-03-20 (rev 10 — register page, login/register dialogs)
+> **Last updated:** 2026-03-20 (rev 11 — email confirmation flow, password validation)
 > **Status:** 🟢 Phase 1 done, Phase 2 auth nearly complete (profile page remaining)
 
 ---
@@ -42,9 +42,9 @@
 - ✅ User registration (email + password + display name, client-side validation, terms checkbox)
 - ✅ User login / logout (dedicated page + modal dialog for contextual login)
 - ✅ JWT token auth (7-day expiry, localStorage)
+- ✅ Email verification on registration (Resend email, confirm-email page, resend button)
 - 🕐 User profile page (avatar, bio, location, communication platforms with predefined toggles)
 - 💡 OAuth (Google / Facebook login)
-- 💡 Email verification
 - 💡 Forgot password (reset via email)
 
 ### Shop Management
