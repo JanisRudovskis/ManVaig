@@ -11,12 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProfilePage() {
   const t = useTranslations("profile");
-  const { isLoggedIn, user } = useAuth();
+  const { isLoggedIn, isLoading: authLoading, user } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
+
     if (!isLoggedIn) {
       router.push("/login");
       return;
@@ -26,11 +28,9 @@ export default function ProfilePage() {
       .then(setProfile)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isLoggedIn, router]);
+  }, [isLoggedIn, authLoading, router]);
 
-  if (!isLoggedIn) return null;
-
-  if (loading) {
+  if (authLoading || (!isLoggedIn && loading)) {
     return (
       <div className="flex justify-center p-8">
         <div className="w-full max-w-2xl space-y-4">

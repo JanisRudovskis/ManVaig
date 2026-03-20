@@ -13,6 +13,7 @@ interface User {
 
 interface AuthContextValue {
   isLoggedIn: boolean;
+  isLoading: boolean;
   user: User | null;
   openLoginDialog: () => void;
   setUser: (data: AuthResponse) => void;
@@ -37,6 +38,7 @@ function parseToken(token: string): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const parsed = parseToken(token);
       if (parsed) setUserState(parsed);
     }
+    setIsLoading(false);
   }, []);
 
   const openLoginDialog = useCallback(() => setDialogOpen(true), []);
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext value={{ isLoggedIn: !!user, user, openLoginDialog, setUser, logout }}>
+    <AuthContext value={{ isLoggedIn: !!user, isLoading, user, openLoginDialog, setUser, logout }}>
       {children}
       <LoginDialog
         open={dialogOpen}
