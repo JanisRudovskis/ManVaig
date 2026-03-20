@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-03-20
+> Last updated: 2026-03-20 (session 2: auth fixes + profile UI polish)
 
 ---
 
@@ -152,7 +152,8 @@ html (lang={locale} from cookie)
 **`lib/auth-context.tsx`** — React context:
 - On mount: reads token from localStorage, parses JWT via `atob(token.split(".")[1])`
 - Extracts: `sub`→userId, `email`, `displayName`, `emailConfirmed` (string→boolean)
-- `useAuth()` exposes: `isLoggedIn`, `user` (with `emailConfirmed`), `openLoginDialog`, `setUser`, `logout`
+- `isLoading` state prevents race conditions — pages wait for auth to initialize before checking `isLoggedIn`
+- `useAuth()` exposes: `isLoggedIn`, `isLoading`, `user` (with `emailConfirmed`), `openLoginDialog`, `setUser`, `logout`
 - `LoginDialog` rendered inside `AuthProvider` — any component calls `openLoginDialog()` to trigger it
 
 ### Component Patterns
@@ -204,7 +205,7 @@ button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dia
 ## Phase Completion
 
 - **Phase 1** (Scaffolding): 6/7 done — Railway deploy pending
-- **Phase 2** (Auth): 8/12 done — profile page done; phone verification, forgot-password, OAuth, show/hide future
+- **Phase 2** (Auth): 9/12 done — profile page done + polished; phone verification, forgot-password, OAuth, show/hide future
 - **Phase 3–8**: Not started
 
 ## What's Next
@@ -217,6 +218,7 @@ button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dia
 
 - Console warnings "Functions are not valid as React child" from sidebar Label components (low priority)
 - `appsettings.json` has local DB password — needs env var for production
-- Resend sender is `onboarding@resend.dev` (dev domain) — need custom domain for production
+- Resend sender is `onboarding@resend.dev` (dev domain) — need custom domain for production (`noreply@manvaig.com`)
 - Cloudinary credentials empty in `appsettings.json` — avatar upload won't work until configured in `appsettings.Development.json`
 - Phone verification is stubbed (always shows "unverified") — needs implementation later
+- Communication channels (WhatsApp/Telegram) hidden from public profiles until phone is verified

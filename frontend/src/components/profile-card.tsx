@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,8 +117,9 @@ export function ProfileCard({
   const localeTag = locale === "lv" ? "lv-LV" : "en-US";
   const monthName = memberDateObj.toLocaleDateString(localeTag, { month: "long" });
   const year = memberDateObj.getFullYear();
-  // Capitalize first letter for Latvian
-  const memberDate = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`;
+  const memberDate = locale === "lv"
+    ? `${monthName} ${year}`
+    : `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`;
 
   const hasWhatsApp = !!((editing ? channels : profile.enabledChannels) & CHANNEL_WHATSAPP);
   const hasTelegram = !!((editing ? channels : profile.enabledChannels) & CHANNEL_TELEGRAM);
@@ -156,17 +158,17 @@ export function ProfileCard({
 
             {/* Email (owner only) */}
             {isOwner && profile.email && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
                 <Mail className="size-4 flex-shrink-0" />
-                <span className="truncate">{profile.email}</span>
+                <span>{profile.email}</span>
                 {profile.emailConfirmed ? (
-                  <span className="flex items-center gap-1 text-emerald-500 text-xs">
-                    <CheckCircle className="size-3" />
+                  <span className="flex items-center gap-1 text-emerald-500 text-xs whitespace-nowrap">
+                    <CheckCircle className="size-3.5" />
                     {t("emailVerified")}
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-amber-500 text-xs">
-                    <AlertCircle className="size-3" />
+                  <span className="flex items-center gap-1 text-amber-500 text-xs whitespace-nowrap">
+                    <AlertCircle className="size-3.5" />
                     {t("emailUnverified")}
                   </span>
                 )}
@@ -175,21 +177,21 @@ export function ProfileCard({
 
             {/* Phone (owner only) */}
             {isOwner && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
                 <Phone className="size-4 flex-shrink-0" />
                 {editing ? (
                   <Input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder={t("phonePlaceholder")}
-                    className="h-8 text-sm max-w-48"
+                    className="h-8 text-sm max-w-64"
                   />
                 ) : (
                   <span>{profile.phone || t("phoneNotSet")}</span>
                 )}
                 {!editing && profile.phone && (
-                  <span className="flex items-center gap-1 text-amber-500 text-xs">
-                    <AlertCircle className="size-3" />
+                  <span className="flex items-center gap-1 text-amber-500 text-xs whitespace-nowrap">
+                    <AlertCircle className="size-3.5" />
                     {t("phoneUnverified")}
                   </span>
                 )}
@@ -204,7 +206,7 @@ export function ProfileCard({
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder={t("locationPlaceholder")}
-                  className="h-8 text-sm max-w-48"
+                  className="h-8 text-sm max-w-64"
                 />
               ) : (
                 <span>{profile.location || t("locationNotSet")}</span>
@@ -235,7 +237,8 @@ export function ProfileCard({
         </div>
 
         {/* Bio section */}
-        <div className="mt-4">
+        <Separator className="my-4" />
+        <div>
           {editing ? (
             <div>
               <Label className="text-sm font-medium">{t("bio")}</Label>
@@ -252,8 +255,8 @@ export function ProfileCard({
             </div>
           ) : (
             (profile.bio || isOwner) && (
-              <p className="text-sm text-muted-foreground">
-                {profile.bio || t("bioPlaceholder")}
+              <p className={`text-sm text-muted-foreground ${!profile.bio ? "italic" : ""}`}>
+                {profile.bio || t("bioNotSet")}
               </p>
             )
           )}
