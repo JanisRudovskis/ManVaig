@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-03-20 (session 2: auth fixes + profile UI polish)
+> Last updated: 2026-03-21 (session 3: Railway deployment setup — Dockerfiles, standalone output, env var docs)
 
 ---
 
@@ -202,17 +202,63 @@ button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dia
 
 ---
 
+## Deployment (Railway)
+
+### Docker Setup
+
+Both services use multi-stage Dockerfiles for small production images.
+
+**Backend (`backend/Dockerfile`):**
+- Build stage: `dotnet/sdk:9.0` → restore, publish Release
+- Runtime stage: `dotnet/aspnet:9.0` → runs `ManVaig.Api.dll`
+- Listens on `PORT` env var (Railway sets this), defaults to 8080
+
+**Frontend (`frontend/Dockerfile`):**
+- Deps stage: `node:22-alpine` → `npm ci`
+- Build stage: builds Next.js with `NEXT_PUBLIC_API_URL` build arg
+- Runtime stage: runs standalone `server.js` as non-root user
+- Requires `output: "standalone"` in `next.config.ts`
+
+### Railway Environment Variables (Backend)
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `ConnectionStrings__DefaultConnection` | `Host=...;Database=...` | Railway provides PostgreSQL, use internal URL |
+| `Jwt__Secret` | (generate 64+ char random string) | Must differ from dev |
+| `Jwt__Issuer` | `ManVaig.Api` | |
+| `Jwt__Audience` | `ManVaig.Frontend` | |
+| `Jwt__ExpirationDays` | `7` | |
+| `Cors__AllowedOrigins__0` | `https://your-frontend.up.railway.app` | Frontend URL |
+| `Resend__ApiKey` | (from Resend dashboard) | Optional for first deploy |
+| `Resend__FromEmail` | `ManVaig <noreply@manvaig.com>` | Needs custom domain later |
+| `Cloudinary__CloudName` | | Optional |
+| `Cloudinary__ApiKey` | | Optional |
+| `Cloudinary__ApiSecret` | | Optional |
+
+### Railway Environment Variables (Frontend)
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `NEXT_PUBLIC_API_URL` | `https://your-backend.up.railway.app` | Set as build arg in Railway |
+
+### Config Override Pattern
+
+.NET reads env vars with `__` as section separator. E.g., `Jwt__Secret` overrides `appsettings.json → Jwt.Secret`. No production config files needed — all secrets via Railway env vars.
+
+---
+
 ## Phase Completion
 
-- **Phase 1** (Scaffolding): 6/7 done — Railway deploy pending
+- **Phase 1** (Scaffolding): 6/7 done — Railway deploy in progress (Dockerfiles ready)
 - **Phase 2** (Auth): 9/12 done — profile page done + polished; phone verification, forgot-password, OAuth, show/hide future
 - **Phase 3–8**: Not started
 
 ## What's Next
 
-1. Phase 3: Shop management (model, CRUD, dashboard, contact details)
-2. Phase 4: Item listings
-3. Cloudinary configuration for avatar uploads
+1. Complete Railway deployment (create project, add services, configure env vars)
+2. Phase 3: Shop management (model, CRUD, dashboard, contact details)
+3. Phase 4: Item listings
+4. Cloudinary configuration for avatar uploads
 
 ## Known Issues
 
