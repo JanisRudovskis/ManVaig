@@ -3,11 +3,19 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev"],
       "port": 3001,
       "autoPort": true,
       "cwd": "frontend"
+    },
+    {
+      "name": "prototype",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "require('http').createServer((q,r)=>{require('fs').readFile('.'+q.url.split('?')[0],(e,d)=>{if(e){r.writeHead(404);r.end('not found')}else{r.writeHead(200,{'Content-Type':'text/html;charset=utf-8'});r.end(d)}});}).listen(process.env.PORT||8888,()=>console.log('ready'))"],
+      "port": 8888,
+      "autoPort": true,
+      "cwd": "docs/prototypes"
     }
   ]
 }

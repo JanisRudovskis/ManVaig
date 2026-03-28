@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-03-20 (rev 11 — email confirmation flow, password validation)
-> **Status:** 🟢 Phase 1 done, Phase 2 auth nearly complete (profile page remaining)
+> **Last updated:** 2026-03-27 (rev 12 — items management model updates, prototype-driven decisions)
+> **Status:** 🟢 Phase 2 auth done, Phase 4 items in progress
 
 ---
 
@@ -57,16 +57,19 @@
 - 💡 Multiple shops per user (DB supports it, UI limited to 1 for now)
 
 ### Item Listings
-- 🕐 Add item (title, description, category, tags, images, condition)
+- 🕐 Add item (title, description, category, tags, images, condition, pricing type)
 - 🕐 Edit / delete item
-- 🕐 Item detail page — public only
-- 🕐 Item status: Available / Under offer / Sold
-- 🕐 Image upload (max 5 per item, compressed)
-- 🕐 Category system (predefined main categories + free-form tags)
-- 🕐 Optional minimum offer price per item
-- 🕐 Item location (free text) + can ship flag
-- 🕐 Allow anonymous offers toggle per item (default off)
-- 💡 Private / unlisted items (IsPublic column in DB, UI hidden for now)
+- 🕐 Seller "My Items" management page (card grid, type/visibility tags)
+- 🕐 Pricing types: Fixed Price / Fixed + Offers / Open Bidding / Auction
+- 🕐 Image upload (max 5 per item, compressed via Cloudinary)
+- 🕐 Category system (12 flat categories + free-form tags)
+- 🕐 Item location (Nominatim autocomplete, city+country) + can ship flag
+- 🕐 Visibility: Public / RegisteredOnly / LinkOnly / Private (all active in UI)
+- 🕐 Allow guest offers toggle per item (default off)
+- 🕐 Item limit per user (MaxItems, default 10, manually adjustable in DB for v1, purchasable in future)
+- 🕐 Ended auctions become readonly (winner visible)
+- 🕐 Auction bidders list (view who placed bids)
+- 🕐 Public item detail page (deferred to Phase 5)
 - 💡 Advanced filters (price range, condition, location)
 
 ### Offer System
@@ -135,14 +138,9 @@
 - Tags — free-form keywords added by sellers, used for search and discovery
 - An item belongs to exactly 1 category and can have 0–10 tags
 
-**Structure:** Tree (adjacency list, self-referencing FK). Max 3 levels enforced in UI.
+**Structure:** Flat list (v1). No hierarchy, no subcategories. Tree structure deferred to future if needed.
 
-**Example tree:**
-- Antiques → WW2 → Vehicles
-- Antiques → WW2 → Uniforms
-- Electronics → Phones → Smartphones
-
-**Starter root categories (to be confirmed):**
+**12 categories (confirmed):**
 - Electronics
 - Clothing & Accessories
 - Antiques & Collectibles
@@ -150,10 +148,14 @@
 - Sports & Outdoors
 - Vehicles & Parts
 - Books & Media
+- Musical Instruments
+- Toys & Hobbies
+- Health & Beauty
+- Building Materials
 - Other
 
 **Tag behaviour:**
-- Autocomplete from existing tags as seller types (GET /api/tags?q=ww2)
+- Autocomplete from existing tags as seller types (GET /api/v1/tags?q=ww2)
 - If no match → seller can create a new tag on the fly
 - Tags normalized on save: trimmed, lowercased, deduplicated
 - Prevents duplicates like "ww2", "WW2", "World War 2" all existing separately
@@ -162,6 +164,7 @@
 - All categories managed in DB — no code change needed to add/edit/remove
 - Tags stored in a `Tags` table with many-to-many join to Items
 - Future: tag popularity ranking, admin tag merging tool (merge "ww2" + "wwii" → one canonical tag)
+- Future: category tree (add ParentId, Slug, IconName) if subcategories are needed
 
 ---
 
@@ -176,6 +179,7 @@ User
   - AvatarUrl
   - Bio
   - Location
+  - MaxItems (int, default 10)      ← item listing limit; set manually in DB for v1, purchasable in future
   - IsActive (bool, default true)   ← soft delete / ban support
   - CreatedAt
 
@@ -189,19 +193,17 @@ Shop
   - ContactEmail (string, nullable)
   - ContactFacebook (string, nullable)
   - ContactOther (string, nullable)    ← free text, e.g. "Telegram: @username"
-  - MaxItems (int, default 10)         ← free tier limit, enforced at API level
   - CreatedAt
   NOTE: FK is one-to-many in DB to allow future multi-shop expansion
   NOTE: at least one contact method required at shop creation
+  NOTE: MaxItems moved to User model (v1 items are user-level, not shop-level)
 
-Category  (self-referencing tree, adjacency list)
+Category  (flat list, v1)
   - Id (int)
   - Name
-  - Slug                               ← e.g. "ww2" for /browse/antiques/ww2
-  - ParentId → Category (nullable)     ← null = root category
-  - SortOrder (int, default 0)         ← controls display order within siblings
-  - IconName (string, nullable)        ← only used on root level in UI
-  NOTE: DB supports unlimited depth. UI enforces max 3 levels (Root → Sub → Sub-sub)
+  - SortOrder (int, default 0)         ← controls display order in dropdown
+  NOTE: flat list for v1. Tree structure (ParentId, Slug, IconName) deferred to future.
+  NOTE: 12 categories seeded on first migration
 
 Tag
   - Id (int)
@@ -209,19 +211,24 @@ Tag
 
 Item
   - Id (uuid)
-  - ShopId → Shop
+  - UserId → User                            ← direct link for v1 (no Shop dependency); migrate to ShopId in Phase 3
   - CategoryId → Category
   - Title
   - Description
   - Condition (enum: New / Used / Worn)
-  - Status (enum: Available / UnderOffer / Sold)
+  - PricingType (enum: Fixed / FixedOffers / Bidding / Auction)
+  - Price (decimal, nullable)                ← used by Fixed & FixedOffers
+  - MinBidPrice (decimal, nullable)          ← floor price for Bidding & Auction
+  - BidStep (decimal, nullable)              ← minimum increment for Auction
+  - AuctionEnd (DateTime, nullable)          ← end time for Auction only
   - Visibility (enum: Public / RegisteredOnly / LinkOnly / Private, default: Public)
-  - MinimumOfferPrice (decimal, nullable)    ← optional floor price, v1 feature
-  - Location (string, nullable)              ← free text city/country
+  - Location (string, nullable)              ← Nominatim autocomplete, stores "City, Country"
   - CanShip (bool, default false)            ← local pickup vs shipping
-  - AllowAnonymousOffers (bool, default false) ← seller decides per item
+  - AllowGuestOffers (bool, default false)   ← unregistered users can submit offers
   - CreatedAt
   - UpdatedAt
+  NOTE: no Status enum for v1. Seller removes item when done. Ended auctions derived from AuctionEnd < now (readonly).
+  NOTE: item count enforced against User.MaxItems at API level
 
 ItemImage
   - Id (uuid)
@@ -281,7 +288,7 @@ Notification
 | 8 | 1 shop per user (v1) | Simpler UX; DB supports multi-shop for future | 2026-03-17 |
 | 9 | Item Visibility enum (Public/RegisteredOnly/LinkOnly/Private) | Boolean too limiting; enum covers all future visibility cases cleanly | 2026-03-17 |
 | 10 | Categories (fixed) + Tags (free-form) | Structured browsing + flexible discovery | 2026-03-17 |
-| 11 | Category tree — adjacency list (self-referencing FK) | Simple, EF Core native, DB-managed, unlimited depth, UI capped at 3 levels | 2026-03-17 |
+| 11 | ~~Category tree~~ → Flat category list (v1) | Simplified: 12 categories in a flat dropdown. Tree structure deferred. See #36. | 2026-03-17 |
 | 12 | Tags: autocomplete + allow new, normalized on save | Prevents duplicates, keeps tag DB clean, good UX (Stack Overflow style) | 2026-03-17 |
 | 13 | On offer accept → other offers silently declined, no notification | Clean UX — buyer only notified on accept, not on silent decline | 2026-03-17 |
 | 14 | One active offer per buyer per item — new offer replaces old | Simpler than multiple simultaneous offers, avoids confusion | 2026-03-17 |
@@ -303,25 +310,34 @@ Notification
 | 30 | Anonymous offers supported (seller opt-in per item) | Lower barrier to buy = more offers; seller controls exposure | 2026-03-17 |
 | 31 | Anonymous offer contact stored as snapshot on Offer | No account needed; contact (phone/email/messenger) captured at offer time, visible to seller immediately | 2026-03-17 |
 | 32 | Contact blacklist deferred to post-v1 | Blacklist targets contact values not accounts; noted for future, not blocking v1 | 2026-03-17 |
-| 33 | Free tier with item limit: 10 items per shop (v1) | No payments in v1; MaxItems on Shop enforced at API level. Will reduce to 5 when paid plans are added. | 2026-03-18 |
+| 33 | ~~Free tier 10 items per shop~~ → MaxItems on User | Moved from Shop to User (no shops in v1). Default 10, manually adjustable in DB. Future: purchasable. See #39. | 2026-03-18 |
 | 34 | Monetization deferred to post-v1 | Tiered plans (Basic/Pro) likely model; need real users before deciding pricing. DB ready with MaxItems field. | 2026-03-18 |
 | 35 | UI/UX pages designed separately | Every frontend page gets its own design discussion before implementation — no rushed UI | 2026-03-18 |
+| 36 | Flat categories (no tree) for v1 | Prototype uses simple dropdown with 12 categories. Tree adds complexity with no current benefit. Add ParentId/Slug later if needed. | 2026-03-27 |
+| 37 | PricingType enum on Item | Prototype designed 4 pricing modes (Fixed/FixedOffers/Bidding/Auction) each with different fields. Replaces single MinimumOfferPrice. | 2026-03-27 |
+| 38 | Item → User (not Shop) for v1 | Shop management (Phase 3) not built yet. Items link to User directly. Migrate to ShopId when Phase 3 is implemented. | 2026-03-27 |
+| 39 | MaxItems on User (not Shop) | Item limit is per-user for v1. Default 10, manually set in DB. Future: purchasable upgrades. Moves to Shop when Phase 3 is built. | 2026-03-27 |
+| 40 | No item Status enum for v1 | No sold history, no "Under Offer". Seller removes item when done. Ended auctions derived from AuctionEnd < now. | 2026-03-27 |
+| 41 | Item location via Nominatim | OpenStreetMap Nominatim autocomplete (free, global, no API key). Stores "City, Country" string. Pre-filled from user profile. | 2026-03-27 |
+| 42 | AllowAnonymousOffers → AllowGuestOffers | Renamed for clarity. "Guest" = unregistered user. | 2026-03-27 |
 
 ---
 
 ## 7. Open Questions
 
-- [ ] Confirm or adjust the starter root category list
+- [x] ~~Confirm or adjust the starter root category list~~ → 12 flat categories confirmed (2026-03-27)
 - [ ] Target market / geography? (Latvia? Europe? Global?)
 - [ ] Public platform name / domain?
 - [ ] Frontend state management — decide at Phase 2 (Zustand + TanStack Query vs simpler approach)
+- [ ] Auction bidders list — prototype + implement view of users who placed bids
+- [ ] Ended auction UX — readonly display, winner visible, full details TBD
 
 ## 8. Resolved Decisions (from open questions)
 
 - [x] Tags: autocomplete from existing + allow new ones. Normalized on save (lowercase, trimmed). Future: admin tag merge tool.
-- [x] Category structure: tree (adjacency list), DB-managed, UI max 3 levels
+- [x] Category structure: flat list for v1 (12 categories, dropdown). Tree deferred.
 - [x] 1 shop per user (v1)
-- [x] All items public (v1), visibility enum ready for future
+- [x] All 4 visibility levels active in UI (Public/RegisteredOnly/LinkOnly/Private)
 - [x] No payments in v1
 - [x] Offer accept → others silently declined
 - [x] One active offer per buyer per item (new replaces old)
@@ -341,6 +357,12 @@ Notification
 - [x] Anonymous offers — seller opt-in per item; contact snapshot stored on Offer
 - [x] Contact blacklist — deferred post-v1
 - [x] No built-in messaging in v1 — deferred to future
+- [x] PricingType enum (Fixed/FixedOffers/Bidding/Auction) — replaces single MinimumOfferPrice
+- [x] Item → User for v1 (not Shop) — migrate to ShopId in Phase 3
+- [x] MaxItems on User (default 10) — manually set in DB for v1, purchasable in future
+- [x] No item Status enum — seller removes when done, ended auctions derived from AuctionEnd
+- [x] Item location via Nominatim autocomplete — stores "City, Country" string
+- [x] 12 flat categories confirmed — Musical Instruments, Toys & Hobbies, Health & Beauty, Building Materials added to original 8
 
 ---
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, Search, PlusCircle, Bell, LogIn, LogOut, PanelLeftClose, PanelLeft, User } from "lucide-react";
+import { Home, Search, PlusCircle, Bell, LogIn, LogOut, PanelLeftClose, PanelLeft, User, Package } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useAuth } from "@/lib/auth-context";
@@ -24,6 +24,7 @@ import {
 const navItems = [
   { key: "home", href: "/", icon: Home },
   { key: "browse", href: "/browse", icon: Search },
+  { key: "myItems", href: "/my-items", icon: Package, auth: true },
   { key: "sell", href: "/sell", icon: PlusCircle },
   { key: "notifications", href: "/notifications", icon: Bell },
 ];
@@ -101,6 +102,11 @@ function AuthButton() {
 export function AppSidebar() {
   const pathname = usePathname();
   const t = useTranslations("nav");
+  const { isLoggedIn } = useAuth();
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.auth || isLoggedIn
+  );
 
   return (
     <Sidebar collapsible="icon">
@@ -112,7 +118,7 @@ export function AppSidebar() {
         <SidebarGroup className="!gap-1.5">
           <SidebarGroupContent>
             <SidebarMenu className="!gap-0.5">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     className={navButtonClass}

@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-03-21 (session 3: Railway deployment setup — Dockerfiles, standalone output, env var docs)
+> Last updated: 2026-03-28 (session 5: validation + image upload)
 
 ---
 
@@ -133,7 +133,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `profile`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `profile`, `items`, `itemForm`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -177,6 +177,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/confirm-email?userId=...&token=...` | `app/confirm-email/page.tsx` | Client component |
 | `/profile` | `ProfileCard` (inline edit) | Client component, auth required |
 | `/user/[displayName]` | `ProfileCard` (read-only) | Client component, public |
+| `/my-items` | `MyItemsPage` + `ItemForm` modal | Client component, auth required |
 
 ### Component Map
 
@@ -195,6 +196,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color |
 | AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
+| ItemForm | `components/item-form.tsx` | Add/Edit item modal with all sections (images placeholder, basic info, location autocomplete, pricing types, tags, visibility, delete) |
 
 ### shadcn/ui Components Installed
 
@@ -247,18 +249,112 @@ Both services use multi-stage Dockerfiles for small production images.
 
 ---
 
+---
+
+## Prototypes
+
+### Items Management (`docs/prototypes/items-management.html`)
+
+Interactive HTML prototype for the seller's "My Items" page. Serves as the design spec for Phase 4 implementation.
+
+**List View (card-based, marketplace style):**
+- Card layout: large image → title → price (emerald `#34d399`) → separator → footer (views/bids/age + edit button)
+- Type tag: top-left corner overlay (Fixed=blue, Offers=purple, Bidding=orange, Auction=orange)
+- Visibility tag: top-right corner overlay (Private=gray, Registered=amber, Link Only=teal, Public=no tag)
+- Dimmed cards for ended auctions
+- No delete button in list (only in edit form)
+- No view/preview button (edit only; preview-as-buyer deferred)
+- Empty state with box icon + "Add your first item" CTA
+
+**Add/Edit Form (slide-in panel):**
+- Images: up to 5, drag-to-reorder, star marks primary, delete per image
+- Basic Info: Title*, Description, Category* (12 broad categories dropdown), Location (Nominatim autocomplete), Condition (New/Used/Worn segmented)
+- Pricing Type: 4 cards — Fixed Price, Fixed + Offers, Open Bidding, Auction
+  - Each type shows relevant fields (price, min bid, step, auction end date)
+- Tags: free-form tag input (max 10)
+- Visibility & Options: Public/Registered/Link Only/Private dropdown, guest offers toggle, can-ship toggle
+- Delete button: only in Edit mode, bottom of form
+
+**Design Decisions (from this session):**
+- **No sold history**: when item is sold, seller removes it or marks unavailable
+- **Item status**: Available only (no "Under Offer" state). Buyers make offers freely → seller contacts preferred buyer → removes item
+- **Location**: OpenStreetMap Nominatim autocomplete (free, global, no API key). Debounced 300ms. Stores city + country. Falls back to plain text if API down. Pre-filled from seller's profile.
+- **Categories**: 12 broad categories (Electronics, Clothing & Accessories, Vehicles & Parts, Home & Garden, Sports & Outdoors, Antiques & Collectibles, Books & Media, Musical Instruments, Toys & Hobbies, Health & Beauty, Building Materials, Other). Tags handle detailed classification.
+- **Pricing colors**: all prices use emerald `#34d399` regardless of type. Auction countdown: white normally, red only when ending soon.
+- **Auction/Bidding colors**: both use orange `#f97316`
+
+---
+
+## Phase 4 Implementation Plan
+
+Build order for items management (from prototype → actual environment):
+
+| Step | What | Status |
+|------|------|--------|
+| 0 | Update PROJECT_SPEC.md — align models with prototype | done |
+| 1 | Backend: models + migration + seed 12 categories | done |
+| 2 | Backend: Items CRUD API + tag autocomplete + categories list | done |
+| 3 | Frontend: My Items list page + sidebar nav | done |
+| 4 | Frontend: Add/Edit item form (image slots visual-only, no upload) + full i18n | done |
+| 5 | Discuss: validation rules, error/loading states | done (agreed 2026-03-28) |
+| 5b | Implement validation + error/loading states | done |
+| 6 | Item image upload (Cloudinary, max 5, drag-to-reorder) | done |
+| 7 | Auction bidders list — prototype first, then implement | next up |
+| 8 | Public item detail page | deferred |
+
+**Key model decisions (from plan audit):**
+- Item → UserId (not ShopId) — no Shop dependency in v1, migrate in Phase 3
+- Category: flat (Id, Name, SortOrder) — no tree hierarchy
+- PricingType enum: Fixed / FixedOffers / Bidding / Auction
+- No Status enum — seller removes item, ended auctions derived from AuctionEnd < now
+- MaxItems on User (default 10) — manually set in DB, purchasable in future
+- Location: Nominatim autocomplete, stores "City, Country" string
+
+**Validation rules (agreed 2026-03-28):**
+
+Common (all pricing types):
+- Title — required, 3–100 chars
+- Category — required
+- Condition — required (New / Used / Worn)
+- Images — at least 1 required (enforce in Step 6 when upload lands)
+- Description — optional, max 2000 chars
+- Location — optional, max 200 chars
+- Tags — max 10, each max 30 chars
+
+Per pricing type:
+- **Fixed Price** — Price required, > 0, max 2 decimals
+- **Fixed + Offers** — Price required, > 0; MinOfferPrice optional (> 0, <= Price)
+- **Open Bidding** — no price required; MinBidPrice optional > 0; BidStep optional > 0
+- **Auction** — StartingPrice required > 0; AuctionEnd required (min 1h in future); BidStep optional > 0
+
+**Auction lifecycle:**
+
+| State | Condition | Seller can do |
+|-------|-----------|--------------|
+| Draft | 0 bids | Edit everything, delete freely |
+| Active (locked) | 1+ bids | Nothing — fully readonly |
+| Ended (grace) | AuctionEnd passed, < 48h | Readonly, cannot delete. Winner visible. |
+| Settled | Grace period (48h) expired | Can delete/archive |
+
+- 0 bids at end → no grace period, seller can edit/delete immediately
+- No reserve price in v1 — starting price is effectively the reserve
+- Enforced both frontend (show/hide fields, i18n errors) and backend (same rules + 403 on locked auction edit/delete)
+
+
 ## Phase Completion
 
-- **Phase 1** (Scaffolding): 6/7 done — Railway deploy in progress (Dockerfiles ready)
+- **Phase 1** (Scaffolding): 6/7 done — Railway deploy pending (Dockerfiles ready)
 - **Phase 2** (Auth): 9/12 done — profile page done + polished; phone verification, forgot-password, OAuth, show/hide future
-- **Phase 3–8**: Not started
+- **Phase 4** (Items): Steps 0–6 done — prototype, models, API, My Items page, Add/Edit form, validation, image upload. Remaining: auction bidders list, public item detail page
+- **Phase 3, 5–8**: Not started
 
 ## What's Next
 
-1. Complete Railway deployment (create project, add services, configure env vars)
-2. Phase 3: Shop management (model, CRUD, dashboard, contact details)
-3. Phase 4: Item listings
-4. Cloudinary configuration for avatar uploads
+1. **Phase 4 Step 7** — auction bidders list (prototype the view first, then implement)
+2. **Phase 4 Step 8** — public item detail page (deferred)
+3. Complete Railway deployment (create project, add services, configure env vars)
+4. Phase 3: Shop management
+5. Phase 5: Offer system
 
 ## Known Issues
 

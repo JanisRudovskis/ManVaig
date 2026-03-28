@@ -1,4 +1,5 @@
 using ManVaig.Api.Models;
+using ManVaig.Api.Models.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +14,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<UserBadge> UserBadges => Set<UserBadge>();
     public DbSet<UserDisplayedBadge> UserDisplayedBadges => Set<UserDisplayedBadge>();
 
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<Item> Items => Set<Item>();
+    public DbSet<ItemImage> ItemImages => Set<ItemImage>();
+    public DbSet<ItemTag> ItemTags => Set<ItemTag>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
+        // === ApplicationUser ===
         builder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(u => u.DisplayName).HasMaxLength(100);
@@ -27,6 +35,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.Property(u => u.Phone).HasMaxLength(30);
         });
 
+        // === BadgeDefinition ===
         builder.Entity<BadgeDefinition>(entity =>
         {
             entity.Property(b => b.Key).HasMaxLength(50);
@@ -45,6 +54,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             });
         });
 
+        // === UserBadge ===
         builder.Entity<UserBadge>(entity =>
         {
             entity.HasKey(ub => new { ub.UserId, ub.BadgeDefinitionId });
@@ -52,11 +62,93 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.HasOne(ub => ub.BadgeDefinition).WithMany(b => b.UserBadges).HasForeignKey(ub => ub.BadgeDefinitionId);
         });
 
+        // === UserDisplayedBadge ===
         builder.Entity<UserDisplayedBadge>(entity =>
         {
             entity.HasKey(db => new { db.UserId, db.BadgeDefinitionId });
             entity.HasOne(db => db.User).WithMany(u => u.DisplayedBadges).HasForeignKey(db => db.UserId);
             entity.HasOne(db => db.BadgeDefinition).WithMany().HasForeignKey(db => db.BadgeDefinitionId);
+        });
+
+        // === Category ===
+        builder.Entity<Category>(entity =>
+        {
+            entity.Property(c => c.Name).HasMaxLength(100);
+            entity.HasIndex(c => c.Name).IsUnique();
+
+            entity.HasData(
+                new Category { Id = 1, Name = "Electronics", SortOrder = 0 },
+                new Category { Id = 2, Name = "Clothing & Accessories", SortOrder = 1 },
+                new Category { Id = 3, Name = "Antiques & Collectibles", SortOrder = 2 },
+                new Category { Id = 4, Name = "Home & Garden", SortOrder = 3 },
+                new Category { Id = 5, Name = "Sports & Outdoors", SortOrder = 4 },
+                new Category { Id = 6, Name = "Vehicles & Parts", SortOrder = 5 },
+                new Category { Id = 7, Name = "Books & Media", SortOrder = 6 },
+                new Category { Id = 8, Name = "Musical Instruments", SortOrder = 7 },
+                new Category { Id = 9, Name = "Toys & Hobbies", SortOrder = 8 },
+                new Category { Id = 10, Name = "Health & Beauty", SortOrder = 9 },
+                new Category { Id = 11, Name = "Building Materials", SortOrder = 10 },
+                new Category { Id = 12, Name = "Other", SortOrder = 11 }
+            );
+        });
+
+        // === Tag ===
+        builder.Entity<Tag>(entity =>
+        {
+            entity.Property(t => t.Name).HasMaxLength(50);
+            entity.HasIndex(t => t.Name).IsUnique();
+        });
+
+        // === Item ===
+        builder.Entity<Item>(entity =>
+        {
+            entity.Property(i => i.Title).HasMaxLength(200);
+            entity.Property(i => i.Description).HasMaxLength(5000);
+            entity.Property(i => i.Location).HasMaxLength(200);
+            entity.Property(i => i.Price).HasPrecision(10, 2);
+            entity.Property(i => i.MinBidPrice).HasPrecision(10, 2);
+            entity.Property(i => i.BidStep).HasPrecision(10, 2);
+
+            entity.HasOne(i => i.User)
+                .WithMany(u => u.Items)
+                .HasForeignKey(i => i.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Category)
+                .WithMany(c => c.Items)
+                .HasForeignKey(i => i.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(i => i.UserId);
+            entity.HasIndex(i => i.CategoryId);
+            entity.HasIndex(i => i.CreatedAt);
+        });
+
+        // === ItemImage ===
+        builder.Entity<ItemImage>(entity =>
+        {
+            entity.Property(ii => ii.Url).HasMaxLength(500);
+
+            entity.HasOne(ii => ii.Item)
+                .WithMany(i => i.Images)
+                .HasForeignKey(ii => ii.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // === ItemTag ===
+        builder.Entity<ItemTag>(entity =>
+        {
+            entity.HasKey(it => new { it.ItemId, it.TagId });
+
+            entity.HasOne(it => it.Item)
+                .WithMany(i => i.ItemTags)
+                .HasForeignKey(it => it.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(it => it.Tag)
+                .WithMany(t => t.ItemTags)
+                .HasForeignKey(it => it.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

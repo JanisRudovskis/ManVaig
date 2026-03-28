@@ -276,11 +276,16 @@
 <div class="header">
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
-    <p>// click any task to toggle status · last updated 2026-03-20</p>
+    <p>// click any task to toggle status · last updated 2026-03-28</p>
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
     <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
     <!-- Session: 2026-03-20 — auth race condition fix, profile UI polish (verification text, email truncation, bio placeholder, month i18n, separator, icon sizing, channel visibility for unverified phones) -->
+    <!-- Session: 2026-03-27 — Items management prototype: card-based list view (marketplace style), add/edit form with location autocomplete (Nominatim), pricing types, visibility tags, category system. Design decisions: no sold history, simplified status (Available only, remove = done), location via OpenStreetMap Nominatim, 12 broad categories + tags for detail -->
+    <!-- Session: 2026-03-27b — Phase 4 implementation: backend models (Item, Category, Tag, ItemImage, ItemTag, enums) + migration + 12 seeded categories. CRUD API (items, categories, tags). Frontend: My Items list page with card grid, type/visibility tags, empty state, sidebar nav. Add/Edit item form modal (Nominatim location, pricing type cards, tag input, visibility/options). Full i18n (EN + LV, ~90 strings). PROJECT_SPEC updated: flat categories, PricingType enum, Item→User, MaxItems on User. -->
+    <!-- Session: 2026-03-28 — Roundup: marked Phase 4 implemented tasks as done (visibility, status flow, ItemImage, min offer, location, guest offers), updated docs for session continuity -->
+    <!-- Session: 2026-03-28b — Step 5b: validation implementation. Backend: tightened DTOs (Title 3-100, Desc 2000), expanded ValidatePricingFields per-type, auction lock on PUT/DELETE (placeholder). Frontend: full validate() per pricing type, char counters, error displays. i18n: 8 new validation keys EN+LV. -->
+    <!-- Session: 2026-03-28c — Step 6: item image upload. Backend: UploadItemImageAsync (800px max, WebP q80), DeleteImageAsync, 3 endpoints (upload/reorder/delete). Frontend: @dnd-kit drag-to-reorder (touch+mouse), SortableImageThumb, local preview via blob URLs, upload-on-save flow, at least 1 image validation. i18n: 4 new keys EN+LV. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -481,60 +486,75 @@
     <span class="phase-count" id="ph4-count"></span>
   </div>
   <div class="tasks" id="ph4">
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Items management UI prototype (list view + add/edit form)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Item + Category + Tag models + migrations</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Seed starter categories (Electronics, Clothing, etc.)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Seed starter categories (12 flat categories)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Add / edit / delete item API endpoints</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Add / edit / delete item API endpoints + tag autocomplete + categories list</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">My Items list page + sidebar nav + i18n (EN + LV)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Add/Edit item form (modal, all sections, Nominatim location, pricing types, tags, visibility)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Item image upload — max 5, compressed (Cloudinary)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Item visibility enum (Public / RegisteredOnly / LinkOnly / Private)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Public item detail page (Next.js, SSR)</div>
       <div class="task-badge badge-planned">planned</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Item status flow: Available → Under Offer → Sold</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Item status flow: Available → removed by seller (no sold history)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">ItemImage table — sort order, primary image, per-image delete</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Optional minimum offer price per item</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Item location (free text) + can ship flag</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Item location (Nominatim autocomplete, city+country) + can ship flag</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="4" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Allow anonymous offers toggle per item (default off)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>

@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ManVaig — My Items (Prototype)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+    body {
+      background: oklch(0.145 0 0);
+      color: oklch(0.985 0 0);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== TOKENS ===== */
+    :root {
+      --bg: oklch(0.145 0 0);
+      --fg: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0);
+      --card-fg: oklch(0.985 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-fg: oklch(0.708 0 0);
+      --border: oklch(1 0 0 / 10%);
+      --input: oklch(1 0 0 / 15%);
+      --ring: oklch(0.556 0 0);
+      --primary: oklch(0.922 0 0);
+      --primary-fg: oklch(0.205 0 0);
+      --destructive: oklch(0.704 0.191 22.216);
+      --radius: 0.625rem;
+
+      /* pricing type colors */
+      --type-fixed: #3b82f6;
+      --type-offers: #a855f7;
+      --type-bidding: #f97316;
+      --type-auction: #f97316;
+
+      /* status colors */
+      --status-available: #22c55e;
+      --status-underoffer: #eab308;
+      --status-sold: #71717a;
+      --price: #34d399;
+    }
+
+    /* ===== CONTAINER ===== */
+    .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    @media (min-width: 768px) { .page { padding: 32px 24px; } }
+
+    /* ===== HEADER ===== */
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 1.5rem; font-weight: 700; flex: 1; min-width: 120px; }
+    .item-counter {
+      background: var(--muted); color: var(--muted-fg);
+      padding: 4px 12px; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 500;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: calc(var(--radius) * 0.8);
+      font-size: 0.875rem; font-weight: 500;
+      border: none; cursor: pointer; transition: opacity 0.15s;
+      text-decoration: none;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); }
+    .btn-outline { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    .btn-outline:hover { background: var(--muted); }
+    .btn-destructive { background: transparent; color: var(--destructive); border: 1px solid transparent; }
+    .btn-destructive:hover { background: oklch(0.704 0.191 22.216 / 15%); }
+    .btn-ghost { background: transparent; color: var(--muted-fg); border: none; padding: 6px; border-radius: calc(var(--radius) * 0.6); }
+    .btn-ghost:hover { background: var(--muted); color: var(--fg); }
+    .btn-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .btn svg { width: 16px; height: 16px; }
+
+    /* ===== ITEM LIST ===== */
+    /* Card grid: responsive columns */
+    .item-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    /* ===== ITEM CARD ===== */
+    .item-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 1.4);
+      display: flex; flex-direction: column;
+      transition: border-color 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .item-card:hover { border-color: oklch(1 0 0 / 20%); }
+
+    .item-thumb {
+      width: 100%; aspect-ratio: 4/3;
+      background: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    .item-thumb svg { color: var(--muted-fg); width: 48px; height: 48px; }
+
+    .item-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+    .item-title { font-size: 0.95rem; font-weight: 600; line-height: 1.3; }
+
+    .item-pricing { display: flex; flex-direction: column; gap: 2px; }
+    .item-pricing .price-main { font-size: 1.15rem; font-weight: 700; color: var(--price); }
+    .item-pricing .price-detail { font-size: 0.8rem; color: var(--muted-fg); }
+    .item-pricing .bid-info { font-size: 0.8rem; color: var(--muted-fg); }
+    .item-pricing .countdown { font-size: 0.8rem; font-weight: 500; display: flex; align-items: center; gap: 4px; color: var(--muted-fg); }
+    .item-pricing .countdown.urgent { color: var(--destructive); }
+    .item-pricing .countdown svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .item-location { font-size: 0.8rem; color: var(--muted-fg); display: flex; align-items: center; gap: 4px; }
+    .item-location svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .item-separator { border: none; border-top: 1px solid var(--border); margin: 0 14px; }
+
+    .item-footer {
+      padding: 8px 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      min-height: 40px;
+    }
+    .item-footer .item-meta { font-size: 0.75rem; color: var(--muted-fg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 10px; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 500;
+      white-space: nowrap;
+    }
+    .badge svg { width: 12px; height: 12px; }
+
+    /* ===== TYPE TAG (overlay on primary image) ===== */
+    .type-tag {
+      position: absolute; top: 0; left: 0;
+      padding: 4px 12px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-radius: calc(var(--radius) * 1.4) 0 calc(var(--radius) * 0.6) 0;
+      z-index: 2; line-height: 1.4;
+      white-space: nowrap;
+    }
+    .type-tag-fixed { background: var(--type-fixed); color: #fff; }
+    .type-tag-offers { background: var(--type-offers); color: #fff; }
+    .type-tag-bidding { background: var(--type-bidding); color: #fff; }
+    .type-tag-auction { background: var(--type-auction); color: #fff; }
+
+    /* ===== VISIBILITY TAG (top-right corner) ===== */
+    .vis-tag {
+      position: absolute; top: 0; right: 0;
+      padding: 4px 12px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-radius: 0 calc(var(--radius) * 1.4) 0 calc(var(--radius) * 0.6);
+      z-index: 2; line-height: 1.4;
+      white-space: nowrap;
+    }
+    .vis-tag-private { background: #71717a; color: #fff; }
+    .vis-tag-registered { background: #eab308; color: #000; }
+    .vis-tag-link { background: #14b8a6; color: #fff; }
+
+    .badge-available { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-ended { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-unavailable { background: rgba(113,113,122,0.2); color: #a1a1aa; }
+
+    /* Dimmed row for ended/unavailable items */
+    .item-card.dimmed { opacity: 0.6; }
+    .item-card.dimmed:hover { opacity: 0.8; }
+
+    .tag { background: var(--muted); color: var(--muted-fg); padding: 2px 8px; border-radius: calc(var(--radius) * 0.6); font-size: 0.75rem; }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      padding: 80px 20px; text-align: center; gap: 16px;
+      width: 100%; margin: 0 auto;
+    }
+    .empty-state.active { display: flex; }
+    .empty-state > svg { width: 64px; height: 64px; color: var(--muted-fg); opacity: 0.5; }
+    .empty-state .btn svg { width: 16px; height: 16px; opacity: 1; }
+    .empty-state h2 { font-size: 1.25rem; font-weight: 600; }
+    .empty-state p { color: var(--muted-fg); font-size: 0.9rem; max-width: 320px; }
+
+    /* ===== MODAL / OVERLAY ===== */
+    .overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 50; backdrop-filter: blur(2px);
+    }
+    .overlay.active { display: block; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      display: none; position: fixed; z-index: 51;
+      background: var(--card);
+      flex-direction: column;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.4), 0 8px 16px rgba(0,0,0,0.2);
+    }
+    .modal.active {
+      display: flex;
+      animation: modalIn 0.25s ease-out;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+    /* Mobile: near-full-screen */
+    .modal {
+      inset: 8px;
+      border-radius: calc(var(--radius) * 1.8);
+    }
+
+    /* Desktop: centered, max-width */
+    @media (min-width: 768px) {
+      .modal {
+        inset: auto;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 640px; max-height: 85vh;
+        border-radius: calc(var(--radius) * 1.8);
+      }
+      .modal.active {
+        animation: modalInDesktop 0.25s ease-out;
+      }
+      @keyframes modalInDesktop {
+        from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      }
+    }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .modal-header h2 { font-size: 1.15rem; font-weight: 600; }
+
+    .modal-body { padding: 24px; flex: 1; overflow-y: auto; }
+
+    .modal-footer {
+      padding: 16px 24px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
+    /* ===== FORM ===== */
+    .form-section { margin-bottom: 28px; }
+    .form-section-title {
+      font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted-fg); margin-bottom: 16px;
+    }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; }
+    .field .hint { font-size: 0.75rem; color: var(--muted-fg); margin-top: 4px; }
+    .field .error-text { font-size: 0.75rem; color: var(--destructive); margin-top: 4px; display: none; }
+
+    input[type="text"], input[type="number"], input[type="datetime-local"], textarea, select {
+      width: 100%; padding: 8px 12px;
+      background: var(--input); color: var(--fg);
+      border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8);
+      font-size: 0.875rem; font-family: inherit;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--ring); box-shadow: 0 0 0 2px oklch(0.556 0 0 / 25%); }
+    textarea { resize: vertical; min-height: 80px; }
+    select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+    select option { background: oklch(0.205 0 0); }
+
+    .price-input-wrap {
+      display: flex; align-items: center; gap: 0;
+      border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8);
+      overflow: hidden;
+    }
+    .price-input-wrap:focus-within { border-color: var(--ring); box-shadow: 0 0 0 2px oklch(0.556 0 0 / 25%); }
+    .price-prefix {
+      padding: 8px 10px; background: var(--muted); color: var(--muted-fg);
+      font-size: 0.85rem; font-weight: 500; border-right: 1px solid var(--border);
+      user-select: none;
+    }
+    .price-input-wrap input {
+      border: none; border-radius: 0; background: var(--input);
+      box-shadow: none !important;
+    }
+
+    /* ===== SEGMENTED CONTROL ===== */
+    .segmented {
+      display: flex; gap: 0; background: var(--muted);
+      border-radius: calc(var(--radius) * 0.8); padding: 3px; width: fit-content;
+    }
+    .segmented button {
+      padding: 6px 16px; border: none; background: transparent;
+      color: var(--muted-fg); font-size: 0.8rem; font-weight: 500;
+      border-radius: calc(var(--radius) * 0.6); cursor: pointer;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .segmented button.active {
+      background: var(--card); color: var(--fg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .segmented button:hover:not(.active) { color: var(--fg); }
+
+    /* ===== TYPE SELECTOR CARDS ===== */
+    .type-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
+    .type-card {
+      padding: 12px; border: 2px solid var(--border);
+      border-radius: calc(var(--radius) * 1.0); cursor: pointer;
+      transition: all 0.15s; background: transparent;
+      text-align: left; font-family: inherit; color: var(--fg);
+      min-height: 80px;
+    }
+    .type-card:hover { border-color: oklch(1 0 0 / 25%); }
+    .type-card.active { border-color: var(--type-active, var(--primary)); background: oklch(1 0 0 / 5%); }
+    .type-card[data-type="fixed"].active { --type-active: var(--type-fixed); }
+    .type-card[data-type="offers"].active { --type-active: var(--type-offers); }
+    .type-card[data-type="bidding"].active { --type-active: var(--type-bidding); }
+    .type-card[data-type="auction"].active { --type-active: var(--type-auction); }
+
+    .type-card .type-icon { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem; }
+    .type-card .type-icon svg { width: 18px; height: 18px; }
+    .type-card[data-type="fixed"] .type-icon svg { color: var(--type-fixed); }
+    .type-card[data-type="offers"] .type-icon svg { color: var(--type-offers); }
+    .type-card[data-type="bidding"] .type-icon svg { color: var(--type-bidding); }
+    .type-card[data-type="auction"] .type-icon svg { color: var(--type-auction); }
+    .type-card .type-desc { font-size: 0.75rem; color: var(--muted-fg); line-height: 1.4; }
+
+    /* ===== TYPE-SPECIFIC FIELDS ===== */
+    .type-fields { display: none; margin-top: 16px; }
+    .type-fields.active { display: block; }
+
+    /* ===== SWITCH ===== */
+    .switch-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .switch-label { flex: 1; }
+    .switch-label .label-text { font-size: 0.85rem; font-weight: 500; }
+    .switch-label .label-hint { font-size: 0.75rem; color: var(--muted-fg); margin-top: 2px; }
+    .switch {
+      width: 40px; height: 22px; border-radius: 999px;
+      background: var(--muted); cursor: pointer; position: relative;
+      border: none; flex-shrink: 0; transition: background 0.2s;
+    }
+    .switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--fg); transition: transform 0.2s;
+    }
+    .switch.on { background: var(--primary); }
+    .switch.on::after { transform: translateX(18px); background: var(--primary-fg); }
+
+    /* ===== IMAGE GRID ===== */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 480px) {
+      .image-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .image-slot {
+      aspect-ratio: 1; width: 100%;
+      border: 2px dashed var(--border); border-radius: calc(var(--radius) * 0.8);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; cursor: pointer; transition: border-color 0.15s;
+      position: relative;
+    }
+    .image-slot:hover { border-color: var(--muted-fg); }
+    .image-slot svg { width: 20px; height: 20px; color: var(--muted-fg); }
+    .image-slot span { font-size: 0.65rem; color: var(--muted-fg); }
+    .image-slot.filled { border-style: solid; background: var(--muted); }
+    .image-slot.filled svg { width: 28px; height: 28px; opacity: 0.4; }
+    .image-slot .star {
+      position: absolute; top: -4px; left: -4px;
+      width: 18px; height: 18px; background: #eab308;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    }
+    .image-slot .star svg { width: 10px; height: 10px; color: #000; }
+    .image-slot .img-delete {
+      position: absolute; top: -4px; right: -4px;
+      width: 18px; height: 18px; background: var(--destructive);
+      border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .image-slot .img-delete svg { width: 10px; height: 10px; color: #fff; }
+    .image-slot.filled:hover .img-delete { opacity: 1; }
+
+    /* ===== LOCATION AUTOCOMPLETE ===== */
+    .location-wrap { position: relative; }
+    .location-input-row { display: flex; align-items: center; gap: 8px; }
+    .location-input-row input { flex: 1; }
+    .location-input-row .loc-icon { color: var(--muted-fg); flex-shrink: 0; }
+    .location-dropdown {
+      display: none; position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 0.8);
+      margin-top: 4px; z-index: 10; max-height: 200px; overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .location-dropdown.open { display: block; }
+    .location-option {
+      padding: 10px 12px; cursor: pointer; font-size: 0.85rem;
+      display: flex; align-items: center; gap: 8px;
+      transition: background 0.1s; border-bottom: 1px solid var(--border);
+    }
+    .location-option:last-child { border-bottom: none; }
+    .location-option:hover { background: var(--muted); }
+    .location-option .loc-city { color: var(--fg); font-weight: 500; }
+    .location-option .loc-country { color: var(--muted-fg); font-size: 0.8rem; }
+    .location-option svg { width: 14px; height: 14px; color: var(--muted-fg); flex-shrink: 0; }
+    .location-selected {
+      display: none; align-items: center; gap: 8px;
+      padding: 8px 12px; background: var(--muted);
+      border-radius: calc(var(--radius) * 0.8); font-size: 0.85rem;
+    }
+    .location-selected.active { display: flex; }
+    .location-selected .loc-text { flex: 1; }
+    .location-selected .loc-clear {
+      background: none; border: none; color: var(--muted-fg);
+      cursor: pointer; padding: 2px; display: flex;
+    }
+    .location-selected .loc-clear:hover { color: var(--destructive); }
+
+    /* ===== TAG INPUT ===== */
+    .tags-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      padding: 6px 8px; background: var(--input);
+      border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8);
+      min-height: 40px; cursor: text;
+    }
+    .tags-wrap:focus-within { border-color: var(--ring); box-shadow: 0 0 0 2px oklch(0.556 0 0 / 25%); }
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--muted); color: var(--fg);
+      padding: 3px 8px; border-radius: calc(var(--radius) * 0.6);
+      font-size: 0.8rem;
+    }
+    .tag-chip button {
+      background: none; border: none; color: var(--muted-fg); cursor: pointer;
+      padding: 0; display: flex; line-height: 1;
+    }
+    .tag-chip button:hover { color: var(--destructive); }
+    .tag-chip button svg { width: 12px; height: 12px; }
+    .tag-input {
+      border: none; background: transparent; color: var(--fg);
+      font-size: 0.8rem; outline: none; min-width: 100px; flex: 1;
+      font-family: inherit;
+    }
+    .tag-counter { font-size: 0.75rem; color: var(--muted-fg); margin-top: 4px; }
+
+    /* ===== DEV TOGGLE ===== */
+    .dev-bar {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 1.4); padding: 6px 8px;
+      display: flex; gap: 6px; z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .dev-bar button {
+      padding: 5px 12px; border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.6);
+      background: transparent; color: var(--muted-fg); font-size: 0.75rem;
+      cursor: pointer; font-family: inherit;
+    }
+    .dev-bar button.active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+
+
+    /* ===== DELETE ZONE (edit mode only) ===== */
+    .delete-zone {
+      display: none; margin-top: 8px; padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .delete-zone.visible { display: block; }
+    .btn-delete-item {
+      width: 100%; padding: 10px 16px;
+      background: transparent; color: var(--destructive);
+      border: 1px solid var(--destructive); border-radius: calc(var(--radius) * 0.8);
+      font-size: 0.85rem; font-weight: 500; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .btn-delete-item:hover { background: oklch(0.704 0.191 22.216 / 15%); }
+    .btn-delete-item svg { width: 16px; height: 16px; }
+
+    /* ===== ANTI-SNIPER NOTE ===== */
+    .info-note {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 10px 12px; background: oklch(from #3b82f6 l c h / 10%);
+      border-radius: calc(var(--radius) * 0.8); font-size: 0.8rem; color: #93c5fd;
+      margin-top: 12px;
+    }
+    @supports not (color: oklch(from red l c h)) {
+      .info-note { background: rgba(59,130,246,0.1); }
+    }
+    .info-note svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <!-- HEADER -->
+  <div class="header">
+    <h1>My Items</h1>
+    <span class="item-counter" id="counter">5 / 10 items</span>
+    <button class="btn btn-primary" onclick="openModal('add')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Add Item
+    </button>
+  </div>
+
+  <!-- ITEM LIST (populated) -->
+  <div class="item-list" id="itemList">
+
+    <!-- Item 1: Fixed Price -->
+    <div class="item-card">
+      <span class="type-tag type-tag-fixed">Fixed</span>
+      <div class="item-thumb">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      </div>
+      <div class="item-info">
+        <span class="item-title">Vintage Transistor Radio — Philips 1962</span>
+        <div class="item-pricing">
+          <span class="price-main">€120.00</span>
+        </div>
+      </div>
+      <hr class="item-separator">
+      <div class="item-footer">
+        <span class="item-meta">42 views · Listed 2 days ago</span>
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-icon" title="Edit" onclick="openModal('edit')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 2: Fixed + Offers -->
+    <div class="item-card">
+      <span class="type-tag type-tag-offers">Offers</span>
+      <div class="item-thumb">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      </div>
+      <div class="item-info">
+        <span class="item-title">WW2 Medal Collection — 5 pieces</span>
+        <div class="item-pricing">
+          <span class="price-main">€150.00</span>
+          <span class="price-detail">Best offer: €120.00</span>
+          <span class="bid-info">2 offers received</span>
+        </div>
+      </div>
+      <hr class="item-separator">
+      <div class="item-footer">
+        <span class="item-meta">128 views · 2 offers · Last offer 1h ago</span>
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-icon" title="Edit" onclick="openModal('edit')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 3: Open Bidding -->
+    <div class="item-card">
+      <span class="type-tag type-tag-bidding">Bidding</span>
+      <span class="vis-tag vis-tag-registered">Registered</span>
+      <div class="item-thumb">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      </div>
+      <div class="item-info">
+        <span class="item-title">Mountain Bike — Trek Marlin 7</span>
+        <div class="item-pricing">
+          <span class="price-detail">Min: €50.00</span>
+          <span class="price-main">Highest: €85.00</span>
+          <span class="bid-info">3 bids</span>
+        </div>
+      </div>
+      <hr class="item-separator">
+      <div class="item-footer">
+        <span class="item-meta">89 views · 3 bids · Last bid 3h ago</span>
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-icon" title="Edit" onclick="openModal('edit')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 4: Auction -->
+    <div class="item-card">
+      <span class="type-tag type-tag-auction">Auction</span>
+      <span class="vis-tag vis-tag-link">Link Only</span>
+      <div class="item-thumb">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      </div>
+      <div class="item-info">
+        <span class="item-title">Antique Grandfather Clock — 19th Century</span>
+        <div class="item-pricing">
+          <span class="price-detail">Start: €100.00 · Step: €10</span>
+          <span class="price-main">Highest: €140.00</span>
+          <span class="bid-info">5 bids</span>
+          <span class="countdown">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Ends in 2d 5h 30m
+          </span>
+        </div>
+      </div>
+      <hr class="item-separator">
+      <div class="item-footer">
+        <span class="item-meta">215 views · 5 bids · Listed 3 days ago</span>
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-icon" title="Edit" onclick="openModal('edit')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 5: Ended Auction (dimmed) -->
+    <div class="item-card dimmed">
+      <span class="type-tag type-tag-auction">Auction</span>
+      <span class="vis-tag vis-tag-private">Private</span>
+      <div class="item-thumb">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      </div>
+      <div class="item-info">
+        <span class="item-title">Silver Pocket Watch — 1920s</span>
+        <div class="item-pricing">
+          <span class="price-detail">Start: €60.00 · Step: €5</span>
+          <span class="price-main">Winner: €95.00</span>
+          <span class="bid-info">8 bids</span>
+          <span class="badge badge-ended">Ended</span>
+        </div>
+      </div>
+      <hr class="item-separator">
+      <div class="item-footer">
+        <span class="item-meta">340 views · 8 bids · Ended 2h ago</span>
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-icon" title="Edit" onclick="openModal('edit')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="emptyState">
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+    <h2>No items yet</h2>
+    <p>Start listing items in your shop to receive offers from buyers.</p>
+    <button class="btn btn-primary" onclick="openModal('add')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Add your first item
+    </button>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeModal()"></div>
+
+<!-- ADD / EDIT PANEL -->
+<div class="modal" id="modal">
+  <div class="modal-header">
+    <h2 id="modalTitle">Add Item</h2>
+    <button class="btn btn-ghost btn-icon" onclick="closeModal()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+
+    <!-- Section 1: Images (moved to top) -->
+    <div class="form-section">
+      <div class="form-section-title">Images</div>
+      <div class="image-grid">
+        <div class="image-slot filled">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <div class="star">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <button class="img-delete" onclick="this.parentElement.className='image-slot'; this.parentElement.innerHTML=emptySlotHTML();" title="Remove">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="image-slot filled">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <button class="img-delete" onclick="this.parentElement.className='image-slot'; this.parentElement.innerHTML=emptySlotHTML();" title="Remove">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="image-slot">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span>Upload</span>
+        </div>
+        <div class="image-slot">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span>Upload</span>
+        </div>
+        <div class="image-slot">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span>Upload</span>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px;">First image is the cover. Max 5 images.</div>
+    </div>
+
+    <!-- Section 2: Basic Info -->
+    <div class="form-section">
+      <div class="form-section-title">Basic Info</div>
+      <div class="field">
+        <label>Title *</label>
+        <input type="text" placeholder="e.g. Vintage Radio — Philips 1962" id="fieldTitle">
+        <div class="error-text" id="errTitle">Title is required</div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea placeholder="Describe the item, its condition, history..." rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label>Category *</label>
+        <select>
+          <option value="">Select category...</option>
+          <option>Electronics</option>
+          <option>Clothing &amp; Accessories</option>
+          <option>Antiques &amp; Collectibles</option>
+          <option>Home &amp; Garden</option>
+          <option>Sports &amp; Outdoors</option>
+          <option>Vehicles &amp; Parts</option>
+          <option>Books &amp; Media</option>
+          <option>Musical Instruments</option>
+          <option>Toys &amp; Hobbies</option>
+          <option>Health &amp; Beauty</option>
+          <option>Building Materials</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <div class="location-wrap" id="locationWrap">
+          <!-- Selected state (shown after picking) -->
+          <div class="location-selected" id="locationSelected">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span class="loc-text" id="locationText">Rīga, Latvia</span>
+            <button class="loc-clear" onclick="clearLocation()" title="Change">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <!-- Search state -->
+          <div id="locationSearch">
+            <div class="location-input-row">
+              <input type="text" placeholder="Search city..." id="locationInput" oninput="onLocationInput(this.value)" onfocus="onLocationFocus()" autocomplete="off">
+            </div>
+            <div class="location-dropdown" id="locationDropdown"></div>
+          </div>
+        </div>
+        <div class="hint">Pre-filled from your profile. Change if item is elsewhere.</div>
+      </div>
+      <div class="field">
+        <label>Condition</label>
+        <div class="segmented" id="conditionSeg">
+          <button class="active" onclick="setSegment(this)">New</button>
+          <button onclick="setSegment(this)">Used</button>
+          <button onclick="setSegment(this)">Worn</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Pricing Type -->
+    <div class="form-section">
+      <div class="form-section-title">Pricing Type</div>
+      <div class="type-cards">
+        <button class="type-card active" data-type="fixed" onclick="setType('fixed', this)">
+          <div class="type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7v10"/><path d="M15 9.5a2.5 2.5 0 0 0-2.5-2.5h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/></svg>
+            Fixed Price
+          </div>
+          <div class="type-desc">Set your price, buyers pay it</div>
+        </button>
+        <button class="type-card" data-type="offers" onclick="setType('offers', this)">
+          <div class="type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+            Fixed + Offers
+          </div>
+          <div class="type-desc">Set a price, accept lower offers</div>
+        </button>
+        <button class="type-card" data-type="bidding" onclick="setType('bidding', this)">
+          <div class="type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+            Open Bidding
+          </div>
+          <div class="type-desc">Set minimum, bids go up</div>
+        </button>
+        <button class="type-card" data-type="auction" onclick="setType('auction', this)">
+          <div class="type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Auction
+          </div>
+          <div class="type-desc">Timed auction, highest bid wins</div>
+        </button>
+      </div>
+
+      <!-- Fixed Price fields -->
+      <div class="type-fields active" id="fields-fixed">
+        <div class="field">
+          <label>Price *</label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">EUR</span>
+            <input type="number" placeholder="0.00" step="0.01" min="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Fixed + Offers fields -->
+      <div class="type-fields" id="fields-offers">
+        <div class="field">
+          <label>Listed Price *</label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">EUR</span>
+            <input type="number" placeholder="0.00" step="0.01" min="0">
+          </div>
+          <div class="hint">Buyers can offer less than this price</div>
+        </div>
+      </div>
+
+      <!-- Open Bidding fields -->
+      <div class="type-fields" id="fields-bidding">
+        <div class="field">
+          <label>Minimum Price *</label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">EUR</span>
+            <input type="number" placeholder="0.00" step="0.01" min="0">
+          </div>
+          <div class="hint">Bidding starts from this price and goes up</div>
+        </div>
+      </div>
+
+      <!-- Auction fields -->
+      <div class="type-fields" id="fields-auction">
+        <div class="field">
+          <label>Starting Price *</label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">EUR</span>
+            <input type="number" placeholder="0.00" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Bid Step *</label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">EUR</span>
+            <input type="number" placeholder="10.00" step="1" min="1">
+          </div>
+          <div class="hint">Minimum increment for each new bid</div>
+        </div>
+        <div class="field">
+          <label>End Date &amp; Time *</label>
+          <input type="datetime-local">
+        </div>
+        <div class="info-note">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span>Anti-sniper protection: if a bid is placed in the last 10 minutes, the auction automatically extends by 10 minutes.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Tags -->
+    <div class="form-section">
+      <div class="form-section-title">Tags</div>
+      <div class="tags-wrap" onclick="this.querySelector('.tag-input').focus()">
+        <div class="tag-chip" id="chip-vintage">vintage <button onclick="removeTag('chip-vintage')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="tag-chip" id="chip-retro">retro <button onclick="removeTag('chip-retro')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <input type="text" class="tag-input" placeholder="Add tag..." id="tagInput" onkeydown="handleTagKey(event)">
+      </div>
+      <div class="tag-counter" id="tagCounter">2 / 10 tags</div>
+    </div>
+
+    <!-- Section 5: Visibility & Options -->
+    <div class="form-section">
+      <div class="form-section-title">Visibility &amp; Options</div>
+      <div class="field">
+        <label>Visibility</label>
+        <select>
+          <option>Public</option>
+          <option>Registered Only</option>
+          <option>Link Only</option>
+          <option>Private</option>
+        </select>
+        <div class="hint">Controls who can see this item</div>
+      </div>
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="label-text">Allow guest offers</div>
+          <div class="label-hint">Users without an account can submit offers (name + contact required)</div>
+        </div>
+        <button class="switch" onclick="this.classList.toggle('on')"></button>
+      </div>
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="label-text">Can ship</div>
+          <div class="label-hint">Item can be shipped to the buyer</div>
+        </div>
+        <button class="switch on" onclick="this.classList.toggle('on')"></button>
+      </div>
+    </div>
+
+    <!-- Delete zone (edit mode only) -->
+    <div class="delete-zone" id="deleteZone">
+      <button class="btn-delete-item" onclick="if(confirm('Are you sure you want to delete this item? This cannot be undone.')) closeModal();">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+        Delete Item
+      </button>
+    </div>
+
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="validateAndSave()">Save Item</button>
+  </div>
+</div>
+
+<!-- DEV BAR -->
+<div class="dev-bar">
+  <button class="active" id="devPopulated" onclick="showState('populated')">Populated</button>
+  <button id="devEmpty" onclick="showState('empty')">Empty</button>
+</div>
+
+<script>
+  // Modal open/close
+  function openModal(mode) {
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('modal').classList.add('active');
+    document.getElementById('modalTitle').textContent = mode === 'edit' ? 'Edit Item' : 'Add Item';
+    const deleteZone = document.getElementById('deleteZone');
+    if (mode === 'edit') { deleteZone.classList.add('visible'); } else { deleteZone.classList.remove('visible'); }
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    document.getElementById('overlay').classList.remove('active');
+    document.getElementById('modal').classList.remove('active');
+    document.body.style.overflow = '';
+    document.querySelectorAll('.delete-confirm').forEach(el => el.classList.remove('active'));
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // Helper for empty image slot HTML
+  function emptySlotHTML() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span>Upload</span>';
+  }
+
+  // Segmented control
+  function setSegment(btn) {
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // Pricing type selector
+  function setType(type, btn) {
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.type-fields').forEach(f => f.classList.remove('active'));
+    const fields = document.getElementById('fields-' + type);
+    if (fields) fields.classList.add('active');
+  }
+
+  // Tag management
+  let tagCount = 2;
+  function handleTagKey(e) {
+    if ((e.key === 'Enter' || e.key === ',') && tagCount < 10) {
+      e.preventDefault();
+      const val = e.target.value.trim().replace(',', '').toLowerCase();
+      if (!val) return;
+      const id = 'chip-' + val.replace(/\s+/g, '-') + '-' + Date.now();
+      const chip = document.createElement('div');
+      chip.className = 'tag-chip';
+      chip.id = id;
+      chip.innerHTML = val + ' <button onclick="removeTag(\'' + id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>';
+      e.target.parentElement.insertBefore(chip, e.target);
+      e.target.value = '';
+      tagCount++;
+      document.getElementById('tagCounter').textContent = tagCount + ' / 10 tags';
+    }
+  }
+  function removeTag(id) {
+    const el = document.getElementById(id);
+    if (el) { el.remove(); tagCount--; document.getElementById('tagCounter').textContent = tagCount + ' / 10 tags'; }
+  }
+
+  // Location autocomplete (mock — in production uses Nominatim)
+  const mockLocations = [
+    { city: 'Rīga', country: 'Latvia' },
+    { city: 'Rīga, Centrs', country: 'Latvia' },
+    { city: 'Riga', country: 'Spain' },
+    { city: 'Liepāja', country: 'Latvia' },
+    { city: 'Daugavpils', country: 'Latvia' },
+    { city: 'Jelgava', country: 'Latvia' },
+    { city: 'Jūrmala', country: 'Latvia' },
+    { city: 'Barcelona', country: 'Spain' },
+    { city: 'Barcelona', country: 'Venezuela' },
+    { city: 'Madrid', country: 'Spain' },
+    { city: 'Berlin', country: 'Germany' },
+    { city: 'Bremen', country: 'Germany' },
+    { city: 'Paris', country: 'France' },
+    { city: 'London', country: 'United Kingdom' },
+    { city: 'Liverpool', country: 'United Kingdom' },
+    { city: 'Tallinn', country: 'Estonia' },
+    { city: 'Vilnius', country: 'Lithuania' },
+    { city: 'Warsaw', country: 'Poland' },
+  ];
+
+  let locationDebounce;
+  function onLocationInput(val) {
+    clearTimeout(locationDebounce);
+    const dd = document.getElementById('locationDropdown');
+    if (val.length < 2) { dd.classList.remove('open'); return; }
+    locationDebounce = setTimeout(() => {
+      const q = val.toLowerCase();
+      const matches = mockLocations.filter(l =>
+        l.city.toLowerCase().includes(q) || l.country.toLowerCase().includes(q)
+      ).slice(0, 5);
+      if (matches.length === 0) {
+        dd.innerHTML = '<div class="location-option"><span class="loc-country">No results found</span></div>';
+      } else {
+        dd.innerHTML = matches.map(l =>
+          '<div class="location-option" onclick="selectLocation(\'' + l.city + '\', \'' + l.country + '\')">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>' +
+          '<span><span class="loc-city">' + l.city + '</span> <span class="loc-country">' + l.country + '</span></span>' +
+          '</div>'
+        ).join('');
+      }
+      dd.classList.add('open');
+    }, 300);
+  }
+
+  function onLocationFocus() {
+    const input = document.getElementById('locationInput');
+    if (input.value.length >= 2) onLocationInput(input.value);
+  }
+
+  function selectLocation(city, country) {
+    document.getElementById('locationText').textContent = city + ', ' + country;
+    document.getElementById('locationSelected').classList.add('active');
+    document.getElementById('locationSearch').style.display = 'none';
+    document.getElementById('locationDropdown').classList.remove('open');
+  }
+
+  function clearLocation() {
+    document.getElementById('locationSelected').classList.remove('active');
+    document.getElementById('locationSearch').style.display = '';
+    document.getElementById('locationInput').value = '';
+    document.getElementById('locationInput').focus();
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.location-wrap')) {
+      document.getElementById('locationDropdown').classList.remove('open');
+    }
+  });
+
+  // State toggle (dev)
+  function showState(state) {
+    const list = document.getElementById('itemList');
+    const empty = document.getElementById('emptyState');
+    const counter = document.getElementById('counter');
+    if (state === 'empty') {
+      list.style.display = 'none';
+      empty.classList.add('active');
+      counter.textContent = '0 / 10 items';
+      document.getElementById('devPopulated').classList.remove('active');
+      document.getElementById('devEmpty').classList.add('active');
+    } else {
+      list.style.display = 'grid';
+      empty.classList.remove('active');
+      counter.textContent = '5 / 10 items';
+      document.getElementById('devPopulated').classList.add('active');
+      document.getElementById('devEmpty').classList.remove('active');
+    }
+  }
+
+  // Simple validation demo
+  function validateAndSave() {
+    const title = document.getElementById('fieldTitle');
+    const err = document.getElementById('errTitle');
+    if (!title.value.trim()) {
+      title.style.borderColor = 'var(--destructive)';
+      err.style.display = 'block';
+      title.focus();
+    } else {
+      title.style.borderColor = '';
+      err.style.display = 'none';
+      closeModal();
+    }
+  }
+
+</script>
+
+</body>
+</html>
