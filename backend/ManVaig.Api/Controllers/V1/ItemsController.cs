@@ -93,26 +93,26 @@ public class ItemsController : ControllerBase
 
         var currentCount = await _db.Items.CountAsync(i => i.UserId == userId.Value);
         if (currentCount >= user.MaxItems)
-            return BadRequest(new { error = $"Item limit reached ({user.MaxItems}). You cannot add more items." });
+            return BadRequest(new { error = "ITEM_LIMIT_REACHED", maxItems = user.MaxItems });
 
         // Validate title length
         if (request.Title.Trim().Length < 3 || request.Title.Trim().Length > 100)
-            return BadRequest(new { error = "Title must be between 3 and 100 characters." });
+            return BadRequest(new { error = "TITLE_LENGTH" });
 
         // Validate description length
         if (request.Description != null && request.Description.Length > 2000)
-            return BadRequest(new { error = "Description cannot exceed 2000 characters." });
+            return BadRequest(new { error = "DESCRIPTION_LENGTH" });
 
         // Validate tags
         if (request.Tags is { Count: > 10 })
-            return BadRequest(new { error = "Maximum 10 tags allowed." });
+            return BadRequest(new { error = "TAGS_LIMIT" });
         if (request.Tags != null && request.Tags.Any(t => t.Trim().Length > 30))
-            return BadRequest(new { error = "Each tag must be 30 characters or less." });
+            return BadRequest(new { error = "TAG_LENGTH" });
 
         // Validate category exists
         var categoryExists = await _db.Categories.AnyAsync(c => c.Id == request.CategoryId);
         if (!categoryExists)
-            return BadRequest(new { error = "Invalid category." });
+            return BadRequest(new { error = "INVALID_CATEGORY" });
 
         // Validate pricing fields
         var pricingError = ValidatePricingFields(request.PricingType, request.Price, request.MinBidPrice, request.BidStep, request.AuctionEnd);
@@ -190,7 +190,7 @@ public class ItemsController : ControllerBase
         {
             var categoryExists = await _db.Categories.AnyAsync(c => c.Id == request.CategoryId.Value);
             if (!categoryExists)
-                return BadRequest(new { error = "Invalid category." });
+                return BadRequest(new { error = "INVALID_CATEGORY" });
             item.CategoryId = request.CategoryId.Value;
         }
 
@@ -291,19 +291,19 @@ public class ItemsController : ControllerBase
             return StatusCode(403, new { error = lockError });
 
         if (files == null || files.Count == 0)
-            return BadRequest(new { error = "No files provided." });
+            return BadRequest(new { error = "NO_FILES" });
 
         var currentCount = item.Images?.Count ?? 0;
         if (currentCount + files.Count > MaxImagesPerItem)
-            return BadRequest(new { error = $"Maximum {MaxImagesPerItem} images per item. Currently have {currentCount}." });
+            return BadRequest(new { error = "IMAGE_LIMIT_REACHED", max = MaxImagesPerItem });
 
         // Validate all files first
         foreach (var file in files)
         {
             if (file.Length > MaxImageSize)
-                return BadRequest(new { error = $"File '{file.FileName}' exceeds 5MB limit." });
+                return BadRequest(new { error = "IMAGE_TOO_LARGE" });
             if (!AllowedImageTypes.Contains(file.ContentType))
-                return BadRequest(new { error = $"File '{file.FileName}' is not a supported image type. Use JPG, PNG, WebP, or GIF." });
+                return BadRequest(new { error = "IMAGE_INVALID_TYPE" });
         }
 
         var uploadedImages = new List<ItemImageDto>();
@@ -363,7 +363,7 @@ public class ItemsController : ControllerBase
             return StatusCode(403, new { error = lockError });
 
         if (request.ImageIds == null || request.ImageIds.Count == 0)
-            return BadRequest(new { error = "No image IDs provided." });
+            return BadRequest(new { error = "NO_IMAGE_IDS" });
 
         var images = item.Images?.ToList() ?? new();
         var imageMap = images.ToDictionary(i => i.Id);
@@ -372,7 +372,7 @@ public class ItemsController : ControllerBase
         foreach (var imgId in request.ImageIds)
         {
             if (!imageMap.ContainsKey(imgId))
-                return BadRequest(new { error = $"Image {imgId} does not belong to this item." });
+                return BadRequest(new { error = "IMAGE_NOT_FOUND" });
         }
 
         // Update sort order and primary flag
@@ -512,14 +512,14 @@ public class ItemsController : ControllerBase
         {
             case PricingType.Fixed:
                 if (!price.HasValue || price.Value <= 0)
-                    return "Price is required and must be greater than 0.";
+                    return "PRICE_REQUIRED";
                 break;
 
             case PricingType.FixedOffers:
                 if (!price.HasValue || price.Value <= 0)
-                    return "Price is required and must be greater than 0.";
+                    return "PRICE_REQUIRED";
                 if (minBid.HasValue && minBid.Value > price.Value)
-                    return "Minimum offer price cannot exceed the listed price.";
+                    return "MIN_OFFER_EXCEEDS_PRICE";
                 break;
 
             case PricingType.Bidding:
@@ -528,19 +528,19 @@ public class ItemsController : ControllerBase
 
             case PricingType.Auction:
                 if (!auctionEnd.HasValue)
-                    return "Auction end date is required.";
+                    return "AUCTION_END_REQUIRED";
                 if (auctionEnd.Value <= DateTime.UtcNow.AddHours(1))
-                    return "Auction must end at least 1 hour from now.";
+                    return "AUCTION_END_TOO_SOON";
                 break;
         }
 
         // Cross-field: no negative values
         if (price.HasValue && price.Value < 0)
-            return "Price cannot be negative.";
+            return "PRICE_NEGATIVE";
         if (minBid.HasValue && minBid.Value < 0)
-            return "Minimum bid cannot be negative.";
+            return "MIN_BID_NEGATIVE";
         if (bidStep.HasValue && bidStep.Value <= 0)
-            return "Bid step must be greater than 0.";
+            return "BID_STEP_POSITIVE";
 
         return null;
     }
@@ -563,12 +563,12 @@ public class ItemsController : ControllerBase
         {
             // Auction with bids is locked
             if (!item.AuctionEnd.HasValue || item.AuctionEnd.Value > DateTime.UtcNow)
-                return Task.FromResult<string?>("This auction has bids and cannot be modified.");
+                return Task.FromResult<string?>("AUCTION_LOCKED");
 
             // Auction ended — check 48h grace period
             var gracePeriodEnd = item.AuctionEnd.Value.AddHours(48);
             if (DateTime.UtcNow < gracePeriodEnd)
-                return Task.FromResult<string?>("This auction has ended. It will remain locked for 48 hours so the winner can contact you.");
+                return Task.FromResult<string?>("AUCTION_GRACE_PERIOD");
         }
 
         // No bids and auction ended → freely editable/deletable

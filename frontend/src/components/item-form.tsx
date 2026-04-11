@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import {
   X,
   Plus,
@@ -22,6 +22,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { lv } from "date-fns/locale/lv";
+import { enUS } from "date-fns/locale/en-US";
 import {
   DndContext,
   closestCenter,
@@ -156,6 +162,7 @@ interface NominatimResult {
 
 export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted }: ItemFormProps) {
   const t = useTranslations("itemForm");
+  const locale = useLocale();
 
   // Form state
   const [title, setTitle] = useState(item?.title ?? "");
@@ -166,7 +173,24 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
   const [price, setPrice] = useState(item?.price?.toString() ?? "");
   const [minBidPrice, setMinBidPrice] = useState(item?.minBidPrice?.toString() ?? "");
   const [bidStep, setBidStep] = useState(item?.bidStep?.toString() ?? "");
-  const [auctionEnd, setAuctionEnd] = useState(item?.auctionEnd?.slice(0, 16) ?? "");
+  const [auctionEndDate, setAuctionEndDate] = useState<Date | undefined>(() => {
+    if (!item?.auctionEnd) return undefined;
+    return new Date(item.auctionEnd);
+  });
+  const [auctionEndTime, setAuctionEndTime] = useState(() => {
+    if (!item?.auctionEnd) return "23:59";
+    const d = new Date(item.auctionEnd);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const dateFnsLocale = locale === "lv" ? lv : enUS;
+  const auctionEndIso = (() => {
+    if (!auctionEndDate || !auctionEndTime.match(/^\d{2}:\d{2}$/)) return "";
+    const y = auctionEndDate.getFullYear();
+    const m = String(auctionEndDate.getMonth() + 1).padStart(2, "0");
+    const d = String(auctionEndDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}T${auctionEndTime}`;
+  })();
   const [visibility, setVisibility] = useState(item?.visibility ?? ItemVisibility.Public);
   const [location, setLocation] = useState(item?.location ?? userLocation ?? "");
   const [locationSelected, setLocationSelected] = useState(!!(item?.location || userLocation));
@@ -392,9 +416,9 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
       // BidStep optional but must be > 0 if set
       if (bidStep && parseFloat(bidStep) <= 0) errs.bidStep = t("errorBidStepPositive");
       // AuctionEnd required, min 1h in future
-      if (!auctionEnd) errs.auctionEnd = t("errorAuctionEndRequired");
+      if (!auctionEndIso) errs.auctionEnd = t("errorAuctionEndRequired");
       else {
-        const endTime = new Date(auctionEnd).getTime();
+        const endTime = new Date(auctionEndIso).getTime();
         const oneHourFromNow = Date.now() + 60 * 60 * 1000;
         if (endTime <= oneHourFromNow) errs.auctionEnd = t("errorAuctionEndMinDuration");
       }
@@ -423,7 +447,7 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
           price: price ? parseFloat(price) : null,
           minBidPrice: minBidPrice ? parseFloat(minBidPrice) : null,
           bidStep: bidStep ? parseFloat(bidStep) : null,
-          auctionEnd: auctionEnd || null,
+          auctionEnd: auctionEndIso || null,
           visibility,
           location: location || undefined,
           canShip,
@@ -442,7 +466,7 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
           price: price ? parseFloat(price) : null,
           minBidPrice: minBidPrice ? parseFloat(minBidPrice) : null,
           bidStep: bidStep ? parseFloat(bidStep) : null,
-          auctionEnd: auctionEnd || null,
+          auctionEnd: auctionEndIso || null,
           visibility,
           location: location || "",
           canShip,
@@ -479,8 +503,10 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
       }
       onSaved();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t("errorSaveFailed");
-      setErrors({ form: message });
+      const code = err instanceof Error ? err.message : "";
+      const errorKey = `apiError_${code}`;
+      const translated = t.has(errorKey) ? t(errorKey) : t("errorSaveFailed");
+      setErrors({ form: translated });
     } finally {
       setSaving(false);
       setUploading(false);
@@ -642,11 +668,11 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(parseInt(e.target.value))}
-                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 [&>option]:bg-background [&>option]:text-foreground"
               >
-                <option value={0}>{t("categoryPlaceholder")}</option>
+                <option value={0} className="bg-background text-foreground">{t("categoryPlaceholder")}</option>
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <option key={c.id} value={c.id} className="bg-background text-foreground">
                     {c.name}
                   </option>
                 ))}
@@ -762,19 +788,18 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
                   <Label className="mb-1.5">
                     {pricingType === PricingType.FixedOffers ? t("fieldListedPrice") : t("fieldPrice")} *
                   </Label>
-                  <div className="flex overflow-hidden rounded-md border border-border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-                    <span className="flex items-center border-r border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
-                      EUR
-                    </span>
+                  <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={price}
-                      onChange={(e) => setPrice(e.target.value)}
+                      onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === "") setPrice(e.target.value); }}
                       placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                      className="flex-1 border-0 bg-input px-3 py-2 text-sm text-foreground outline-none"
+                      className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-foreground outline-none"
                     />
+                    <span className="flex items-center pr-3 text-sm text-muted-foreground">
+                      €
+                    </span>
                   </div>
                   {pricingType === PricingType.FixedOffers && (
                     <p className="mt-1 text-xs text-muted-foreground">{t("offersHint")}</p>
@@ -787,19 +812,18 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
               {pricingType === PricingType.FixedOffers && (
                 <div className="mb-4">
                   <Label className="mb-1.5">{t("fieldMinPrice")}</Label>
-                  <div className="flex overflow-hidden rounded-md border border-border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-                    <span className="flex items-center border-r border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
-                      EUR
-                    </span>
+                  <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={minBidPrice}
-                      onChange={(e) => setMinBidPrice(e.target.value)}
+                      onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === "") setMinBidPrice(e.target.value); }}
                       placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                      className="flex-1 border-0 bg-input px-3 py-2 text-sm text-foreground outline-none"
+                      className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-foreground outline-none"
                     />
+                    <span className="flex items-center pr-3 text-sm text-muted-foreground">
+                      €
+                    </span>
                   </div>
                   {errors.minBidPrice && <p className="mt-1 text-xs text-destructive">{errors.minBidPrice}</p>}
                 </div>
@@ -809,19 +833,18 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
               {pricingType === PricingType.Bidding && (
                 <div className="mb-4">
                   <Label className="mb-1.5">{t("fieldMinPrice")}</Label>
-                  <div className="flex overflow-hidden rounded-md border border-border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-                    <span className="flex items-center border-r border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
-                      EUR
-                    </span>
+                  <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={minBidPrice}
-                      onChange={(e) => setMinBidPrice(e.target.value)}
+                      onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === "") setMinBidPrice(e.target.value); }}
                       placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                      className="flex-1 border-0 bg-input px-3 py-2 text-sm text-foreground outline-none"
+                      className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-foreground outline-none"
                     />
+                    <span className="flex items-center pr-3 text-sm text-muted-foreground">
+                      €
+                    </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{t("biddingHint")}</p>
                   {errors.minBidPrice && <p className="mt-1 text-xs text-destructive">{errors.minBidPrice}</p>}
@@ -833,49 +856,90 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
                 <>
                   <div className="mb-4">
                     <Label className="mb-1.5">{t("fieldStartPrice")} *</Label>
-                    <div className="flex overflow-hidden rounded-md border border-border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-                      <span className="flex items-center border-r border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
-                        EUR
-                      </span>
+                    <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={minBidPrice}
-                        onChange={(e) => setMinBidPrice(e.target.value)}
+                        onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === "") setMinBidPrice(e.target.value); }}
                         placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        className="flex-1 border-0 bg-input px-3 py-2 text-sm text-foreground outline-none"
+                        className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-foreground outline-none"
                       />
+                      <span className="flex items-center pr-3 text-sm text-muted-foreground">
+                        €
+                      </span>
                     </div>
                     {errors.minBidPrice && <p className="mt-1 text-xs text-destructive">{errors.minBidPrice}</p>}
                   </div>
                   <div className="mb-4">
                     <Label className="mb-1.5">{t("fieldBidStep")}</Label>
-                    <div className="flex overflow-hidden rounded-md border border-border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-                      <span className="flex items-center border-r border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
-                        EUR
-                      </span>
+                    <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={bidStep}
-                        onChange={(e) => setBidStep(e.target.value)}
+                        onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === "") setBidStep(e.target.value); }}
                         placeholder="10.00"
-                        step="1"
-                        min="1"
-                        className="flex-1 border-0 bg-input px-3 py-2 text-sm text-foreground outline-none"
+                        className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-foreground outline-none"
                       />
+                      <span className="flex items-center pr-3 text-sm text-muted-foreground">
+                        €
+                      </span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{t("bidStepHint")}</p>
                     {errors.bidStep && <p className="mt-1 text-xs text-destructive">{errors.bidStep}</p>}
                   </div>
                   <div className="mb-4">
                     <Label className="mb-1.5">{t("fieldEndDate")} *</Label>
-                    <input
-                      type="datetime-local"
-                      value={auctionEnd}
-                      onChange={(e) => setAuctionEnd(e.target.value)}
-                      className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarOpen(!calendarOpen)}
+                        className={cn(
+                          "inline-flex w-[160px] items-center gap-2 rounded-md border border-border bg-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/25",
+                          auctionEndDate ? "text-foreground" : "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="size-4" />
+                        {auctionEndDate
+                          ? format(auctionEndDate, "dd.MM.yyyy", { locale: dateFnsLocale })
+                          : "DD.MM.YYYY"}
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={auctionEndTime}
+                        onChange={(e) => {
+                          let v = e.target.value.replace(/[^\d:]/g, "");
+                          if (v.length === 2 && !v.includes(":") && auctionEndTime.length < v.length) v += ":";
+                          if (v.length <= 5) setAuctionEndTime(v);
+                        }}
+                        onBlur={() => {
+                          const m = auctionEndTime.match(/^(\d{1,2}):?(\d{0,2})$/);
+                          if (m) {
+                            const h = Math.min(23, parseInt(m[1] || "0"));
+                            const min = Math.min(59, parseInt(m[2] || "0"));
+                            setAuctionEndTime(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
+                          }
+                        }}
+                        placeholder="23:59"
+                        className="w-[80px] rounded-md border border-border bg-input px-3 py-2 text-center text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                      />
+                    </div>
+                    {calendarOpen && (
+                      <div className="mt-2 w-fit rounded-md border border-border bg-popover shadow-md">
+                        <Calendar
+                          mode="single"
+                          selected={auctionEndDate}
+                          onSelect={(day) => {
+                            setAuctionEndDate(day);
+                            setCalendarOpen(false);
+                          }}
+                          disabled={(date) => date < new Date()}
+                          locale={dateFnsLocale}
+                        />
+                      </div>
+                    )}
                     {errors.auctionEnd && <p className="mt-1 text-xs text-destructive">{errors.auctionEnd}</p>}
                   </div>
                   <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 p-3 text-xs text-blue-300">
@@ -942,10 +1006,10 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(parseInt(e.target.value))}
-                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 [&>option]:bg-background [&>option]:text-foreground"
               >
                 {visibilityOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
+                  <option key={opt.value} value={opt.value} className="bg-background text-foreground">
                     {t(opt.key)}
                   </option>
                 ))}
