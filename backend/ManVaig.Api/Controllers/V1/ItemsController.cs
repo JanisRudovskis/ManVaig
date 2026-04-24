@@ -131,7 +131,7 @@ public class ItemsController : ControllerBase
             Price = request.Price,
             MinBidPrice = request.MinBidPrice,
             BidStep = request.BidStep,
-            AuctionEnd = request.AuctionEnd,
+            AuctionEnd = request.AuctionEnd.HasValue ? DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc) : null,
             Visibility = request.Visibility,
             Location = request.Location,
             CanShip = request.CanShip,
@@ -203,7 +203,7 @@ public class ItemsController : ControllerBase
         if (request.Price.HasValue) item.Price = request.Price.Value;
         if (request.MinBidPrice.HasValue) item.MinBidPrice = request.MinBidPrice.Value;
         if (request.BidStep.HasValue) item.BidStep = request.BidStep.Value;
-        if (request.AuctionEnd.HasValue) item.AuctionEnd = request.AuctionEnd.Value;
+        if (request.AuctionEnd.HasValue) item.AuctionEnd = DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc);
 
         // Allow clearing pricing fields when switching pricing type
         if (request.ClearPricingFields)
@@ -211,7 +211,7 @@ public class ItemsController : ControllerBase
             item.Price = request.Price;
             item.MinBidPrice = request.MinBidPrice;
             item.BidStep = request.BidStep;
-            item.AuctionEnd = request.AuctionEnd;
+            item.AuctionEnd = request.AuctionEnd.HasValue ? DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc) : null;
         }
 
         // Validate final pricing state
