@@ -32,4 +32,5 @@ public class Item
 
     public ICollection<ItemImage> Images { get; set; } = new List<ItemImage>();
     public ICollection<ItemTag> ItemTags { get; set; } = new List<ItemTag>();
+    public ICollection<Bid> Bids { get; set; } = new List<Bid>();
 }

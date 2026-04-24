@@ -262,3 +262,48 @@ export async function deleteItemImage(
     throw new Error(body.error ?? "image_delete_failed");
   }
 }
+
+// === Bids ===
+
+export interface BidResponse {
+  id: string;
+  bidderLabel: string;
+  bidderName: string | null;
+  bidderContact: string | null;
+  amount: number;
+  status: string;
+  isWinner: boolean;
+  createdAt: string;
+}
+
+export interface BidListResponse {
+  bids: BidResponse[];
+  totalBids: number;
+  highestBid: number | null;
+  auctionEnded: boolean;
+  winnerExpiresAt: string | null;
+}
+
+export async function fetchBids(itemId: string): Promise<BidListResponse> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/bids`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "bids_fetch_failed");
+  }
+  return res.json();
+}
+
+export async function assignNextWinner(itemId: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/bids/assign-next`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "assign_next_failed");
+  }
+}

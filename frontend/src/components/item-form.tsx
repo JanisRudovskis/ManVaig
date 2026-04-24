@@ -51,11 +51,13 @@ import {
   uploadItemImages,
   reorderItemImages,
   deleteItemImage,
+  fetchBids,
+  assignNextWinner,
   PricingType,
   Condition,
   ItemVisibility,
 } from "@/lib/items";
-import type { ItemResponse, ItemImage, CategoryDto, CreateItemData, UpdateItemData } from "@/lib/items";
+import type { ItemResponse, ItemImage, CategoryDto, CreateItemData, UpdateItemData, BidListResponse } from "@/lib/items";
 
 // === Types ===
 
@@ -224,6 +226,10 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
   const locationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
+  // Bid history (auction items only, edit mode)
+  const [bidData, setBidData] = useState<BidListResponse | null>(null);
+  const [bidLoading, setBidLoading] = useState(false);
+
   // DnD sensors — pointer (mouse) + touch (mobile long-press)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -234,6 +240,14 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {});
   }, []);
+
+  // Load bids for auction items in edit mode
+  useEffect(() => {
+    if (mode === "edit" && item?.pricingType === PricingType.Auction) {
+      setBidLoading(true);
+      fetchBids(item.id).then(setBidData).catch(() => {}).finally(() => setBidLoading(false));
+    }
+  }, [mode, item]);
 
   // === Image handlers ===
 
@@ -1035,6 +1049,81 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
               <Switch checked={canShip} onCheckedChange={setCanShip} />
             </div>
           </div>
+
+          {/* === Bid History (auction items, edit mode only) === */}
+          {mode === "edit" && item?.pricingType === PricingType.Auction && (
+            <div className="border-t border-border pt-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("bidsTitle")} ({bidData?.totalBids ?? 0})
+              </p>
+              {bidLoading ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  {t("loadingBids")}
+                </div>
+              ) : !bidData || bidData.bids.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">{t("noBids")}</p>
+              ) : (
+                <div className="space-y-1">
+                  {bidData.bids.map((bid) => (
+                    <div
+                      key={bid.id}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
+                        bid.isWinner && bidData.auctionEnded
+                          ? "border-l-4 border-emerald-500 bg-emerald-500/10"
+                          : "bg-muted/30"
+                      )}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {bid.bidderName ?? bid.bidderLabel}
+                          </span>
+                          {bid.isWinner && bidData.auctionEnded && (
+                            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                              {t("winner")}
+                            </span>
+                          )}
+                          {bid.status === "Expired" && (
+                            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+                              {t("expired")}
+                            </span>
+                          )}
+                        </div>
+                        {bid.bidderContact && bidData.auctionEnded && bid.isWinner && (
+                          <p className="text-xs text-muted-foreground">{bid.bidderContact}</p>
+                        )}
+                      </div>
+                      <span className="font-semibold text-emerald-400">€{bid.amount.toFixed(2)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(bid.createdAt).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Assign next winner button */}
+                  {bidData.auctionEnded && bidData.winnerExpiresAt && new Date(bidData.winnerExpiresAt) < new Date() && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await assignNextWinner(item!.id);
+                          const updated = await fetchBids(item!.id);
+                          setBidData(updated);
+                        } catch {
+                          setErrors({ form: t("apiError_assign_next_failed") });
+                        }
+                      }}
+                      className="mt-2 w-full rounded-md bg-orange-500/15 px-3 py-2 text-sm font-medium text-orange-400 transition-colors hover:bg-orange-500/25"
+                    >
+                      {t("assignNextWinner")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* === Delete zone (edit only) === */}
           {mode === "edit" && (

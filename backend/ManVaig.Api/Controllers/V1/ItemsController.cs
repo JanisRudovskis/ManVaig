@@ -548,31 +548,28 @@ public class ItemsController : ControllerBase
     /// <summary>
     /// Check if an auction item is locked (has bids, in grace period, etc.).
     /// Returns an error message if locked, null if editable.
-    /// Note: Bids table doesn't exist yet — this is a placeholder for when it does.
     /// </summary>
-    private Task<string?> CheckAuctionLock(Item item)
+    private async Task<string?> CheckAuctionLock(Item item)
     {
         if (item.PricingType != PricingType.Auction)
-            return Task.FromResult<string?>(null);
+            return null;
 
-        // TODO: When Bids table exists, check: var hasBids = await _db.Bids.AnyAsync(b => b.ItemId == item.Id);
-        // For now, auctions are always editable (no bids table yet)
-        var hasBids = false;
+        var hasBids = await _db.Bids.AnyAsync(b => b.ItemId == item.Id);
 
         if (hasBids)
         {
             // Auction with bids is locked
             if (!item.AuctionEnd.HasValue || item.AuctionEnd.Value > DateTime.UtcNow)
-                return Task.FromResult<string?>("AUCTION_LOCKED");
+                return "AUCTION_LOCKED";
 
             // Auction ended — check 48h grace period
             var gracePeriodEnd = item.AuctionEnd.Value.AddHours(48);
             if (DateTime.UtcNow < gracePeriodEnd)
-                return Task.FromResult<string?>("AUCTION_GRACE_PERIOD");
+                return "AUCTION_GRACE_PERIOD";
         }
 
-        // No bids and auction ended → freely editable/deletable
-        return Task.FromResult<string?>(null);
+        // No bids, or grace period expired → freely editable/deletable
+        return null;
     }
 
     private static ItemResponse MapToResponse(Item item)

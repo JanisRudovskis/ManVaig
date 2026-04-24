@@ -247,6 +247,23 @@
     "apiError_image_upload_failed": "Nevarēja augšupielādēt attēlus. Lūdzu, mēģiniet vēlreiz.",
     "apiError_image_reorder_failed": "Nevarēja pārkārtot attēlus. Lūdzu, mēģiniet vēlreiz.",
     "apiError_image_delete_failed": "Nevarēja dzēst attēlu. Lūdzu, mēģiniet vēlreiz.",
-    "apiError_IMAGE_INVALID_TYPE": "Tiek atbalstīti tikai JPG, PNG, WebP un GIF attēli."
+    "apiError_IMAGE_INVALID_TYPE": "Tiek atbalstīti tikai JPG, PNG, WebP un GIF attēli.",
+    "bidsTitle": "Likmes",
+    "loadingBids": "Ielādē likmes...",
+    "noBids": "Vēl nav likmju",
+    "winner": "Uzvarētājs",
+    "expired": "Beidzies",
+    "assignNextWinner": "Piešķirt nākamo solītāju kā uzvarētāju",
+    "apiError_assign_next_failed": "Nevarēja piešķirt nākamo uzvarētāju. Lūdzu, mēģiniet vēlreiz.",
+    "apiError_bids_fetch_failed": "Nevarēja ielādēt likmes. Lūdzu, mēģiniet vēlreiz.",
+    "apiError_NOT_AUCTION": "Šis nav izsoles sludinājums.",
+    "apiError_AUCTION_ENDED": "Šī izsole ir beigusies.",
+    "apiError_CANNOT_BID_OWN_ITEM": "Jūs nevarat likt likmi uz savu sludinājumu.",
+    "apiError_BID_TOO_LOW": "Jūsu likme ir jābūt augstākai par pašreizējo augstāko likmi.",
+    "apiError_BID_BELOW_STARTING": "Jūsu likme nedrīkst būt mazāka par sākuma cenu.",
+    "apiError_BID_STEP_TOO_SMALL": "Jūsu likme neatbilst minimālajam solīšanas solim.",
+    "apiError_AUCTION_NOT_ENDED": "Izsole vēl nav beigusies.",
+    "apiError_WINNER_NOT_EXPIRED": "Uzvarētāja 24 stundu apstiprināšanas periods vēl nav beidzies.",
+    "apiError_NO_MORE_BIDDERS": "Nav vairāk solītāju, kuriem piešķirt uzvaru."
   }
 }

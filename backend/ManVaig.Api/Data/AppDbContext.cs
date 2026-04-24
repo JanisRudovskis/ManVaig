@@ -19,6 +19,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Item> Items => Set<Item>();
     public DbSet<ItemImage> ItemImages => Set<ItemImage>();
     public DbSet<ItemTag> ItemTags => Set<ItemTag>();
+    public DbSet<Bid> Bids => Set<Bid>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -150,6 +151,25 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 .WithMany(t => t.ItemTags)
                 .HasForeignKey(it => it.TagId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // === Bid ===
+        builder.Entity<Bid>(entity =>
+        {
+            entity.Property(b => b.Amount).HasPrecision(10, 2);
+
+            entity.HasOne(b => b.Item)
+                .WithMany(i => i.Bids)
+                .HasForeignKey(b => b.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.User)
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(b => b.ItemId);
+            entity.HasIndex(b => new { b.ItemId, b.Amount });
         });
     }
 }

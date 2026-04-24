@@ -247,6 +247,23 @@
     "apiError_image_upload_failed": "Could not upload images. Please try again.",
     "apiError_image_reorder_failed": "Could not reorder images. Please try again.",
     "apiError_image_delete_failed": "Could not delete image. Please try again.",
-    "apiError_IMAGE_INVALID_TYPE": "Only JPG, PNG, WebP, and GIF images are supported."
+    "apiError_IMAGE_INVALID_TYPE": "Only JPG, PNG, WebP, and GIF images are supported.",
+    "bidsTitle": "Bids",
+    "loadingBids": "Loading bids...",
+    "noBids": "No bids yet",
+    "winner": "Winner",
+    "expired": "Expired",
+    "assignNextWinner": "Assign next bidder as winner",
+    "apiError_assign_next_failed": "Could not assign next winner. Please try again.",
+    "apiError_bids_fetch_failed": "Could not load bids. Please try again.",
+    "apiError_NOT_AUCTION": "This item is not an auction.",
+    "apiError_AUCTION_ENDED": "This auction has ended.",
+    "apiError_CANNOT_BID_OWN_ITEM": "You cannot bid on your own item.",
+    "apiError_BID_TOO_LOW": "Your bid must be higher than the current highest bid.",
+    "apiError_BID_BELOW_STARTING": "Your bid must be at least the starting price.",
+    "apiError_BID_STEP_TOO_SMALL": "Your bid must respect the minimum bid step.",
+    "apiError_AUCTION_NOT_ENDED": "The auction has not ended yet.",
+    "apiError_WINNER_NOT_EXPIRED": "The winner's 24-hour confirmation period has not expired yet.",
+    "apiError_NO_MORE_BIDDERS": "No more bidders to assign."
   }
 }
