@@ -249,6 +249,7 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
     }
   }, [mode, item]);
 
+
   // === Image handlers ===
 
   const addImageFiles = (files: FileList | File[]) => {
