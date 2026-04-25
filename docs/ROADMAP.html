@@ -276,7 +276,7 @@
 <div class="header">
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
-    <p>// click any task to toggle status · last updated 2026-03-28</p>
+    <p>// click any task to toggle status · last updated 2026-04-25</p>
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
     <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
@@ -286,6 +286,7 @@
     <!-- Session: 2026-03-28 — Roundup: marked Phase 4 implemented tasks as done (visibility, status flow, ItemImage, min offer, location, guest offers), updated docs for session continuity -->
     <!-- Session: 2026-03-28b — Step 5b: validation implementation. Backend: tightened DTOs (Title 3-100, Desc 2000), expanded ValidatePricingFields per-type, auction lock on PUT/DELETE (placeholder). Frontend: full validate() per pricing type, char counters, error displays. i18n: 8 new validation keys EN+LV. -->
     <!-- Session: 2026-03-28c — Step 6: item image upload. Backend: UploadItemImageAsync (800px max, WebP q80), DeleteImageAsync, 3 endpoints (upload/reorder/delete). Frontend: @dnd-kit drag-to-reorder (touch+mouse), SortableImageThumb, local preview via blob URLs, upload-on-save flow, at least 1 image validation. i18n: 4 new keys EN+LV. -->
+    <!-- Session: 2026-04-25 — Auction bidding system (Phase 4 Step 7), backend error codes i18n, Playwright E2E tests (15 tests), Railway deployment, date picker UX fix, price input polish, Cloudinary config. Added roadmap task: unverified email UX (login allowed, guest permissions, warning banner). -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -393,6 +394,11 @@
       <div class="task-check">✓</div>
       <div class="task-text">User profile page (view + edit)</div>
       <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="2" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Unverified email UX — allow login, restrict to guest permissions, show persistent warning banner to verify email</div>
+      <div class="task-badge badge-planned">planned</div>
     </div>
     <div class="task" data-status="future" data-phase="2" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>

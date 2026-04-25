@@ -263,6 +263,53 @@ export async function deleteItemImage(
   }
 }
 
+// === Public types (for browse feed + detail page) ===
+
+export interface PublicSellerSummary {
+  displayName: string;
+  avatarUrl: string | null;
+  location: string | null;
+  memberSince: string;
+}
+
+export interface PublicSellerDetail extends PublicSellerSummary {
+  bio: string | null;
+}
+
+export interface PublicItemCard {
+  id: string;
+  title: string;
+  categoryId: number;
+  categoryName: string;
+  condition: number;
+  pricingType: number;
+  price: number | null;
+  minBidPrice: number | null;
+  bidStep: number | null;
+  auctionEnd: string | null;
+  location: string | null;
+  canShip: boolean;
+  createdAt: string;
+  images: ItemImage[];
+  tags: string[];
+  seller: PublicSellerSummary;
+  bidCount: number;
+  highestBid: number | null;
+}
+
+export interface PublicItemDetail extends PublicItemCard {
+  description: string | null;
+  allowGuestOffers: boolean;
+  seller: PublicSellerDetail;
+}
+
+export interface PublicItemListResponse {
+  items: PublicItemCard[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 // === Bids ===
 
 export interface BidResponse {
@@ -306,4 +353,37 @@ export async function assignNextWinner(itemId: string): Promise<void> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "assign_next_failed");
   }
+}
+
+// === Public Browse API (no auth required) ===
+
+export async function fetchPublicItems(
+  page = 1,
+  pageSize = 20,
+  categoryId?: number | null,
+  signal?: AbortSignal
+): Promise<PublicItemListResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (categoryId) params.set("categoryId", String(categoryId));
+
+  const res = await fetch(`${API_URL}/api/v1/public/items?${params}`, { signal });
+  if (!res.ok) throw new Error("browse_fetch_failed");
+  return res.json();
+}
+
+export async function fetchPublicItem(id: string): Promise<PublicItemDetail> {
+  const headers: Record<string, string> = {};
+  // Optionally send auth token (needed for RegisteredOnly items)
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}/api/v1/public/items/${id}`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "item_fetch_failed");
+  }
+  return res.json();
 }
