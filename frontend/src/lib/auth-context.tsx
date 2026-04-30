@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { getToken, logout as clearToken, type AuthResponse } from "@/lib/auth";
 import { LoginDialog } from "@/components/login-dialog";
 
@@ -9,6 +10,7 @@ interface User {
   email: string;
   displayName: string;
   emailConfirmed: boolean;
+  avatarUrl: string | null;
 }
 
 interface AuthContextValue {
@@ -17,6 +19,7 @@ interface AuthContextValue {
   user: User | null;
   openLoginDialog: () => void;
   setUser: (data: AuthResponse) => void;
+  updateAvatarUrl: (url: string) => void;
   logout: () => void;
 }
 
@@ -34,6 +37,7 @@ function parseToken(token: string): User | null {
       email: payload.email,
       displayName: payload.displayName ?? payload.display_name ?? payload.email,
       emailConfirmed: payload.emailConfirmed === "true",
+      avatarUrl: payload.avatarUrl ?? null,
     };
   } catch {
     return null;
@@ -44,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const token = getToken();
@@ -54,6 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Listen for auto-logout events (401 from authFetch)
+  useEffect(() => {
+    const handler = () => {
+      setUserState(null);
+      router.push("/login");
+    };
+    window.addEventListener("auth:logout", handler);
+    return () => window.removeEventListener("auth:logout", handler);
+  }, [router]);
+
   const openLoginDialog = useCallback(() => setDialogOpen(true), []);
 
   const setUser = useCallback((data: AuthResponse) => {
@@ -62,7 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.email,
       displayName: data.displayName,
       emailConfirmed: data.emailConfirmed,
+      avatarUrl: data.avatarUrl ?? null,
     });
+  }, []);
+
+  const updateAvatarUrl = useCallback((url: string) => {
+    setUserState((prev) =>
+      prev ? { ...prev, avatarUrl: url } : prev
+    );
   }, []);
 
   const logout = useCallback(() => {
@@ -71,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext value={{ isLoggedIn: !!user, isLoading, user, openLoginDialog, setUser, logout }}>
+    <AuthContext value={{ isLoggedIn: !!user, isLoading, user, openLoginDialog, setUser, updateAvatarUrl, logout }}>
       {children}
       <LoginDialog
         open={dialogOpen}

@@ -6,7 +6,8 @@
     "sell": "Sell",
     "notifications": "Notifications",
     "login": "Login",
-    "logout": "Logout"
+    "logout": "Logout",
+    "more": "More"
   },
   "home": {
     "title": "Welcome to ManVaig",
@@ -22,8 +23,9 @@
   },
   "login": {
     "title": "ManVaig",
-    "email": "Email",
+    "loginLabel": "Email or username",
     "password": "Password",
+    "forgotPassword": "Forgot password?",
     "submit": "Log in",
     "orContinueWith": "or continue with",
     "google": "Google",
@@ -31,12 +33,12 @@
     "comingSoon": "coming soon",
     "noAccount": "Don't have an account?",
     "register": "Register",
-    "errorInvalid": "Invalid email or password",
+    "errorInvalid": "Invalid email/username or password",
     "errorGeneric": "Something went wrong. Please try again."
   },
   "register": {
     "title": "ManVaig",
-    "displayName": "Display name",
+    "displayName": "Username",
     "email": "Email",
     "password": "Password",
     "confirmPassword": "Confirm password",
@@ -49,7 +51,9 @@
     "login": "Log in",
     "termsCheckbox": "I agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>",
     "required": "*",
-    "errorDisplayNameLength": "Display name must be at least 3 characters",
+    "errorDisplayNameLength": "Username must be 3-30 characters",
+    "errorDisplayNameFormat": "Username can only contain letters, numbers, hyphens and underscores",
+    "errorDisplayNameTaken": "This username is already taken",
     "errorEmailFormat": "Please enter a valid email address",
     "errorPasswordLength": "Password must be at least 8 characters",
     "errorPasswordMismatch": "Passwords do not match",
@@ -73,9 +77,36 @@
     "errorTitle": "Confirmation failed",
     "errorDescription": "The confirmation link is invalid or has expired. Please request a new one.",
     "goToLogin": "Go to login",
+    "goToProfile": "Go to profile",
     "goHome": "Go to homepage",
     "inlineTitle": "Email not confirmed",
-    "inlineDescription": "Please confirm your email to access this feature."
+    "inlineDescription": "Please confirm your email to access this feature.",
+    "resendIn": "Resend in {time}",
+    "rateLimited": "Please wait before requesting another email."
+  },
+  "emailManagement": {
+    "verified": "Verified",
+    "notVerified": "Not verified",
+    "changeEmail": "Change email",
+    "resendVerification": "Resend verification",
+    "resendIn": "Resend in {time}",
+    "newEmailLabel": "New email",
+    "newEmailPlaceholder": "your@newemail.com",
+    "passwordLabel": "Current password",
+    "passwordPlaceholder": "Enter your password",
+    "sendVerification": "Send verification",
+    "cancel": "Cancel",
+    "changeSuccess": "Email changed! Check your inbox for the verification link.",
+    "resendSuccess": "Verification email sent! Check your inbox.",
+    "errorEmailRequired": "Email is required",
+    "errorEmailInvalid": "Please enter a valid email address",
+    "errorPasswordRequired": "Password is required to change email",
+    "errorInvalidPassword": "Incorrect password",
+    "errorEmailTaken": "This email is already in use",
+    "errorSameEmail": "This is already your current email",
+    "errorRateLimited": "Please wait before sending another email.",
+    "errorResendFailed": "Could not send email. Please try again.",
+    "errorGeneric": "Something went wrong. Please try again."
   },
   "profile": {
     "title": "My Profile",
@@ -266,13 +297,60 @@
     "apiError_WINNER_NOT_EXPIRED": "The winner's 24-hour confirmation period has not expired yet.",
     "apiError_NO_MORE_BIDDERS": "No more bidders to assign."
   },
+  "usernameChecklist": {
+    "length": "3-30 characters",
+    "format": "Only letters, numbers, - and _",
+    "checking": "Checking availability...",
+    "available": "Username is available",
+    "taken": "Username is already taken"
+  },
+  "passwordChecklist": {
+    "length": "At least 8 characters",
+    "uppercase": "One uppercase letter (A-Z)",
+    "digit": "One digit (0-9)"
+  },
+  "forgotPassword": {
+    "title": "Forgot password?",
+    "description": "Enter your email address and we'll send you a link to reset your password.",
+    "email": "Email",
+    "emailPlaceholder": "your@email.com",
+    "submit": "Send reset link",
+    "sentTitle": "Check your email",
+    "sentDescription": "If an account with that email exists, we've sent a password reset link. Click it to choose a new password.",
+    "checkSpam": "Don't see it? Check your spam folder.",
+    "backToLogin": "Back to login",
+    "errorEmailRequired": "Please enter your email address",
+    "errorEmailFormat": "Please enter a valid email address",
+    "errorGeneric": "Something went wrong. Please try again."
+  },
+  "resetPassword": {
+    "title": "Reset your password",
+    "description": "Choose a new password for your account.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "submit": "Reset password",
+    "successTitle": "Password reset!",
+    "successDescription": "Your password has been changed successfully. You can now log in with your new password.",
+    "goToLogin": "Go to login",
+    "errorTitle": "Invalid reset link",
+    "errorDescription": "This reset link is invalid or has expired. Please request a new one.",
+    "tryAgain": "Request new link",
+    "errorPasswordLength": "Password must be at least 8 characters",
+    "errorPasswordUppercase": "Password must contain at least one uppercase letter (A-Z)",
+    "errorPasswordDigit": "Password must contain at least one digit (0-9)",
+    "errorPasswordMismatch": "Passwords do not match",
+    "errorGeneric": "Something went wrong. Please try again."
+  },
   "feed": {
     "forYou": "For You",
     "noItems": "No items yet",
     "noItemsDescription": "Be the first to list something!",
     "noItemsInCategory": "No items in this category yet",
     "loadingMore": "Loading more...",
-    "errorLoadFailed": "Could not load items. Please try again."
+    "errorLoadFailed": "Could not load items. Please try again.",
+    "sellPrompt": "Sell your item...",
+    "sellPhoto": "Photo",
+    "sellItem": "List Item"
   },
   "itemDetail": {
     "description": "Description",

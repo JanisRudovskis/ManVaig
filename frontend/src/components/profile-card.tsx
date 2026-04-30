@@ -12,15 +12,16 @@ import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { BadgeDisplay } from "@/components/badge-display";
+import { LocationSearch } from "@/components/location-search";
+import { EmailManagement } from "@/components/email-management";
 import { updateProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import { useLocale } from "next-intl";
 import {
-  Mail,
   Phone,
   MapPin,
   Calendar,
-  CheckCircle,
   AlertCircle,
   MessageCircle,
   Send,
@@ -48,6 +49,7 @@ export function ProfileCard({
 }: ProfileCardProps) {
   const t = useTranslations("profile");
   const locale = useLocale();
+  const { updateAvatarUrl } = useAuth();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -135,7 +137,7 @@ export function ProfileCard({
               <AvatarUpload
                 displayName={profile.displayName}
                 avatarUrl={avatarUrl}
-                onUploaded={(url) => setAvatarUrl(url)}
+                onUploaded={(url) => { setAvatarUrl(url); updateAvatarUrl(url); }}
               />
             ) : (
               <UserAvatar
@@ -158,21 +160,11 @@ export function ProfileCard({
 
             {/* Email (owner only) */}
             {isOwner && profile.email && (
-              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-                <Mail className="size-4 flex-shrink-0" />
-                <span>{profile.email}</span>
-                {profile.emailConfirmed ? (
-                  <span className="flex items-center gap-1 text-emerald-500 text-xs whitespace-nowrap">
-                    <CheckCircle className="size-3.5" />
-                    {t("emailVerified")}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-amber-500 text-xs whitespace-nowrap">
-                    <AlertCircle className="size-3.5" />
-                    {t("emailUnverified")}
-                  </span>
-                )}
-              </div>
+              <EmailManagement
+                email={profile.email}
+                emailConfirmed={!!profile.emailConfirmed}
+                editing={editing}
+              />
             )}
 
             {/* Phone (owner only) */}
@@ -202,11 +194,11 @@ export function ProfileCard({
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="size-4 flex-shrink-0" />
               {editing ? (
-                <Input
+                <LocationSearch
                   value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                  onChange={setLocation}
                   placeholder={t("locationPlaceholder")}
-                  className="h-8 text-sm max-w-64"
+                  className="max-w-72 flex-1"
                 />
               ) : (
                 <span>{profile.location || t("locationNotSet")}</span>

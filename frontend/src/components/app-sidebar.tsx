@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, Search, PlusCircle, Bell, LogIn, LogOut, PanelLeftClose, PanelLeft, User, Package } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import { Home, Search, PlusCircle, Bell, LogIn, Package, PanelLeft, PanelLeftClose } from "lucide-react";
+import { SidebarMoreMenu } from "@/components/sidebar-more-menu";
+import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth-context";
 import {
   Sidebar,
@@ -17,7 +17,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 
@@ -29,80 +28,17 @@ const navItems = [
   { key: "notifications", href: "/notifications", icon: Bell },
 ];
 
-/* Match Claude's sidebar nav button style exactly:
-   12px, weight 400, 32px tall, 6px gap, 6px radius, padding 6px 16px */
-const navButtonClass = "!h-8 !rounded-md !px-4 !py-1.5 !text-sm !font-normal !gap-3";
-
-function SidebarHeaderContent() {
-  const { toggleSidebar, state } = useSidebar();
-
-  if (state === "collapsed") {
-    return (
-      <div className="flex justify-center py-2">
-        <button
-          onClick={toggleSidebar}
-          aria-label="Expand sidebar"
-          className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <Link href="/" className="text-base font-normal text-sidebar-foreground">
-        ManVaig
-      </Link>
-      <button
-        onClick={toggleSidebar}
-        aria-label="Collapse sidebar"
-        className="flex size-7 items-center justify-center rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-      >
-        <PanelLeftClose className="size-4" aria-hidden="true" />
-      </button>
-    </div>
-  );
-}
-
-function AuthButton() {
-  const t = useTranslations("nav");
-  const { isLoggedIn, user, logout } = useAuth();
-
-  if (isLoggedIn) {
-    return (
-      <>
-        <SidebarMenuItem>
-          <SidebarMenuButton className={navButtonClass} tooltip={user?.displayName ?? ""} render={<Link href="/profile" />}>
-            <User className="!size-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">{user?.displayName}</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton className={navButtonClass} tooltip={t("logout")} onClick={logout}>
-            <LogOut className="!size-4 shrink-0" aria-hidden="true" />
-            <span>{t("logout")}</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </>
-    );
-  }
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton className={navButtonClass} tooltip={t("login")} render={<Link href="/login" />}>
-        <LogIn className="!size-4 shrink-0" aria-hidden="true" />
-        <span>{t("login")}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
-}
+/* Instagram-style: uses size="lg" (h-12) for proper collapsed handling.
+   Only override text/gap/radius — leave padding to sidebar framework. */
+const navButtonClass =
+  "!rounded-xl !text-[15px] !font-normal !gap-4 hover:!bg-sidebar-accent/60";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const t = useTranslations("nav");
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
 
   const visibleNavItems = navItems.filter(
     (item) => !item.auth || isLoggedIn
@@ -110,24 +46,61 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="!pb-0">
-        <SidebarHeaderContent />
+      {/* Logo header + collapse toggle */}
+      <SidebarHeader className={collapsed ? "" : "!pt-4 !pb-3"}>
+        {!collapsed ? (
+          <div className="flex items-center justify-between px-1">
+            <Link
+              href="/"
+              className="text-xl font-semibold tracking-tight text-sidebar-foreground"
+            >
+              ManVaig
+            </Link>
+            <button
+              onClick={toggleSidebar}
+              aria-label="Collapse sidebar"
+              className="flex size-8 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
+            >
+              <PanelLeftClose className="size-5" strokeWidth={1.5} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={toggleSidebar}
+            aria-label="Expand sidebar"
+            className="flex size-10 mx-auto items-center justify-center rounded-xl text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
+          >
+            <PanelLeft className="size-5" strokeWidth={1.5} />
+          </button>
+        )}
       </SidebarHeader>
 
+      {/* Navigation */}
       <SidebarContent>
-        <SidebarGroup className="!gap-1.5">
+        <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu className="!gap-0.5">
+            <SidebarMenu className="!gap-1">
               {visibleNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
+                    size="lg"
                     className={navButtonClass}
                     isActive={pathname === item.href}
                     tooltip={t(item.key)}
                     render={<Link href={item.href} />}
                   >
-                    <item.icon className="!size-4 shrink-0" aria-hidden="true" />
-                    <span>{t(item.key)}</span>
+                    <item.icon
+                      className="!size-6 shrink-0"
+                      strokeWidth={pathname === item.href ? 2.5 : 1.5}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={
+                        pathname === item.href ? "font-semibold" : ""
+                      }
+                    >
+                      {t(item.key)}
+                    </span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -136,16 +109,47 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="!gap-0.5">
-        <SidebarSeparator />
-        <SidebarMenu className="!gap-0.5">
+      {/* Footer: Profile/Login + More */}
+      <SidebarFooter className={collapsed ? "" : "!pb-4"}>
+        <SidebarMenu className="!gap-1">
+          {isLoggedIn ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                className={navButtonClass}
+                isActive={pathname === "/profile"}
+                tooltip={user?.displayName ?? ""}
+                render={<Link href="/profile" />}
+              >
+                <UserAvatar
+                  displayName={user?.displayName ?? ""}
+                  avatarUrl={user?.avatarUrl ?? null}
+                  size="xs"
+                  className="shrink-0"
+                />
+                <span
+                  className={`truncate ${pathname === "/profile" ? "font-semibold" : ""}`}
+                >
+                  {user?.displayName}
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                className={navButtonClass}
+                tooltip={t("login")}
+                render={<Link href="/login" />}
+              >
+                <LogIn className="!size-6 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+                <span>{t("login")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
-            <ThemeToggle />
+            <SidebarMoreMenu />
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <LanguageSwitcher />
-          </SidebarMenuItem>
-          <AuthButton />
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

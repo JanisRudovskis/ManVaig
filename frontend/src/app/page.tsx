@@ -6,6 +6,7 @@ import { fetchPublicItems } from "@/lib/items";
 import type { PublicItemCard as PublicItemCardType } from "@/lib/items";
 import { CategoryChips } from "@/components/category-chips";
 import { PublicItemCard } from "@/components/public-item-card";
+import { ItemDetailModal } from "@/components/item-detail-modal";
 import { ItemCardSkeleton } from "@/components/item-card-shared";
 import { Package, Loader2 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export default function HomeFeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   // Generation counter to prevent stale responses
   const genRef = useRef(0);
@@ -94,13 +96,13 @@ export default function HomeFeedPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-[600px] px-4 py-6 md:px-6 md:py-8">
       {/* Category chips */}
       <CategoryChips selected={categoryId} onChange={handleCategoryChange} />
 
       {/* Loading state */}
       {loading && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+        <div className="flex flex-col gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <ItemCardSkeleton key={i} />
           ))}
@@ -130,9 +132,9 @@ export default function HomeFeedPage() {
       {/* Items grid */}
       {!loading && items.length > 0 && (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <div className="flex flex-col gap-4">
             {items.map((item) => (
-              <PublicItemCard key={item.id} item={item} />
+              <PublicItemCard key={item.id} item={item} onClick={(i) => setSelectedItemId(i.id)} />
             ))}
           </div>
 
@@ -146,6 +148,14 @@ export default function HomeFeedPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* Item detail modal */}
+      {selectedItemId && (
+        <ItemDetailModal
+          itemId={selectedItemId}
+          onClose={() => setSelectedItemId(null)}
+        />
       )}
     </div>
   );

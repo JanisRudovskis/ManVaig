@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   X,
   Plus,
   Star,
   Trash2,
-  MapPin,
   ImageIcon,
   DollarSign,
   MessageCircle,
@@ -58,6 +57,7 @@ import {
   ItemVisibility,
 } from "@/lib/items";
 import type { ItemResponse, ItemImage, CategoryDto, CreateItemData, UpdateItemData, BidListResponse } from "@/lib/items";
+import { LocationSearch } from "@/components/location-search";
 
 // === Types ===
 
@@ -146,20 +146,6 @@ function SortableImageThumb({
   );
 }
 
-// === Nominatim location result ===
-
-interface NominatimResult {
-  display_name: string;
-  address: {
-    city?: string;
-    town?: string;
-    village?: string;
-    county?: string;
-    state?: string;
-    country?: string;
-  };
-}
-
 // === Component ===
 
 export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted }: ItemFormProps) {
@@ -195,10 +181,6 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
   })();
   const [visibility, setVisibility] = useState(item?.visibility ?? ItemVisibility.Public);
   const [location, setLocation] = useState(item?.location ?? userLocation ?? "");
-  const [locationSelected, setLocationSelected] = useState(!!(item?.location || userLocation));
-  const [locationQuery, setLocationQuery] = useState("");
-  const [locationResults, setLocationResults] = useState<{ city: string; country: string; display: string }[]>([]);
-  const [locationOpen, setLocationOpen] = useState(false);
   const [canShip, setCanShip] = useState(item?.canShip ?? false);
   const [allowGuestOffers, setAllowGuestOffers] = useState(item?.allowGuestOffers ?? false);
   const [tags, setTags] = useState<string[]>(item?.tags ?? []);
@@ -223,7 +205,6 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const locationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
   // Bid history (auction items only, edit mode)
@@ -300,58 +281,6 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
       reordered.splice(newIndex, 0, moved);
       return reordered;
     });
-  };
-
-  // === Location autocomplete (Nominatim) ===
-
-  const searchLocation = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setLocationResults([]);
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`,
-        { headers: { "Accept-Language": "en" } }
-      );
-      const data: NominatimResult[] = await res.json();
-      setLocationResults(
-        data.map((r) => {
-          const city = r.address.city || r.address.town || r.address.village || r.address.county || "";
-          const country = r.address.country || "";
-          return {
-            city,
-            country,
-            display: city && country ? `${city}, ${country}` : r.display_name.split(",").slice(0, 2).join(",").trim(),
-          };
-        })
-      );
-      setLocationOpen(true);
-    } catch {
-      // Nominatim down — user can type manually
-      setLocationResults([]);
-    }
-  }, []);
-
-  const onLocationInput = (value: string) => {
-    setLocationQuery(value);
-    if (locationTimerRef.current) clearTimeout(locationTimerRef.current);
-    locationTimerRef.current = setTimeout(() => searchLocation(value), 300);
-  };
-
-  const selectLocation = (display: string) => {
-    setLocation(display);
-    setLocationSelected(true);
-    setLocationOpen(false);
-    setLocationQuery("");
-    setLocationResults([]);
-  };
-
-  const clearLocation = () => {
-    setLocation("");
-    setLocationSelected(false);
-    setLocationQuery("");
   };
 
   // === Tags ===
@@ -698,46 +627,11 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
             {/* Location */}
             <div className="mb-4">
               <Label className="mb-1.5">{t("fieldLocation")}</Label>
-              <div className="relative">
-                {locationSelected ? (
-                  <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
-                    <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1">{location}</span>
-                    <button
-                      onClick={clearLocation}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      value={locationQuery}
-                      onChange={(e) => onLocationInput(e.target.value)}
-                      onFocus={() => locationResults.length > 0 && setLocationOpen(true)}
-                      onBlur={() => setTimeout(() => setLocationOpen(false), 200)}
-                      placeholder={t("locationPlaceholder")}
-                    />
-                    {locationOpen && locationResults.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
-                        {locationResults.map((r, i) => (
-                          <button
-                            key={i}
-                            className="flex w-full items-center gap-2 border-b border-border px-3 py-2.5 text-left text-sm transition-colors last:border-0 hover:bg-muted"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => selectLocation(r.display)}
-                          >
-                            <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
-                            <span className="font-medium">{r.city}</span>
-                            <span className="text-xs text-muted-foreground">{r.country}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+              <LocationSearch
+                value={location}
+                onChange={setLocation}
+                placeholder={t("locationPlaceholder")}
+              />
               <p className="mt-1 text-xs text-muted-foreground">{t("locationHint")}</p>
             </div>
 

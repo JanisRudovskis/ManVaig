@@ -18,7 +18,7 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
   const t = useTranslations("login");
   const { setUser } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,7 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password.trim()) {
+    if (!loginValue.trim() || !password.trim()) {
       setError(t("errorInvalid"));
       return;
     }
@@ -35,7 +35,7 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
     setLoading(true);
 
     try {
-      const res = await login(email, password);
+      const res = await login(loginValue.trim(), password);
       saveToken(res.token);
       setUser(res);
       onSuccess?.(res);
@@ -56,18 +56,26 @@ export function LoginFormContent({ onSuccess }: LoginFormContentProps) {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="login-email">{t("email")}</Label>
+          <Label htmlFor="login-id">{t("loginLabel")}</Label>
           <Input
-            id="login-email"
+            id="login-id"
             type="text"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            value={loginValue}
+            onChange={(e) => setLoginValue(e.target.value)}
+            autoComplete="username"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="login-password">{t("password")}</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="login-password">{t("password")}</Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+            >
+              {t("forgotPassword")}
+            </Link>
+          </div>
           <Input
             id="login-password"
             type="password"

@@ -1,40 +1,142 @@
 "use client";
 
-import Link from "next/link";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ImageIcon, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { TypeTag, PriceDisplay, timeAgo } from "@/components/item-card-shared";
 import type { PublicItemCard as PublicItemCardType } from "@/lib/items";
+import type { ItemImage } from "@/lib/items";
+
+const HOVER_INTERVAL = 1500; // ms between slides on desktop hover
 
 interface PublicItemCardProps {
   item: PublicItemCardType;
+  onClick?: (item: PublicItemCardType) => void;
 }
 
-export function PublicItemCard({ item }: PublicItemCardProps) {
-  const t = useTranslations("items");
-  const tf = useTranslations("feed");
-  const primaryImage = item.images.find((img) => img.isPrimary) ?? item.images[0];
+// === Card Image Carousel ===
+
+function CardImageCarousel({
+  images,
+  alt,
+}: {
+  images: ItemImage[];
+  alt: string;
+}) {
+  const sorted = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
+  const total = sorted.length;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  // Reset to first image when not interacting
+  const resetToFirst = useCallback(() => {
+    setActiveIndex(0);
+  }, []);
+
+  // Desktop: auto-cycle on hover
+  const handleMouseEnter = useCallback(() => {
+    if (total <= 1) return;
+    intervalRef.current = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % total);
+    }, HOVER_INTERVAL);
+  }, [total]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    resetToFirst();
+  }, [resetToFirst]);
+
+  // Mobile: swipe
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (touchStartX.current === null || total <= 1) return;
+      const diff = e.changedTouches[0].clientX - touchStartX.current;
+      const threshold = 40;
+
+      if (diff < -threshold) {
+        // Swipe left → next
+        setActiveIndex((prev) => Math.min(prev + 1, total - 1));
+      } else if (diff > threshold) {
+        // Swipe right → prev
+        setActiveIndex((prev) => Math.max(prev - 1, 0));
+      }
+      touchStartX.current = null;
+    },
+    [total]
+  );
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  if (total === 0) {
+    return (
+      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted">
+        <ImageIcon className="size-12 text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <Link
-      href={`/items/${item.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/60"
+    <div
+      className="relative aspect-[4/3] w-full overflow-hidden bg-muted"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Image */}
+      <img
+        src={sorted[activeIndex].url}
+        alt={alt}
+        className="size-full object-cover"
+      />
+
+      {/* Dot indicators */}
+      {total > 1 && (
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+          {sorted.map((_, i) => (
+            <span
+              key={i}
+              className={`size-1.5 rounded-full transition-all ${
+                i === activeIndex
+                  ? "bg-white scale-110"
+                  : "bg-white/50"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === Public Item Card ===
+
+export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
+  const t = useTranslations("items");
+
+  return (
+    <button
+      onClick={() => onClick?.(item)}
+      className="group relative flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-border/60"
     >
       {/* Type tag */}
       <TypeTag type={item.pricingType} t={t} />
 
-      {/* Image */}
-      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted">
-        {primaryImage ? (
-          <img
-            src={primaryImage.url}
-            alt={item.title}
-            className="size-full object-cover transition-transform group-hover:scale-[1.02]"
-          />
-        ) : (
-          <ImageIcon className="size-12 text-muted-foreground" />
-        )}
-      </div>
+      {/* Image carousel */}
+      <CardImageCarousel images={item.images} alt={item.title} />
 
       {/* Info */}
       <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -87,6 +189,6 @@ export function PublicItemCard({ item }: PublicItemCardProps) {
           {timeAgo(item.createdAt, t)}
         </span>
       </div>
-    </Link>
+    </button>
   );
 }

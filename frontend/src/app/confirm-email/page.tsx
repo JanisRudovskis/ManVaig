@@ -7,10 +7,12 @@ import { useTranslations } from "next-intl";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmEmail } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 
 export default function ConfirmEmailPage() {
   const t = useTranslations("emailConfirmation");
   const searchParams = useSearchParams();
+  const { isLoggedIn } = useAuth();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
 
   useEffect(() => {
@@ -46,9 +48,15 @@ export default function ConfirmEmailPage() {
               <h1 className="text-2xl font-bold">{t("confirmed")}</h1>
               <p className="text-muted-foreground">{t("confirmedDescription")}</p>
             </div>
-            <Link href="/login">
-              <Button>{t("goToLogin")}</Button>
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/profile">
+                <Button>{t("goToProfile")}</Button>
+              </Link>
+            ) : (
+              <Link href="/login">
+                <Button>{t("goToLogin")}</Button>
+              </Link>
+            )}
           </>
         )}
 

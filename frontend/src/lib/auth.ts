@@ -8,16 +8,17 @@ export interface AuthResponse {
   email: string;
   displayName: string;
   emailConfirmed: boolean;
+  avatarUrl: string | null;
 }
 
 export async function login(
-  email: string,
+  login: string,
   password: string
 ): Promise<AuthResponse> {
   const res = await fetch(`${API_URL}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ login, password }),
   });
 
   if (!res.ok) {
@@ -32,12 +33,13 @@ export async function login(
 export async function register(
   email: string,
   password: string,
-  displayName: string
+  displayName: string,
+  language?: string
 ): Promise<AuthResponse> {
   const res = await fetch(`${API_URL}/api/v1/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, displayName }),
+    body: JSON.stringify({ email, password, displayName, language }),
   });
 
   if (!res.ok) {
@@ -63,6 +65,28 @@ export function logout() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+// === Authenticated fetch wrapper ===
+// Auto-logout on 401 responses (expired/invalid token)
+
+export async function authFetch(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(options?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401) {
+    logout();
+    window.dispatchEvent(new Event("auth:logout"));
+    // Don't throw — let callers handle the response naturally
+  }
+
+  return res;
+}
+
 export async function confirmEmail(
   userId: string,
   token: string
@@ -81,17 +105,115 @@ export async function confirmEmail(
   return res.json();
 }
 
-export async function resendConfirmation(): Promise<{ message: string }> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/auth/resend-confirmation`, {
+export async function resendConfirmation(language?: string): Promise<{ message: string }> {
+  const params = language ? `?language=${language}` : "";
+  const res = await authFetch(`${API_URL}/api/v1/auth/resend-confirmation${params}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
   });
 
   if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "resend_failed");
+  }
+
+  return res.json();
+}
+
+// --- Username availability check ---
+
+export async function checkDisplayName(
+  name: string
+): Promise<{ available: boolean; reason: string | null }> {
+  const res = await fetch(
+    `${API_URL}/api/v1/auth/check-name?name=${encodeURIComponent(name)}`
+  );
+  if (!res.ok) return { available: false, reason: null };
+  return res.json();
+}
+
+// --- Forgot / Reset Password ---
+
+export async function forgotPassword(email: string, language?: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/api/v1/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, language }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "forgot_password_failed");
+  }
+
+  return res.json();
+}
+
+export async function resetPassword(
+  userId: string,
+  token: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/api/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, token, newPassword }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "reset_password_failed");
+  }
+
+  return res.json();
+}
+
+// --- Email management ---
+
+export async function changeEmail(
+  newEmail: string,
+  password: string,
+  language?: string
+): Promise<AuthResponse> {
+  const res = await authFetch(`${API_URL}/api/v1/auth/change-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newEmail, password, language }),
+  });
+
+  if (!res.ok) {
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      const err = new Error("RATE_LIMITED");
+      (err as Error & { retryAfter?: number }).retryAfter = body.retryAfter;
+      throw err;
+    }
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "change_email_failed");
+  }
+
+  return res.json();
+}
+
+export async function resendConfirmationWithRateLimit(
+  language?: string
+): Promise<{ message: string }> {
+  const params = language ? `?language=${language}` : "";
+  const res = await authFetch(
+    `${API_URL}/api/v1/auth/resend-confirmation${params}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  if (!res.ok) {
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      const err = new Error("RATE_LIMITED");
+      (err as Error & { retryAfter?: number }).retryAfter = body.retryAfter;
+      throw err;
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "resend_failed");
   }
@@ -134,10 +256,7 @@ export interface UpdateProfileData {
 }
 
 export async function getMyProfile(): Promise<UserProfile> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/profile`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`${API_URL}/api/v1/profile`);
 
   if (!res.ok) throw new Error("profile_fetch_failed");
   return res.json();
@@ -146,13 +265,9 @@ export async function getMyProfile(): Promise<UserProfile> {
 export async function updateProfile(
   data: UpdateProfileData
 ): Promise<UserProfile> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/profile`, {
+  const res = await authFetch(`${API_URL}/api/v1/profile`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
@@ -166,13 +281,11 @@ export async function updateProfile(
 export async function uploadAvatar(
   file: File
 ): Promise<{ avatarUrl: string }> {
-  const token = getToken();
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_URL}/api/v1/profile/avatar`, {
+  const res = await authFetch(`${API_URL}/api/v1/profile/avatar`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
 

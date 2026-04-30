@@ -1,33 +1,73 @@
 "use client";
 
-import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { Mail, CheckCircle2, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslations, useLocale } from "next-intl";
+import { Mail, CheckCircle2, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { resendConfirmation } from "@/lib/auth";
+import { resendConfirmationWithRateLimit } from "@/lib/auth";
 
 interface EmailConfirmationPromptProps {
   email?: string;
   variant?: "page" | "inline";
 }
 
+const COOLDOWN_SECONDS = 120;
+
 export function EmailConfirmationPrompt({
   email,
   variant = "page",
 }: EmailConfirmationPromptProps) {
   const t = useTranslations("emailConfirmation");
+  const locale = useLocale();
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback((seconds: number) => {
+    setCooldown(seconds);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  function formatCooldown(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
 
   async function handleResend() {
     setResending(true);
     setError(null);
+    setResent(false);
     try {
-      await resendConfirmation();
+      await resendConfirmationWithRateLimit(locale);
       setResent(true);
-    } catch {
-      setError(t("resendError"));
+      startCooldown(COOLDOWN_SECONDS);
+    } catch (err: unknown) {
+      const e = err as Error & { retryAfter?: number };
+      if (e.message === "RATE_LIMITED" && e.retryAfter) {
+        startCooldown(e.retryAfter);
+        setError(t("rateLimited"));
+      } else {
+        setError(t("resendError"));
+      }
     } finally {
       setResending(false);
     }
@@ -49,10 +89,19 @@ export function EmailConfirmationPrompt({
               variant="outline"
               size="sm"
               onClick={handleResend}
-              disabled={resending || resent}
+              disabled={resending || cooldown > 0}
             >
               {resending && <Loader2 className="mr-2 size-3 animate-spin" />}
-              {resent ? t("resent") : t("resend")}
+              {cooldown > 0 ? (
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" />
+                  {t("resendIn", { time: formatCooldown(cooldown) })}
+                </span>
+              ) : resent ? (
+                t("resent")
+              ) : (
+                t("resend")
+              )}
             </Button>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
@@ -78,7 +127,12 @@ export function EmailConfirmationPrompt({
         </div>
 
         <div className="space-y-3">
-          {resent ? (
+          {cooldown > 0 ? (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Clock className="size-4" />
+              {t("resendIn", { time: formatCooldown(cooldown) })}
+            </div>
+          ) : resent ? (
             <div className="flex items-center justify-center gap-2 text-sm text-green-600 dark:text-green-400">
               <CheckCircle2 className="size-4" />
               {t("resent")}

@@ -3,12 +3,14 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register, saveToken, type AuthResponse } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
 import { EmailConfirmationPrompt } from "@/components/email-confirmation-prompt";
+import { PasswordChecklist } from "@/components/password-checklist";
+import { UsernameChecklist } from "@/components/username-checklist";
 
 interface RegisterFormContentProps {
   onSuccess?: (data: AuthResponse) => void;
@@ -16,6 +18,7 @@ interface RegisterFormContentProps {
 
 export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
   const t = useTranslations("register");
+  const locale = useLocale();
   const { setUser } = useAuth();
 
   const [displayName, setDisplayName] = useState("");
@@ -27,7 +30,9 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
   const [loading, setLoading] = useState(false);
 
   function validate(): string | null {
-    if (displayName.trim().length < 3) return t("errorDisplayNameLength");
+    const name = displayName.trim();
+    if (name.length < 3 || name.length > 30) return t("errorDisplayNameLength");
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) return t("errorDisplayNameFormat");
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return t("errorEmailFormat");
     if (password.length < 8) return t("errorPasswordLength");
@@ -51,18 +56,22 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
     setLoading(true);
 
     try {
-      const res = await register(email, password, displayName.trim());
+      const res = await register(email, password, displayName.trim(), locale);
       saveToken(res.token);
       setUser(res);
       onSuccess?.(res);
     } catch (err) {
       if (err instanceof Error) {
-        const msg = err.message.toLowerCase();
-        if (msg.includes("duplicate") || msg.includes("already taken")) {
+        const msg = err.message;
+        if (msg === "DISPLAY_NAME_TAKEN") {
+          setError(t("errorDisplayNameTaken"));
+        } else if (msg === "DISPLAY_NAME_INVALID_FORMAT") {
+          setError(t("errorDisplayNameFormat"));
+        } else if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("already taken")) {
           setError(t("errorDuplicateEmail"));
-        } else if (msg.includes("digit")) {
+        } else if (msg.toLowerCase().includes("digit")) {
           setError(t("errorPasswordDigit"));
-        } else if (msg.includes("uppercase")) {
+        } else if (msg.toLowerCase().includes("uppercase")) {
           setError(t("errorPasswordUppercase"));
         } else {
           setError(t("errorGeneric"));
@@ -90,8 +99,9 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            autoComplete="name"
+            autoComplete="username"
           />
+          <UsernameChecklist username={displayName.trim()} />
         </div>
 
         <div className="space-y-2">
@@ -120,6 +130,7 @@ export function RegisterFormContent({ onSuccess }: RegisterFormContentProps) {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
           />
+          <PasswordChecklist password={password} />
         </div>
 
         <div className="space-y-2">

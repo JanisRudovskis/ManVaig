@@ -6,7 +6,8 @@
     "sell": "Pārdot",
     "notifications": "Paziņojumi",
     "login": "Ielogoties",
-    "logout": "Izlogoties"
+    "logout": "Izlogoties",
+    "more": "Vairāk"
   },
   "home": {
     "title": "Laipni lūgti ManVaig",
@@ -22,8 +23,9 @@
   },
   "login": {
     "title": "ManVaig",
-    "email": "E-pasts",
+    "loginLabel": "E-pasts vai lietotājvārds",
     "password": "Parole",
+    "forgotPassword": "Aizmirsi paroli?",
     "submit": "Ielogoties",
     "orContinueWith": "vai turpināt ar",
     "google": "Google",
@@ -31,12 +33,12 @@
     "comingSoon": "drīzumā",
     "noAccount": "Nav konta?",
     "register": "Reģistrēties",
-    "errorInvalid": "Nepareizs e-pasts vai parole",
+    "errorInvalid": "Nepareizs e-pasts/lietotājvārds vai parole",
     "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
   },
   "register": {
     "title": "ManVaig",
-    "displayName": "Vārds",
+    "displayName": "Lietotājvārds",
     "email": "E-pasts",
     "password": "Parole",
     "confirmPassword": "Apstiprināt paroli",
@@ -49,7 +51,9 @@
     "login": "Ielogoties",
     "termsCheckbox": "Piekrītu <terms>Lietošanas noteikumiem</terms> un <privacy>Privātuma politikai</privacy>",
     "required": "*",
-    "errorDisplayNameLength": "Vārdam jābūt vismaz 3 rakstzīmēm",
+    "errorDisplayNameLength": "Lietotājvārdam jābūt 3-30 rakstzīmes",
+    "errorDisplayNameFormat": "Lietotājvārds drīkst saturēt tikai burtus, ciparus, defises un pasvītras",
+    "errorDisplayNameTaken": "Šis lietotājvārds jau ir aizņemts",
     "errorEmailFormat": "Lūdzu, ievadiet derīgu e-pasta adresi",
     "errorPasswordLength": "Parolei jābūt vismaz 8 rakstzīmēm",
     "errorPasswordMismatch": "Paroles nesakrīt",
@@ -73,9 +77,36 @@
     "errorTitle": "Apstiprināšana neizdevās",
     "errorDescription": "Apstiprinājuma saite ir nederīga vai ir beigusies tās derīguma termiņš. Lūdzu, pieprasiet jaunu.",
     "goToLogin": "Doties uz ielogošanos",
+    "goToProfile": "Doties uz profilu",
     "goHome": "Doties uz sākumlapu",
     "inlineTitle": "E-pasts nav apstiprināts",
-    "inlineDescription": "Lūdzu, apstipriniet savu e-pastu, lai piekļūtu šai funkcijai."
+    "inlineDescription": "Lūdzu, apstipriniet savu e-pastu, lai piekļūtu šai funkcijai.",
+    "resendIn": "Sūtīt atkārtoti pēc {time}",
+    "rateLimited": "Lūdzu, uzgaidiet pirms pieprasāt jaunu e-pastu."
+  },
+  "emailManagement": {
+    "verified": "Apstiprināts",
+    "notVerified": "Nav apstiprināts",
+    "changeEmail": "Mainīt e-pastu",
+    "resendVerification": "Sūtīt atkārtoti",
+    "resendIn": "Sūtīt pēc {time}",
+    "newEmailLabel": "Jauns e-pasts",
+    "newEmailPlaceholder": "jusu@jaunaisepasts.com",
+    "passwordLabel": "Pašreizējā parole",
+    "passwordPlaceholder": "Ievadiet savu paroli",
+    "sendVerification": "Sūtīt apstiprinājumu",
+    "cancel": "Atcelt",
+    "changeSuccess": "E-pasts nomainīts! Pārbaudiet savu iesūtni apstiprinājuma saitei.",
+    "resendSuccess": "Apstiprinājuma e-pasts nosūtīts! Pārbaudiet savu iesūtni.",
+    "errorEmailRequired": "E-pasts ir obligāts",
+    "errorEmailInvalid": "Lūdzu, ievadiet derīgu e-pasta adresi",
+    "errorPasswordRequired": "Parole ir nepieciešama, lai mainītu e-pastu",
+    "errorInvalidPassword": "Nepareiza parole",
+    "errorEmailTaken": "Šis e-pasts jau tiek izmantots",
+    "errorSameEmail": "Šis jau ir jūsu pašreizējais e-pasts",
+    "errorRateLimited": "Lūdzu, uzgaidiet pirms sūtīt jaunu e-pastu.",
+    "errorResendFailed": "Neizdevās nosūtīt e-pastu. Lūdzu, mēģiniet vēlreiz.",
+    "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
   },
   "profile": {
     "title": "Mans profils",
@@ -266,13 +297,60 @@
     "apiError_WINNER_NOT_EXPIRED": "Uzvarētāja 24 stundu apstiprināšanas periods vēl nav beidzies.",
     "apiError_NO_MORE_BIDDERS": "Nav vairāk solītāju, kuriem piešķirt uzvaru."
   },
+  "usernameChecklist": {
+    "length": "3-30 rakstzīmes",
+    "format": "Tikai burti, cipari, - un _",
+    "checking": "Pārbauda pieejamību...",
+    "available": "Lietotājvārds ir pieejams",
+    "taken": "Lietotājvārds jau ir aizņemts"
+  },
+  "passwordChecklist": {
+    "length": "Vismaz 8 rakstzīmes",
+    "uppercase": "Viens lielais burts (A-Z)",
+    "digit": "Viens cipars (0-9)"
+  },
+  "forgotPassword": {
+    "title": "Aizmirsi paroli?",
+    "description": "Ievadiet savu e-pasta adresi un mēs nosūtīsim saiti paroles atjaunošanai.",
+    "email": "E-pasts",
+    "emailPlaceholder": "jusu@epasts.lv",
+    "submit": "Nosūtīt atjaunošanas saiti",
+    "sentTitle": "Pārbaudiet savu e-pastu",
+    "sentDescription": "Ja konts ar šo e-pastu eksistē, mēs nosūtījām paroles atjaunošanas saiti. Noklikšķiniet uz tās, lai izvēlētos jaunu paroli.",
+    "checkSpam": "Neredzat? Pārbaudiet mēstuļu mapi.",
+    "backToLogin": "Atpakaļ uz ielogošanos",
+    "errorEmailRequired": "Lūdzu, ievadiet savu e-pasta adresi",
+    "errorEmailFormat": "Lūdzu, ievadiet derīgu e-pasta adresi",
+    "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
+  },
+  "resetPassword": {
+    "title": "Atjaunot paroli",
+    "description": "Izvēlieties jaunu paroli savam kontam.",
+    "newPassword": "Jaunā parole",
+    "confirmPassword": "Apstiprināt jauno paroli",
+    "submit": "Atjaunot paroli",
+    "successTitle": "Parole atjaunota!",
+    "successDescription": "Jūsu parole ir veiksmīgi nomainīta. Tagad varat ielogoties ar jauno paroli.",
+    "goToLogin": "Doties uz ielogošanos",
+    "errorTitle": "Nederīga atjaunošanas saite",
+    "errorDescription": "Šī atjaunošanas saite ir nederīga vai tai ir beidzies derīguma termiņš. Lūdzu, pieprasiet jaunu.",
+    "tryAgain": "Pieprasīt jaunu saiti",
+    "errorPasswordLength": "Parolei jābūt vismaz 8 rakstzīmēm",
+    "errorPasswordUppercase": "Parolē jābūt vismaz vienam lielajam burtam (A-Z)",
+    "errorPasswordDigit": "Parolē jābūt vismaz vienam ciparam (0-9)",
+    "errorPasswordMismatch": "Paroles nesakrīt",
+    "errorGeneric": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz."
+  },
   "feed": {
     "forYou": "Pielāgots",
     "noItems": "Vēl nav sludinājumu",
     "noItemsDescription": "Esi pirmais, kas ievietoj sludinājumu!",
     "noItemsInCategory": "Šajā kategorijā vēl nav sludinājumu",
     "loadingMore": "Ielādē vēl...",
-    "errorLoadFailed": "Nevarēja ielādēt sludinājumus. Lūdzu, mēģiniet vēlreiz."
+    "errorLoadFailed": "Nevarēja ielādēt sludinājumus. Lūdzu, mēģiniet vēlreiz.",
+    "sellPrompt": "Pārdod savu lietu...",
+    "sellPhoto": "Foto",
+    "sellItem": "Ievietot sludinājumu"
   },
   "itemDetail": {
     "description": "Apraksts",

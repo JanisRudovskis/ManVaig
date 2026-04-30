@@ -1,4 +1,4 @@
-import { getToken } from "./auth";
+import { authFetch } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5100";
 
@@ -115,12 +115,8 @@ export async function fetchMyItems(
   page = 1,
   pageSize = 20
 ): Promise<ItemListResponse> {
-  const token = getToken();
-  const res = await fetch(
-    `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+  const res = await authFetch(
+    `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}`
   );
 
   if (!res.ok) throw new Error("items_fetch_failed");
@@ -128,23 +124,16 @@ export async function fetchMyItems(
 }
 
 export async function fetchItem(id: string): Promise<ItemResponse> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`${API_URL}/api/v1/items/${id}`);
 
   if (!res.ok) throw new Error("item_fetch_failed");
   return res.json();
 }
 
 export async function createItem(data: CreateItemData): Promise<ItemResponse> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items`, {
+  const res = await authFetch(`${API_URL}/api/v1/items`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
@@ -159,13 +148,9 @@ export async function updateItem(
   id: string,
   data: UpdateItemData
 ): Promise<ItemResponse> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${id}`, {
+  const res = await authFetch(`${API_URL}/api/v1/items/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
@@ -177,10 +162,8 @@ export async function updateItem(
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${id}`, {
+  const res = await authFetch(`${API_URL}/api/v1/items/${id}`, {
     method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!res.ok) throw new Error("item_delete_failed");
@@ -206,13 +189,11 @@ export async function uploadItemImages(
   itemId: string,
   files: File[]
 ): Promise<ItemImage[]> {
-  const token = getToken();
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));
 
-  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/images`, {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/images`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
 
@@ -227,13 +208,9 @@ export async function reorderItemImages(
   itemId: string,
   imageIds: string[]
 ): Promise<ItemImage[]> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/images/reorder`, {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/images/reorder`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageIds }),
   });
 
@@ -248,13 +225,9 @@ export async function deleteItemImage(
   itemId: string,
   imageId: string
 ): Promise<void> {
-  const token = getToken();
-  const res = await fetch(
+  const res = await authFetch(
     `${API_URL}/api/v1/items/${itemId}/images/${imageId}`,
-    {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    { method: "DELETE" }
   );
 
   if (!res.ok) {
@@ -332,10 +305,7 @@ export interface BidListResponse {
 }
 
 export async function fetchBids(itemId: string): Promise<BidListResponse> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/bids`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "bids_fetch_failed");
@@ -344,10 +314,8 @@ export async function fetchBids(itemId: string): Promise<BidListResponse> {
 }
 
 export async function assignNextWinner(itemId: string): Promise<void> {
-  const token = getToken();
-  const res = await fetch(`${API_URL}/api/v1/items/${itemId}/bids/assign-next`, {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/assign-next`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -375,12 +343,8 @@ export async function fetchPublicItems(
 }
 
 export async function fetchPublicItem(id: string): Promise<PublicItemDetail> {
-  const headers: Record<string, string> = {};
-  // Optionally send auth token (needed for RegisteredOnly items)
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${API_URL}/api/v1/public/items/${id}`, { headers });
+  // Use authFetch to optionally send token (needed for RegisteredOnly items)
+  const res = await authFetch(`${API_URL}/api/v1/public/items/${id}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "item_fetch_failed");
