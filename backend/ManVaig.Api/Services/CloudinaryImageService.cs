@@ -114,6 +114,71 @@ public class CloudinaryImageService : IImageService
         return result.SecureUrl.ToString();
     }
 
+    public async Task<string> UploadStallImageAsync(Stream imageStream, string fileName, Guid stallId, string imageType)
+    {
+        if (_cloudinary == null)
+            throw new InvalidOperationException("Cloudinary is not configured. Please set Cloudinary credentials in appsettings.");
+
+        using var image = await Image.LoadAsync(imageStream);
+
+        // Thumbnail: 400x400 crop, Header: max 1200px wide, Background: max 1920px wide
+        if (imageType == "thumbnail")
+        {
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new SixLabors.ImageSharp.Size(400, 400),
+                Mode = ResizeMode.Crop,
+                Position = AnchorPositionMode.Center
+            }));
+        }
+
+        if (imageType == "header")
+        {
+            // Header: crop to 4:1 banner ratio (1200x300), center crop
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new SixLabors.ImageSharp.Size(1200, 300),
+                Mode = ResizeMode.Crop,
+                Position = AnchorPositionMode.Center
+            }));
+        }
+        else if (imageType == "background")
+        {
+            // Background: max 1920px wide, maintain aspect ratio
+            if (image.Width > 1920)
+            {
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new SixLabors.ImageSharp.Size(1920, 0),
+                    Mode = ResizeMode.Max
+                }));
+            }
+        }
+
+        using var outputStream = new MemoryStream();
+        await image.SaveAsync(outputStream, new WebpEncoder { Quality = 80 });
+        outputStream.Position = 0;
+
+        var uploadParams = new ImageUploadParams
+        {
+            File = new FileDescription($"{stallId}-{imageType}.webp", outputStream),
+            PublicId = $"manvaig/stalls/{stallId}/{imageType}",
+            Overwrite = true,
+            Transformation = new Transformation().Quality("auto").FetchFormat("webp")
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams);
+
+        if (result.Error != null)
+        {
+            _logger.LogError("Cloudinary stall image upload failed: {Error}", result.Error.Message);
+            throw new InvalidOperationException($"Stall image upload failed: {result.Error.Message}");
+        }
+
+        _logger.LogInformation("Stall {ImageType} uploaded: {StallId} → {Url}", imageType, stallId, result.SecureUrl);
+        return result.SecureUrl.ToString();
+    }
+
     public async Task DeleteImageAsync(string publicId)
     {
         if (_cloudinary == null)

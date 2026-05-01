@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, Search, PlusCircle, Bell, LogIn, Package, PanelLeft, PanelLeftClose } from "lucide-react";
+import { Home, Search, PlusCircle, Bell, LogIn, Store, PanelLeft, PanelLeftClose } from "lucide-react";
 import { SidebarMoreMenu } from "@/components/sidebar-more-menu";
 import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth-context";
@@ -23,7 +23,7 @@ import {
 const navItems = [
   { key: "home", href: "/", icon: Home },
   { key: "browse", href: "/browse", icon: Search },
-  { key: "myItems", href: "/my-items", icon: Package, auth: true },
+  { key: "myStalls", href: "/my-stalls", icon: Store, auth: true },
   { key: "sell", href: "/sell", icon: PlusCircle },
   { key: "notifications", href: "/notifications", icon: Bell },
 ];
@@ -85,7 +85,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     size="lg"
                     className={navButtonClass}
-                    isActive={pathname === item.href}
+                    isActive={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
                     tooltip={t(item.key)}
                     render={<Link href={item.href} />}
                   >

@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-03-28 (session 5: validation + image upload)
+> Last updated: 2026-04-30 (session 7: auth improvements, email management, sidebar redesign)
 
 ---
 
@@ -40,7 +40,7 @@ DI registration order: EF Core → Identity → JWT → CORS → Resend → Clou
 
 Extends `IdentityUser<Guid>` — inherits `Id`, `Email`, `UserName`, `EmailConfirmed`, `PasswordHash`, etc.
 
-Custom fields: `DisplayName` (unique), `AvatarUrl`, `Bio`, `Location`, `Phone`, `IsProfilePublic` (default true), `EnabledChannels` (flags enum: WhatsApp=1, Telegram=2), `IsActive` (bool), `CreatedAt`
+Custom fields: `DisplayName` (unique username, 3-30 chars, `[a-zA-Z0-9_-]`), `AvatarUrl`, `Bio`, `Location`, `Phone`, `IsProfilePublic` (default true), `EnabledChannels` (flags enum: WhatsApp=1, Telegram=2), `IsActive` (bool), `CreatedAt`, `LastEmailSentAt` (nullable, for rate limiting)
 
 Navigation properties: `UserBadges`, `DisplayedBadges`
 
@@ -53,10 +53,13 @@ Three tables:
 
 ### DTOs: `Models/Dto/AuthDtos.cs`
 
-- `RegisterRequest` — Email, Password, DisplayName
-- `LoginRequest` — Email, Password
-- `AuthResponse` — Token, ExpiresAt, UserId, Email, DisplayName, EmailConfirmed
+- `RegisterRequest` — Email, Password, DisplayName, Language?
+- `LoginRequest` — Login (email or username), Password
+- `AuthResponse` — Token, ExpiresAt, UserId, Email, DisplayName, EmailConfirmed, AvatarUrl?
 - `ConfirmEmailRequest` — UserId, Token
+- `ForgotPasswordRequest` — Email, Language?
+- `ResetPasswordRequest` — UserId, Token, NewPassword
+- `ChangeEmailRequest` — NewEmail, Password, Language?
 
 ### DTOs: `Models/Dto/ProfileDtos.cs`
 
@@ -70,14 +73,24 @@ All routes under `/api/v1/auth/`:
 
 | Endpoint | Auth | What it does |
 |----------|------|-------------|
-| `POST register` | Public | Creates user, sends confirmation email via Resend, returns JWT with `emailConfirmed: false` |
-| `POST login` | Public | Validates credentials, checks `IsActive`, returns JWT |
+| `POST register` | Public | Validates unique username format, creates user, sends bilingual confirmation email, returns JWT |
+| `POST login` | Public | Supports email or username login (contains `@` → email, else → username lookup). Checks `IsActive`, returns JWT |
 | `POST confirm-email` | Public | Accepts `{userId, token}`, calls `ConfirmEmailAsync` |
-| `POST resend-confirmation` | Bearer | Reads userId from JWT, sends new confirmation email |
+| `POST resend-confirmation` | Bearer | Rate-limited (2 min via `LastEmailSentAt`), sends confirmation email. Returns 429 with `retryAfter` if too soon |
+| `GET check-name` | Public | Real-time username availability check. Returns `{available, reason}` |
+| `POST forgot-password` | Public | Always returns 200 (no email enumeration). In-memory rate limit per email (2 min). Sends bilingual reset email |
+| `POST reset-password` | Public | Validates token, resets password |
+| `POST change-email` | Bearer | Requires password verification. Validates email not taken. Rate-limited. Updates email, marks unconfirmed, sends confirmation, returns new JWT |
+
+### Rate Limiting
+
+Email sending is rate-limited to 1 email per 2 minutes:
+- **Authenticated endpoints** (`resend-confirmation`, `change-email`): tracked via `LastEmailSentAt` field on `ApplicationUser`. Returns HTTP 429 with `retryAfter` seconds.
+- **Unauthenticated endpoint** (`forgot-password`): in-memory `ConcurrentDictionary<string, DateTime>` keyed by normalized email. Silently skips sending (still returns 200 to prevent enumeration).
 
 ### JWT Claims
 
-Token contains: `sub` (userId), `email`, `jti`, `displayName`, `emailConfirmed` (string `"true"`/`"false"`)
+Token contains: `sub` (userId), `email`, `jti`, `displayName`, `emailConfirmed` (string `"true"`/`"false"`), `avatarUrl` (optional, only if set)
 
 ### Controller: `Controllers/V1/ProfileController.cs`
 
@@ -99,9 +112,12 @@ All routes under `/api/v1/`:
 
 ### Email Service: `Services/ResendEmailService.cs`
 
-- Implements `IEmailService.SendEmailConfirmationAsync(email, confirmationLink)`
-- Sends styled HTML email with confirmation button
-- Catches exceptions silently (registration succeeds even if email fails)
+- Implements `IEmailService` with bilingual support (EN/LV):
+  - `SendEmailConfirmationAsync(email, confirmationLink, language)` — "Welcome to ManVaig" / "Laipni lūgti ManVaig!"
+  - `SendPasswordResetAsync(email, resetLink, language)` — reset password with 24h expiry note
+- Language detection: `IsLatvian(string language)` helper, defaults to English
+- Styled HTML emails with branded purple (#7c6af7) CTA button
+- Catches exceptions silently (registration/password-reset succeeds even if email fails)
 - `FromEmail` from `Resend:FromEmail` config
 
 ### Config Files
@@ -133,27 +149,34 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `profile`, `items`, `itemForm`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `feed`, `itemDetail`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
 
 **`lib/auth.ts`** — API functions:
-- `login(email, password)` → `AuthResponse`
-- `register(email, password, displayName)` → `AuthResponse`
+- `login(login, password)` → `AuthResponse` (login = email or username)
+- `register(email, password, displayName, language?)` → `AuthResponse`
 - `confirmEmail(userId, token)` → `{ message }`
-- `resendConfirmation()` → `{ message }` (sends Bearer token)
+- `resendConfirmation(language?)` → `{ message }` (Bearer, original function)
+- `resendConfirmationWithRateLimit(language?)` → `{ message }` (Bearer, handles 429 with `retryAfter`)
+- `checkDisplayName(name)` → `{ available, reason }` (public)
+- `forgotPassword(email, language?)` → `{ message }` (public)
+- `resetPassword(userId, token, newPassword)` → `{ message }` (public)
+- `changeEmail(newEmail, password, language?)` → `AuthResponse` (Bearer, handles 429)
 - `saveToken(token)` / `getToken()` / `logout()` — localStorage (`manvaig_token`)
 - `getMyProfile()` → `UserProfile` (authorized)
 - `updateProfile(data)` → `UserProfile` (authorized, partial update)
 - `uploadAvatar(file)` → `{ avatarUrl }` (authorized, FormData)
 - `getPublicProfile(displayName)` → `UserProfile` (anonymous)
+- `authFetch(url, options)` → `Response` (auto-attaches Bearer, auto-logout on 401)
 
 **`lib/auth-context.tsx`** — React context:
 - On mount: reads token from localStorage, parses JWT via `atob(token.split(".")[1])`
-- Extracts: `sub`→userId, `email`, `displayName`, `emailConfirmed` (string→boolean)
+- Extracts: `sub`→userId, `email`, `displayName`, `emailConfirmed` (string→boolean), `avatarUrl` (optional)
 - `isLoading` state prevents race conditions — pages wait for auth to initialize before checking `isLoggedIn`
-- `useAuth()` exposes: `isLoggedIn`, `isLoading`, `user` (with `emailConfirmed`), `openLoginDialog`, `setUser`, `logout`
+- `useAuth()` exposes: `isLoggedIn`, `isLoading`, `user` (with `emailConfirmed`, `avatarUrl`), `openLoginDialog`, `setUser`, `updateAvatarUrl`, `logout`
+- `updateAvatarUrl(url)` — updates avatar in context immediately after upload (no re-login needed)
 - `LoginDialog` rendered inside `AuthProvider` — any component calls `openLoginDialog()` to trigger it
 
 ### Component Patterns
@@ -165,38 +188,51 @@ html (lang={locale} from cookie)
 **No browser-native validation:**
 All `required`, `minLength`, `type="email"` removed. Custom `validate()` functions return i18n error strings. This ensures validation messages appear in the user's selected language.
 
-**Sidebar:** `AppSidebar` uses shadcn `Sidebar` with `collapsible="icon"`. Nav items defined as array. Footer: ThemeToggle, LanguageSwitcher, AuthButton (login/logout).
+**Sidebar (Instagram-style):** `AppSidebar` uses shadcn `Sidebar` with `collapsible="icon"`.
+- Nav items defined as array, 24px icons (`size-6`), 48px tall buttons (`size="lg"`), `rounded-xl`
+- Active items: bold text + thicker stroke (`strokeWidth={2.5}`)
+- Footer: Profile link with `UserAvatar` (xs size) + `SidebarMoreMenu` popover
+- `SidebarMoreMenu`: theme toggle, language sub-view (back navigation), logout. Replaces standalone ThemeToggle + LanguageSwitcher.
+- Collapsed mode: `4rem` width (64px), `size-10` (40px) buttons, icons centered via padding
+- Collapse/expand state persisted via `sidebar_state` cookie (read in `useEffect` to avoid hydration mismatch)
+- Header: "ManVaig" logo + PanelLeftClose toggle (expanded) / PanelLeft toggle (collapsed)
 
 ### Pages (App Router)
 
 | Route | Component | Type |
 |-------|-----------|------|
-| `/` | `app/page.tsx` | Server component |
-| `/login` | `LoginForm` | Client component |
-| `/register` | `RegisterForm` → `EmailConfirmationPrompt` | Client component |
-| `/confirm-email?userId=...&token=...` | `app/confirm-email/page.tsx` | Client component |
+| `/` | `app/page.tsx` | Homepage feed with category chips, infinite scroll |
+| `/login` | `LoginForm` | Client component (email or username) |
+| `/register` | `RegisterForm` → `EmailConfirmationPrompt` | Client component (with UsernameChecklist + PasswordChecklist) |
+| `/confirm-email?userId=...&token=...` | `app/confirm-email/page.tsx` | Client component (context-aware: "Go to profile" if logged in) |
+| `/forgot-password` | `app/forgot-password/page.tsx` | Client component (email form → success state) |
+| `/reset-password?userId=...&token=...` | `app/reset-password/page.tsx` | Client component (new password + PasswordChecklist) |
 | `/profile` | `ProfileCard` (inline edit) | Client component, auth required |
 | `/user/[displayName]` | `ProfileCard` (read-only) | Client component, public |
 | `/my-items` | `MyItemsPage` + `ItemForm` modal | Client component, auth required |
+| `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
 
 ### Component Map
 
 | Component | File | Purpose |
 |-----------|------|---------|
 | AppLayout | `components/app-layout.tsx` | SidebarProvider + SidebarInset wrapper |
-| AppSidebar | `components/app-sidebar.tsx` | Nav items, footer (theme/lang/auth) |
-| LoginFormContent | `components/login-form.tsx` | Reusable login form (page + dialog) |
+| AppSidebar | `components/app-sidebar.tsx` | Instagram-style nav, profile link with avatar, More menu |
+| SidebarMoreMenu | `components/sidebar-more-menu.tsx` | Popover with theme toggle, language sub-view, logout |
+| LoginFormContent | `components/login-form.tsx` | Reusable login form (email or username + forgot password link) |
 | LoginDialog | `components/login-dialog.tsx` | Modal wrapper around LoginFormContent |
-| RegisterFormContent | `components/register-form.tsx` | Register form + post-registration check-email |
-| EmailConfirmationPrompt | `components/email-confirmation-prompt.tsx` | "Check email" screen (page + inline variants) |
-| LanguageSwitcher | `components/language-switcher.tsx` | Popover dropdown, sets NEXT_LOCALE cookie |
-| ThemeToggle | `components/theme-toggle.tsx` | Sun/Moon toggle in sidebar |
+| RegisterFormContent | `components/register-form.tsx` | Register form with UsernameChecklist + PasswordChecklist |
+| EmailConfirmationPrompt | `components/email-confirmation-prompt.tsx` | "Check email" screen with rate-limited resend + cooldown timer |
+| EmailManagement | `components/email-management.tsx` | Profile email section: display, change (with password), resend, cooldown |
+| PasswordChecklist | `components/password-checklist.tsx` | Live validation: length >= 8, uppercase, digit |
+| UsernameChecklist | `components/username-checklist.tsx` | Live validation: format + debounced API availability check |
+| LocationSearch | `components/location-search.tsx` | Nominatim city autocomplete with debounced search (used in profile + item form) |
 | ThemeProvider | `components/theme-provider.tsx` | next-themes wrapper |
-| ProfileCard | `components/profile-card.tsx` | ID card layout with inline edit mode |
-| UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color |
-| AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload |
+| ProfileCard | `components/profile-card.tsx` | ID card layout with inline edit mode + EmailManagement |
+| UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color (xs/sm/md/lg sizes) |
+| AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload (updates auth context) |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
-| ItemForm | `components/item-form.tsx` | Add/Edit item modal with all sections (images placeholder, basic info, location autocomplete, pricing types, tags, visibility, delete) |
+| ItemForm | `components/item-form.tsx` | Add/Edit item modal (uses LocationSearch for autocomplete) |
 
 ### shadcn/ui Components Installed
 
@@ -343,18 +379,20 @@ Per pricing type:
 
 ## Phase Completion
 
-- **Phase 1** (Scaffolding): 6/7 done — Railway deploy pending (Dockerfiles ready)
-- **Phase 2** (Auth): 9/12 done — profile page done + polished; phone verification, forgot-password, OAuth, show/hide future
-- **Phase 4** (Items): Steps 0–6 done — prototype, models, API, My Items page, Add/Edit form, validation, image upload. Remaining: auction bidders list, public item detail page
-- **Phase 3, 5–8**: Not started
+- **Phase 1** (Scaffolding): 6/7 done — Railway deploy working (backend + frontend + PostgreSQL)
+- **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
+- **Phase 4** (Items): Steps 0–6 done — prototype, models, API, My Items page, Add/Edit form, validation, image upload
+- **Phase 5** (Bidding): Auction bidding system implemented (Bid model, endpoints, bid history UI)
+- **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page
+- **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
+- **Phase 3, 6**: Not started
 
 ## What's Next
 
-1. **Phase 4 Step 7** — auction bidders list (prototype the view first, then implement)
-2. **Phase 4 Step 8** — public item detail page (deferred)
-3. Complete Railway deployment (create project, add services, configure env vars)
-4. Phase 3: Shop management
-5. Phase 5: Offer system
+1. Complete Railway deployment configuration (env vars)
+2. Phase 3: Shop management
+3. Phase 5: Offer system (non-auction offers)
+4. Phase 6: Notifications
 
 ## Known Issues
 

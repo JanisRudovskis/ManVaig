@@ -5,6 +5,11 @@ namespace ManVaig.Api.Models.Dto;
 
 public class CreateItemRequest
 {
+    /// <summary>
+    /// Stall to add the item to. If not provided and user has 0 stalls, a default stall is created.
+    /// </summary>
+    public Guid? StallId { get; set; }
+
     [Required, MinLength(3), MaxLength(100)]
     public string Title { get; set; } = default!;
 
@@ -68,12 +73,19 @@ public class UpdateItemRequest
     /// will be cleared even if sent as null.
     /// </summary>
     public bool ClearPricingFields { get; set; }
+
+    /// <summary>
+    /// Move item to a different stall. If null, stall is unchanged.
+    /// </summary>
+    public Guid? StallId { get; set; }
 }
 
 public class ItemResponse
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+    public Guid StallId { get; set; }
+    public string StallName { get; set; } = default!;
     public string Title { get; set; } = default!;
     public string? Description { get; set; }
     public int CategoryId { get; set; }

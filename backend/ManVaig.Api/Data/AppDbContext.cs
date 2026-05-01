@@ -20,6 +20,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ItemImage> ItemImages => Set<ItemImage>();
     public DbSet<ItemTag> ItemTags => Set<ItemTag>();
     public DbSet<Bid> Bids => Set<Bid>();
+    public DbSet<Stall> Stalls => Set<Stall>();
+    public DbSet<StallFeaturedItem> StallFeaturedItems => Set<StallFeaturedItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -101,6 +103,42 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.HasIndex(t => t.Name).IsUnique();
         });
 
+        // === Stall ===
+        builder.Entity<Stall>(entity =>
+        {
+            entity.Property(s => s.Name).HasMaxLength(50);
+            entity.Property(s => s.Slug).HasMaxLength(50);
+            entity.Property(s => s.Description).HasMaxLength(500);
+            entity.Property(s => s.ThumbnailUrl).HasMaxLength(500);
+            entity.Property(s => s.HeaderImageUrl).HasMaxLength(500);
+            entity.Property(s => s.BackgroundImageUrl).HasMaxLength(500);
+            entity.Property(s => s.AccentColor).HasMaxLength(7);
+
+            entity.HasOne(s => s.User)
+                .WithMany(u => u.Stalls)
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(s => new { s.UserId, s.Slug }).IsUnique();
+            entity.HasIndex(s => s.UserId);
+        });
+
+        // === StallFeaturedItem ===
+        builder.Entity<StallFeaturedItem>(entity =>
+        {
+            entity.HasKey(sf => new { sf.StallId, sf.ItemId });
+
+            entity.HasOne(sf => sf.Stall)
+                .WithMany(s => s.FeaturedItems)
+                .HasForeignKey(sf => sf.StallId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(sf => sf.Item)
+                .WithMany(i => i.StallFeaturedItems)
+                .HasForeignKey(sf => sf.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         // === Item ===
         builder.Entity<Item>(entity =>
         {
@@ -116,12 +154,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 .HasForeignKey(i => i.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.HasOne(i => i.Stall)
+                .WithMany(s => s.Items)
+                .HasForeignKey(i => i.StallId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasOne(i => i.Category)
                 .WithMany(c => c.Items)
                 .HasForeignKey(i => i.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(i => i.UserId);
+            entity.HasIndex(i => i.StallId);
             entity.HasIndex(i => i.CategoryId);
             entity.HasIndex(i => i.CreatedAt);
         });

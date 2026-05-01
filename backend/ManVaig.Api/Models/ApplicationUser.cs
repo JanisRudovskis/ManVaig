@@ -18,5 +18,6 @@ public class ApplicationUser : IdentityUser<Guid>
 
     public ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     public ICollection<UserDisplayedBadge> DisplayedBadges { get; set; } = new List<UserDisplayedBadge>();
+    public ICollection<Stall> Stalls { get; set; } = new List<Stall>();
     public ICollection<Item> Items { get; set; } = new List<Item>();
 }

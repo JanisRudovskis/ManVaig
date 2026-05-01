@@ -29,7 +29,7 @@ public class ItemsController : ControllerBase
     /// List current user's items (paginated).
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetMyItems([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetMyItems([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? stallId = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -38,8 +38,12 @@ public class ItemsController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 50);
 
         var query = _db.Items
-            .Where(i => i.UserId == userId.Value)
-            .OrderByDescending(i => i.CreatedAt);
+            .Where(i => i.UserId == userId.Value);
+
+        if (stallId.HasValue)
+            query = query.Where(i => i.StallId == stallId.Value);
+
+        query = query.OrderByDescending(i => i.CreatedAt);
 
         var totalCount = await query.CountAsync();
 
@@ -119,10 +123,43 @@ public class ItemsController : ControllerBase
         if (pricingError != null)
             return BadRequest(new { error = pricingError });
 
+        // Resolve stall
+        Guid stallId;
+        if (request.StallId.HasValue)
+        {
+            // Validate stall belongs to user
+            var stallExists = await _db.Stalls.AnyAsync(s => s.Id == request.StallId.Value && s.UserId == userId.Value);
+            if (!stallExists)
+                return BadRequest(new { error = "INVALID_STALL" });
+            stallId = request.StallId.Value;
+        }
+        else
+        {
+            // Auto-create default stall if user has none
+            var defaultStall = await _db.Stalls.FirstOrDefaultAsync(s => s.UserId == userId.Value && s.IsDefault);
+            if (defaultStall == null)
+            {
+                defaultStall = new Stall
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId.Value,
+                    Name = "General",
+                    Slug = "general",
+                    IsDefault = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.Stalls.Add(defaultStall);
+                await _db.SaveChangesAsync();
+            }
+            stallId = defaultStall.Id;
+        }
+
         var item = new Item
         {
             Id = Guid.NewGuid(),
             UserId = userId.Value,
+            StallId = stallId,
             CategoryId = request.CategoryId,
             Title = request.Title,
             Description = request.Description,
@@ -178,6 +215,21 @@ public class ItemsController : ControllerBase
             return StatusCode(403, new { error = lockError });
 
         // Apply partial updates
+        // Move to different stall
+        if (request.StallId.HasValue && request.StallId.Value != item.StallId)
+        {
+            var stallExists = await _db.Stalls.AnyAsync(s => s.Id == request.StallId.Value && s.UserId == userId.Value);
+            if (!stallExists)
+                return BadRequest(new { error = "INVALID_STALL" });
+            item.StallId = request.StallId.Value;
+
+            // Remove from featured items if it was featured in old stall
+            var featured = await _db.StallFeaturedItems
+                .Where(f => f.ItemId == id)
+                .ToListAsync();
+            _db.StallFeaturedItems.RemoveRange(featured);
+        }
+
         if (request.Title != null) item.Title = request.Title;
         if (request.Description != null) item.Description = request.Description;
         if (request.Condition.HasValue) item.Condition = request.Condition.Value;
@@ -455,6 +507,7 @@ public class ItemsController : ControllerBase
     private IQueryable<Item> GetItemWithIncludes()
     {
         return _db.Items
+            .Include(i => i.Stall)
             .Include(i => i.Category)
             .Include(i => i.Images.OrderBy(img => img.SortOrder))
             .Include(i => i.ItemTags)
@@ -578,6 +631,8 @@ public class ItemsController : ControllerBase
         {
             Id = item.Id,
             UserId = item.UserId,
+            StallId = item.StallId,
+            StallName = item.Stall?.Name ?? "",
             Title = item.Title,
             Description = item.Description,
             CategoryId = item.CategoryId,

@@ -64,6 +64,7 @@ import { LocationSearch } from "@/components/location-search";
 interface ItemFormProps {
   mode: "add" | "edit";
   item?: ItemResponse | null;
+  stallId?: string;
   userLocation?: string | null;
   onClose: () => void;
   onSaved: () => void;
@@ -148,7 +149,7 @@ function SortableImageThumb({
 
 // === Component ===
 
-export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted }: ItemFormProps) {
+export function ItemForm({ mode, item, stallId, userLocation, onClose, onSaved, onDeleted }: ItemFormProps) {
   const t = useTranslations("itemForm");
   const locale = useLocale();
 
@@ -383,6 +384,7 @@ export function ItemForm({ mode, item, userLocation, onClose, onSaved, onDeleted
 
       if (mode === "add") {
         const data: CreateItemData = {
+          stallId: stallId || undefined,
           title: title.trim(),
           description: description.trim() || undefined,
           categoryId,

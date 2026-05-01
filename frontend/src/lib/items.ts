@@ -53,6 +53,7 @@ export interface TagDto {
 }
 
 export interface CreateItemData {
+  stallId?: string;
   title: string;
   description?: string;
   categoryId: number;
@@ -113,11 +114,13 @@ export const ItemVisibility = {
 
 export async function fetchMyItems(
   page = 1,
-  pageSize = 20
+  pageSize = 20,
+  stallId?: string
 ): Promise<ItemListResponse> {
-  const res = await authFetch(
-    `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}`
-  );
+  let url = `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}`;
+  if (stallId) url += `&stallId=${stallId}`;
+
+  const res = await authFetch(url);
 
   if (!res.ok) throw new Error("items_fetch_failed");
   return res.json();
