@@ -84,11 +84,13 @@ function ItemCard({
     <div className={`relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80 ${ended ? "opacity-60 hover:opacity-80" : ""}`}>
       <TypeTag type={item.pricingType} t={t} />
       <VisibilityTag visibility={item.visibility} t={t} />
-      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         {primaryImage ? (
-          <img src={primaryImage.url} alt={item.title} className="size-full object-cover" />
+          <img src={primaryImage.url} alt={item.title} className="absolute inset-0 size-full object-cover" />
         ) : (
-          <ImageIcon className="size-12 text-muted-foreground" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <ImageIcon className="size-12 text-muted-foreground" />
+          </div>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
