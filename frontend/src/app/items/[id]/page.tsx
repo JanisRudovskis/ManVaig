@@ -124,6 +124,9 @@ function ActionButton({ item, t }: { item: PublicItemDetail; t: (key: string) =>
     alert(t("comingSoon"));
   };
 
+  // Don't show action button for the item's owner
+  if (item.isOwner) return null;
+
   const isAuctionEnded = item.pricingType === PricingType.Auction
     && item.auctionEnd
     && new Date(item.auctionEnd).getTime() < Date.now();

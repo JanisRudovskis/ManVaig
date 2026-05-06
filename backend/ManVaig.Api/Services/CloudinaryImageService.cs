@@ -121,15 +121,17 @@ public class CloudinaryImageService : IImageService
 
         using var image = await Image.LoadAsync(imageStream);
 
-        // Thumbnail: 400x400 crop, Header: max 1200px wide, Background: max 1920px wide
+        // Thumbnail: max 1200px wide (preserve aspect ratio for detail), Header: 1200x300, Background: max 1920px
         if (imageType == "thumbnail")
         {
-            image.Mutate(x => x.Resize(new ResizeOptions
+            if (image.Width > 1200)
             {
-                Size = new SixLabors.ImageSharp.Size(400, 400),
-                Mode = ResizeMode.Crop,
-                Position = AnchorPositionMode.Center
-            }));
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new SixLabors.ImageSharp.Size(1200, 0),
+                    Mode = ResizeMode.Max
+                }));
+            }
         }
 
         if (imageType == "header")

@@ -53,6 +53,9 @@ public class PublicItemDetailDto : PublicItemCardDto
     public string? Description { get; set; }
     public bool AllowGuestOffers { get; set; }
 
+    /// <summary>True if the currently authenticated user owns this item.</summary>
+    public bool IsOwner { get; set; }
+
     // Seller with bio for detail page
     public new PublicSellerDetailDto Seller { get; set; } = default!;
 }

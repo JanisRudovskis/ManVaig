@@ -102,6 +102,10 @@ public class BidsController : ControllerBase
         var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
         if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
 
+        // Visibility check — don't allow bids on private items
+        if (item.Visibility == ItemVisibility.Private)
+            return NotFound(new { error = "ITEM_NOT_FOUND" });
+
         // Must be an auction
         if (item.PricingType != PricingType.Auction)
             return BadRequest(new { error = "NOT_AUCTION" });

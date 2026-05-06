@@ -30,6 +30,8 @@ public class Item
     public bool CanShip { get; set; }
     public bool AllowGuestOffers { get; set; }
 
+    public int SortOrder { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

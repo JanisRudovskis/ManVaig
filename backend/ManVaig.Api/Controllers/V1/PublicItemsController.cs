@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using ManVaig.Api.Data;
 using ManVaig.Api.Models.Dto;
 using ManVaig.Api.Models.Enums;
@@ -121,9 +123,14 @@ public class PublicItemsController : ControllerBase
                 break;
         }
 
+        // Check if the current user owns this item
+        var currentUserId = GetCurrentUserId();
+        var isOwner = currentUserId.HasValue && item.UserId == currentUserId.Value;
+
         var detail = new PublicItemDetailDto
         {
             Id = item.Id,
+            IsOwner = isOwner,
             Title = item.Title,
             Description = item.Description,
             CategoryId = item.CategoryId,
@@ -161,5 +168,12 @@ public class PublicItemsController : ControllerBase
         };
 
         return Ok(detail);
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        return Guid.TryParse(raw, out var id) ? id : null;
     }
 }

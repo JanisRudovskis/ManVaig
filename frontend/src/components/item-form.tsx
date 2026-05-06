@@ -4,16 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   X,
-  Plus,
-  Star,
   Trash2,
-  ImageIcon,
   DollarSign,
   MessageCircle,
   TrendingUp,
   Clock,
   Info,
-  GripVertical,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,21 +23,8 @@ import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { lv } from "date-fns/locale/lv";
 import { enUS } from "date-fns/locale/en-US";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  rectSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { ImageManager } from "@/components/image-manager";
+import type { FormImage } from "@/components/image-manager";
 import {
   createItem,
   updateItem,
@@ -69,82 +52,6 @@ interface ItemFormProps {
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
-}
-
-// === Image types ===
-
-interface FormImage {
-  id: string;
-  url: string; // Cloudinary URL for existing images, blob URL for new
-  file?: File; // Only for new images not yet uploaded
-  isPrimary: boolean;
-}
-
-// === Sortable image thumbnail ===
-
-function SortableImageThumb({
-  image,
-  onRemove,
-  onSetPrimary,
-}: {
-  image: FormImage;
-  onRemove: () => void;
-  onSetPrimary: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: image.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="group relative aspect-square overflow-hidden rounded-lg border-2 border-border bg-muted"
-    >
-      <img
-        src={image.url}
-        alt=""
-        className="h-full w-full object-cover"
-      />
-      {/* Drag handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="absolute top-1 left-1 flex size-6 cursor-grab items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-      >
-        <GripVertical className="size-3.5" />
-      </button>
-      {/* Primary star */}
-      <button
-        onClick={onSetPrimary}
-        className={`absolute top-1 right-1 flex size-6 items-center justify-center rounded transition-opacity ${
-          image.isPrimary
-            ? "bg-yellow-500 text-white"
-            : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
-        }`}
-      >
-        <Star className="size-3.5" fill={image.isPrimary ? "currentColor" : "none"} />
-      </button>
-      {/* Delete */}
-      <button
-        onClick={onRemove}
-        className="absolute bottom-1 right-1 flex size-6 items-center justify-center rounded bg-black/60 text-red-400 opacity-0 transition-opacity group-hover:opacity-100"
-      >
-        <X className="size-3.5" />
-      </button>
-      {/* Pending upload indicator */}
-      {image.file && (
-        <div className="absolute bottom-1 left-1 rounded bg-blue-500/80 px-1.5 py-0.5 text-[0.55rem] text-white">
-          NEW
-        </div>
-      )}
-    </div>
-  );
 }
 
 // === Component ===
@@ -199,7 +106,6 @@ export function ItemForm({ mode, item, stallId, userLocation, onClose, onSaved, 
     return [];
   });
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // UI state
   const [categories, setCategories] = useState<CategoryDto[]>([]);
@@ -211,12 +117,6 @@ export function ItemForm({ mode, item, stallId, userLocation, onClose, onSaved, 
   // Bid history (auction items only, edit mode)
   const [bidData, setBidData] = useState<BidListResponse | null>(null);
   const [bidLoading, setBidLoading] = useState(false);
-
-  // DnD sensors — pointer (mouse) + touch (mobile long-press)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
-  );
 
   // Load categories
   useEffect(() => {
@@ -230,59 +130,6 @@ export function ItemForm({ mode, item, stallId, userLocation, onClose, onSaved, 
       fetchBids(item.id).then(setBidData).catch(() => {}).finally(() => setBidLoading(false));
     }
   }, [mode, item]);
-
-
-  // === Image handlers ===
-
-  const addImageFiles = (files: FileList | File[]) => {
-    const fileArray = Array.from(files);
-    const maxToAdd = 5 - images.length;
-    if (maxToAdd <= 0) return;
-
-    const validFiles = fileArray
-      .filter((f) => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024)
-      .slice(0, maxToAdd);
-
-    const newImages: FormImage[] = validFiles.map((file) => ({
-      id: crypto.randomUUID(),
-      url: URL.createObjectURL(file),
-      file,
-      isPrimary: images.length === 0 && validFiles.indexOf(file) === 0,
-    }));
-
-    setImages((prev) => [...prev, ...newImages]);
-  };
-
-  const removeImage = (id: string) => {
-    setImages((prev) => {
-      const filtered = prev.filter((img) => img.id !== id);
-      // If removed image was primary, make first remaining primary
-      if (filtered.length > 0 && !filtered.some((img) => img.isPrimary)) {
-        filtered[0].isPrimary = true;
-      }
-      return [...filtered];
-    });
-  };
-
-  const setPrimaryImage = (id: string) => {
-    setImages((prev) =>
-      prev.map((img) => ({ ...img, isPrimary: img.id === id }))
-    );
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    setImages((prev) => {
-      const oldIndex = prev.findIndex((img) => img.id === active.id);
-      const newIndex = prev.findIndex((img) => img.id === over.id);
-      const reordered = [...prev];
-      const [moved] = reordered.splice(oldIndex, 1);
-      reordered.splice(newIndex, 0, moved);
-      return reordered;
-    });
-  };
 
   // === Tags ===
 
@@ -526,43 +373,11 @@ export function ItemForm({ mode, item, stallId, userLocation, onClose, onSaved, 
             <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t("sectionImages")} *
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) addImageFiles(e.target.files);
-                e.target.value = "";
-              }}
+            <ImageManager
+              images={images}
+              onChange={setImages}
+              error={errors.images}
             />
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={images.map((img) => img.id)} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-5 gap-2 max-[480px]:grid-cols-3">
-                  {images.map((img) => (
-                    <SortableImageThumb
-                      key={img.id}
-                      image={img}
-                      onRemove={() => removeImage(img.id)}
-                      onSetPrimary={() => setPrimaryImage(img.id)}
-                    />
-                  ))}
-                  {images.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-muted-foreground"
-                    >
-                      <Plus className="size-5" />
-                      <span className="text-[0.6rem]">{t("upload")}</span>
-                    </button>
-                  )}
-                </div>
-              </SortableContext>
-            </DndContext>
-            <p className="mt-2 text-xs text-muted-foreground">{t("imagesHint")}</p>
-            {errors.images && <p className="mt-1 text-xs text-destructive">{errors.images}</p>}
           </div>
 
           {/* === Section: Basic Info === */}

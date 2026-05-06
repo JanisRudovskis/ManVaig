@@ -100,8 +100,14 @@ public class ItemResponse
     public string? Location { get; set; }
     public bool CanShip { get; set; }
     public bool AllowGuestOffers { get; set; }
+    public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>Number of active bids on this item.</summary>
+    public int BidCount { get; set; }
+    /// <summary>Highest active bid amount, null if no bids.</summary>
+    public decimal? HighestBid { get; set; }
 
     public List<ItemImageDto> Images { get; set; } = new();
     public List<string> Tags { get; set; } = new();
@@ -139,4 +145,10 @@ public class TagDto
 public class ReorderImagesRequest
 {
     public List<Guid> ImageIds { get; set; } = new();
+}
+
+public class ReorderItemsRequest
+{
+    public Guid StallId { get; set; }
+    public List<Guid> ItemIds { get; set; } = new();
 }

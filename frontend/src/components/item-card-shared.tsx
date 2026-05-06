@@ -70,12 +70,14 @@ interface PriceDisplayProps {
   minBidPrice: number | null;
   bidStep: number | null;
   auctionEnd: string | null;
-  t: (key: string) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
   bidCount?: number;
   highestBid?: number | null;
+  /** Hide the "ended" text when an activity badge already shows it */
+  hideEndedStatus?: boolean;
 }
 
-export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auctionEnd, t, bidCount, highestBid }: PriceDisplayProps) {
+export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auctionEnd, t, bidCount, highestBid, hideEndedStatus }: PriceDisplayProps) {
   const priceClass = "text-lg font-bold text-emerald-400";
   const detailClass = "text-xs text-muted-foreground";
 
@@ -94,10 +96,21 @@ export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auction
     case PricingType.Bidding:
       return (
         <div className="flex flex-col gap-0.5">
-          {minBidPrice ? (
-            <span className={detailClass}>{t("minBid")}: {formatPrice(minBidPrice)}</span>
-          ) : null}
-          <span className={priceClass}>{t("openBidding")}</span>
+          {highestBid != null ? (
+            <>
+              <span className={priceClass}>{formatPrice(highestBid)}</span>
+              {bidCount != null && bidCount > 0 && (
+                <span className={detailClass}>{t("bids", { count: bidCount })}</span>
+              )}
+            </>
+          ) : (
+            <>
+              {minBidPrice ? (
+                <span className={detailClass}>{t("minBid")}: {formatPrice(minBidPrice)}</span>
+              ) : null}
+              <span className={priceClass}>{t("openBidding")}</span>
+            </>
+          )}
         </div>
       );
 
@@ -105,7 +118,12 @@ export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auction
       return (
         <div className="flex flex-col gap-0.5">
           {highestBid != null ? (
-            <span className={priceClass}>{formatPrice(highestBid)}</span>
+            <>
+              <span className={priceClass}>{formatPrice(highestBid)}</span>
+              {bidCount != null && bidCount > 0 && (
+                <span className={detailClass}>{t("bids", { count: bidCount })}</span>
+              )}
+            </>
           ) : minBidPrice ? (
             <span className={detailClass}>
               {t("startPrice")}: {formatPrice(minBidPrice)}
@@ -113,7 +131,10 @@ export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auction
             </span>
           ) : null}
           <span className={highestBid != null ? detailClass : priceClass}>{t("auction")}</span>
-          {auctionEnd && (
+          {auctionEnd && isAuctionEnded(auctionEnd, pricingType) && (highestBid == null || highestBid === undefined) && (
+            <span className="text-xs font-medium text-destructive">{t("noBids")}</span>
+          )}
+          {auctionEnd && !(hideEndedStatus && isAuctionEnded(auctionEnd, pricingType)) && (
             <AuctionCountdown end={auctionEnd} t={t} />
           )}
         </div>

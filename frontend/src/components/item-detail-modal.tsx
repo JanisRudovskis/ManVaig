@@ -187,7 +187,10 @@ export function ItemDetailModal({ itemId, onClose }: ItemDetailModalProps) {
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="fixed inset-2 z-51 flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[700px] md:-translate-x-1/2 md:-translate-y-1/2">
+      <div
+        className="fixed inset-2 z-[60] flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[700px] md:-translate-x-1/2 md:-translate-y-1/2"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="truncate text-sm font-semibold">

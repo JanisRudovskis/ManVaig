@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ItemImage } from "@/lib/items";
+import { ImageLightbox } from "@/components/image-lightbox";
 
 interface ImageGalleryProps {
   images: ItemImage[];
@@ -26,27 +27,16 @@ export function ImageGallery({ images, alt = "" }: ImageGalleryProps) {
   const goPrev = useCallback(() => goTo(activeIndex - 1), [activeIndex, goTo]);
   const goNext = useCallback(() => goTo(activeIndex + 1), [activeIndex, goTo]);
 
-  // Keyboard navigation in lightbox
+  // Keyboard navigation for main gallery (arrows)
   useEffect(() => {
-    if (!lightboxOpen) return;
-
+    if (lightboxOpen) return; // lightbox handles its own keys
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") goPrev();
       else if (e.key === "ArrowRight") goNext();
-      else if (e.key === "Escape") setLightboxOpen(false);
     };
-
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [lightboxOpen, goPrev, goNext]);
-
-  // Prevent body scroll when lightbox is open
-  useEffect(() => {
-    if (lightboxOpen) {
-      document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = ""; };
-    }
-  }, [lightboxOpen]);
 
   if (total === 0) {
     return (
@@ -60,29 +50,33 @@ export function ImageGallery({ images, alt = "" }: ImageGalleryProps) {
     <>
       {/* Main image */}
       <div className="relative">
-        <button
+        <div
           onClick={() => setLightboxOpen(true)}
           className="block w-full cursor-zoom-in overflow-hidden rounded-xl bg-muted"
+          role="button"
+          tabIndex={0}
         >
           <img
             src={sorted[activeIndex].url}
             alt={alt}
             className="aspect-[4/3] w-full object-contain"
           />
-        </button>
+        </div>
 
         {/* Prev/Next on main image */}
         {total > 1 && (
           <>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); goPrev(); }}
-              className="absolute left-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+              className="absolute left-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
             >
               <ChevronLeft className="size-5" />
             </button>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); goNext(); }}
-              className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+              className="absolute right-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
             >
               <ChevronRight className="size-5" />
             </button>
@@ -91,7 +85,7 @@ export function ImageGallery({ images, alt = "" }: ImageGalleryProps) {
 
         {/* Counter */}
         {total > 1 && (
-          <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute bottom-2 right-2 z-10 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white">
             {activeIndex + 1} / {total}
           </span>
         )}
@@ -120,45 +114,12 @@ export function ImageGallery({ images, alt = "" }: ImageGalleryProps) {
 
       {/* Lightbox overlay */}
       {lightboxOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
-          {/* Close button */}
-          <button
-            onClick={() => setLightboxOpen(false)}
-            className="absolute right-4 top-4 z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-          >
-            <X className="size-5" />
-          </button>
-
-          {/* Image */}
-          <img
-            src={sorted[activeIndex].url}
-            alt={alt}
-            className="max-h-[90vh] max-w-[90vw] object-contain"
-          />
-
-          {/* Prev/Next */}
-          {total > 1 && (
-            <>
-              <button
-                onClick={goPrev}
-                className="absolute left-4 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-              >
-                <ChevronLeft className="size-6" />
-              </button>
-              <button
-                onClick={goNext}
-                className="absolute right-4 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-              >
-                <ChevronRight className="size-6" />
-              </button>
-            </>
-          )}
-
-          {/* Counter */}
-          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-1 text-sm font-medium text-white">
-            {activeIndex + 1} / {total}
-          </span>
-        </div>
+        <ImageLightbox
+          images={sorted}
+          initialIndex={activeIndex}
+          alt={alt}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </>
   );

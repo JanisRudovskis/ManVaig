@@ -28,8 +28,11 @@ export interface ItemResponse {
   location: string | null;
   canShip: boolean;
   allowGuestOffers: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  bidCount: number;
+  highestBid: number | null;
   images: ItemImage[];
   tags: string[];
 }
@@ -112,12 +115,15 @@ export const ItemVisibility = {
 
 // === API Functions ===
 
+export type ItemSortOption = "newest" | "oldest" | "priceAsc" | "priceDesc" | "custom";
+
 export async function fetchMyItems(
   page = 1,
   pageSize = 20,
-  stallId?: string
+  stallId?: string,
+  sort: ItemSortOption = "newest"
 ): Promise<ItemListResponse> {
-  let url = `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}`;
+  let url = `${API_URL}/api/v1/items?page=${page}&pageSize=${pageSize}&sort=${sort}`;
   if (stallId) url += `&stallId=${stallId}`;
 
   const res = await authFetch(url);
@@ -239,6 +245,19 @@ export async function deleteItemImage(
   }
 }
 
+export async function reorderItems(
+  stallId: string,
+  itemIds: string[]
+): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/reorder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stallId, itemIds }),
+  });
+
+  if (!res.ok) throw new Error("items_reorder_failed");
+}
+
 // === Public types (for browse feed + detail page) ===
 
 export interface PublicSellerSummary {
@@ -276,6 +295,7 @@ export interface PublicItemCard {
 export interface PublicItemDetail extends PublicItemCard {
   description: string | null;
   allowGuestOffers: boolean;
+  isOwner: boolean;
   seller: PublicSellerDetail;
 }
 

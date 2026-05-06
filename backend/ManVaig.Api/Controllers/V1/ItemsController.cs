@@ -26,10 +26,15 @@ public class ItemsController : ControllerBase
     }
 
     /// <summary>
-    /// List current user's items (paginated).
+    /// List current user's items (paginated, sortable).
+    /// Sort options: newest (default), oldest, priceAsc, priceDesc, custom.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetMyItems([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? stallId = null)
+    public async Task<IActionResult> GetMyItems(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] Guid? stallId = null,
+        [FromQuery] string sort = "newest")
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -43,17 +48,27 @@ public class ItemsController : ControllerBase
         if (stallId.HasValue)
             query = query.Where(i => i.StallId == stallId.Value);
 
-        query = query.OrderByDescending(i => i.CreatedAt);
+        // Apply sort
+        query = sort switch
+        {
+            "oldest" => query.OrderBy(i => i.CreatedAt),
+            "priceAsc" => query.OrderBy(i => i.Price ?? i.MinBidPrice ?? decimal.MaxValue),
+            "priceDesc" => query.OrderByDescending(i => i.Price ?? i.MinBidPrice ?? 0),
+            "custom" => query.OrderBy(i => i.SortOrder).ThenByDescending(i => i.CreatedAt),
+            _ => query.OrderByDescending(i => i.CreatedAt), // "newest" and fallback
+        };
 
         var totalCount = await query.CountAsync();
 
         var items = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Include(i => i.Stall)
             .Include(i => i.Category)
             .Include(i => i.Images.OrderBy(img => img.SortOrder))
             .Include(i => i.ItemTags)
                 .ThenInclude(it => it.Tag)
+            .Include(i => i.Bids)
             .ToListAsync();
 
         return Ok(new ItemListResponse
@@ -448,6 +463,35 @@ public class ItemsController : ControllerBase
     }
 
     /// <summary>
+    /// Reorder items within a stall (custom sort order).
+    /// </summary>
+    [HttpPut("reorder")]
+    public async Task<IActionResult> ReorderItems([FromBody] ReorderItemsRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        // Validate stall ownership
+        var stallOwned = await _db.Stalls.AnyAsync(s => s.Id == request.StallId && s.UserId == userId.Value);
+        if (!stallOwned)
+            return BadRequest(new { error = "INVALID_STALL" });
+
+        var items = await _db.Items
+            .Where(i => i.StallId == request.StallId && i.UserId == userId.Value)
+            .ToListAsync();
+
+        for (int i = 0; i < request.ItemIds.Count; i++)
+        {
+            var item = items.FirstOrDefault(it => it.Id == request.ItemIds[i]);
+            if (item != null)
+                item.SortOrder = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
     /// Delete a single image from an item.
     /// </summary>
     [HttpDelete("{id:guid}/images/{imageId:guid}")]
@@ -511,7 +555,8 @@ public class ItemsController : ControllerBase
             .Include(i => i.Category)
             .Include(i => i.Images.OrderBy(img => img.SortOrder))
             .Include(i => i.ItemTags)
-                .ThenInclude(it => it.Tag);
+                .ThenInclude(it => it.Tag)
+            .Include(i => i.Bids);
     }
 
     private async Task SyncTags(Item item, List<string> tagNames)
@@ -627,6 +672,8 @@ public class ItemsController : ControllerBase
 
     private static ItemResponse MapToResponse(Item item)
     {
+        var activeBids = item.Bids?.Where(b => b.Status == BidStatus.Active).ToList();
+
         return new ItemResponse
         {
             Id = item.Id,
@@ -647,8 +694,11 @@ public class ItemsController : ControllerBase
             Location = item.Location,
             CanShip = item.CanShip,
             AllowGuestOffers = item.AllowGuestOffers,
+            SortOrder = item.SortOrder,
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt,
+            BidCount = activeBids?.Count ?? 0,
+            HighestBid = activeBids?.Count > 0 ? activeBids.Max(b => b.Amount) : null,
             Images = item.Images?.Select(img => new ItemImageDto
             {
                 Id = img.Id,
