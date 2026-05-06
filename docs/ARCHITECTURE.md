@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-04-30 (session 7: auth improvements, email management, sidebar redesign)
+> Last updated: 2026-05-06 (stalls system, item ordering, activity badges, add item wizard, shared ImageManager)
 
 ---
 
@@ -103,11 +103,28 @@ All routes under `/api/v1/`:
 | `POST profile/avatar` | Bearer | Multipart upload, 2MB limit, resizes to 256x256 WebP, uploads to Cloudinary |
 | `GET users/{displayName}` | Public | Public profile (email/phone hidden). 404 if private/inactive/not found. Case-insensitive lookup. |
 
+### Stalls System
+
+**Model: `Models/Stall.cs`** — Name, Description, ThumbnailUrl, BackgroundImageUrl, SortOrder, UserId. Multiple stalls per user.
+
+**Controller: `Controllers/V1/StallsController.cs`**:
+- CRUD: create, update, delete, list my stalls, get single stall
+- `PUT /api/v1/stalls/reorder` — reorder stalls by ID array
+- Background image upload/delete (Cloudinary)
+- Delete protection: cannot delete last stall
+
+**Items ↔ Stalls**: Items have optional `StallId`. `GET /api/v1/items` supports `?stallId=` filter + `?sort=newest|oldest|priceAsc|priceDesc|custom` parameter.
+
+**Item Ordering**: `SortOrder` field on Item. `PUT /api/v1/items/reorder` endpoint (same pattern as stalls). Custom sort orders items by SortOrder then CreatedAt.
+
+**Bid Summary on Items**: `ItemResponse` includes `BidCount` and `HighestBid` (computed from Bids navigation property, active bids only).
+
 ### Image Service: `Services/CloudinaryImageService.cs`
 
 - Implements `IImageService.UploadAvatarAsync(stream, fileName, userId)`
-- SixLabors.ImageSharp: resize to 256x256, center crop, encode as WebP (quality 80)
-- Uploads to Cloudinary as `manvaig/avatars/{userId}`, returns secure URL
+- Also: `UploadItemImageAsync` (800px max, WebP q80), `UploadStallBackgroundAsync`
+- SixLabors.ImageSharp: resize to 256x256 (avatar) / 800px max (items), center crop, encode as WebP (quality 80)
+- Uploads to Cloudinary as `manvaig/avatars/{userId}` or `manvaig/items/{itemId}`, returns secure URL
 - Gracefully handles missing Cloudinary credentials (logs warning, throws on upload attempt)
 
 ### Email Service: `Services/ResendEmailService.cs`
@@ -149,7 +166,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `feed`, `itemDetail`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -210,6 +227,9 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/profile` | `ProfileCard` (inline edit) | Client component, auth required |
 | `/user/[displayName]` | `ProfileCard` (read-only) | Client component, public |
 | `/my-items` | `MyItemsPage` + `ItemForm` modal | Client component, auth required |
+| `/my-stalls` | `MyStallsPage` | Stall list + create, auth required |
+| `/my-stalls/[id]` | `StallItemsPage` | Stall items grid, activity badges, filters, reorder, edit stall |
+| `/my-stalls/[id]/items/new` | `AddItemPage` | 3-step wizard: category+type → describe → terms |
 | `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
 
 ### Component Map
@@ -232,11 +252,17 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color (xs/sm/md/lg sizes) |
 | AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload (updates auth context) |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
-| ItemForm | `components/item-form.tsx` | Add/Edit item modal (uses LocationSearch for autocomplete) |
+| ItemForm | `components/item-form.tsx` | Edit item modal (uses ImageManager, LocationSearch) |
+| ImageManager | `components/image-manager.tsx` | Shared image add/delete/reorder — arrow-based (mobile-friendly), no dnd-kit. Used by both add wizard and edit modal. Exports `FormImage` type. |
+| ImageLightbox | `components/image-lightbox.tsx` | Fullscreen image preview overlay — arrow keys, escape, prev/next, counter. Reusable (used by ImageGallery + stall item cards). |
+| ImageGallery | `components/image-gallery.tsx` | Item detail page image gallery with thumbnails, uses ImageLightbox. |
+| ConfirmDialog | `components/confirm-dialog.tsx` | Generic confirmation dialog (title, message, confirm/cancel). |
+| ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, TypeTag, AuctionCountdown, timeAgo, isAuctionEnded. |
+| BidsModal | `components/bids-modal.tsx` | Auction bid history popup with winner assignment. |
 
 ### shadcn/ui Components Installed
 
-button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dialog, avatar, badge, switch, textarea, card
+button, input, label, separator, skeleton, tooltip, sheet, sidebar, popover, dialog, avatar, badge, switch, textarea, card, calendar
 
 ---
 
@@ -335,8 +361,12 @@ Build order for items management (from prototype → actual environment):
 | 5 | Discuss: validation rules, error/loading states | done (agreed 2026-03-28) |
 | 5b | Implement validation + error/loading states | done |
 | 6 | Item image upload (Cloudinary, max 5, drag-to-reorder) | done |
-| 7 | Auction bidders list — prototype first, then implement | next up |
-| 8 | Public item detail page | deferred |
+| 7 | Auction bidders list — prototype first, then implement | done |
+| 8 | Public item detail page | done |
+| 9 | Item ordering (SortOrder + sort param + reorder endpoint) | done |
+| 10 | Activity badges (bid count, highest bid, ended/ending soon) | done |
+| 11 | 3-step add item wizard (dedicated page) | done |
+| 12 | Shared ImageManager (arrow reorder, mobile-friendly) | done |
 
 **Key model decisions (from plan audit):**
 - Item → UserId (not ShopId) — no Shop dependency in v1, migrate in Phase 3
@@ -381,18 +411,20 @@ Per pricing type:
 
 - **Phase 1** (Scaffolding): 6/7 done — Railway deploy working (backend + frontend + PostgreSQL)
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
-- **Phase 4** (Items): Steps 0–6 done — prototype, models, API, My Items page, Add/Edit form, validation, image upload
+- **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
+- **Phase 4** (Items): nearly complete — prototype, models, API, My Items page, Add/Edit form, validation, image upload, item ordering + reorder, activity badges (bid count, highest bid, ended/ending soon), 3-step add item wizard, shared ImageManager, ImageLightbox. Remaining: public item detail SSR improvements
 - **Phase 5** (Bidding): Auction bidding system implemented (Bid model, endpoints, bid history UI)
-- **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page
+- **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page done. Remaining: browse page, category/tag filters
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
-- **Phase 3, 6**: Not started
+- **Phase 6**: Not started
 
 ## What's Next
 
 1. Complete Railway deployment configuration (env vars)
-2. Phase 3: Shop management
+2. Phase 3: Public stall page, contact details
 3. Phase 5: Offer system (non-auction offers)
 4. Phase 6: Notifications
+5. Phase 7: Browse page with filters
 
 ## Known Issues
 

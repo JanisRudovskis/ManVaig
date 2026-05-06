@@ -287,6 +287,8 @@
     <!-- Session: 2026-03-28b — Step 5b: validation implementation. Backend: tightened DTOs (Title 3-100, Desc 2000), expanded ValidatePricingFields per-type, auction lock on PUT/DELETE (placeholder). Frontend: full validate() per pricing type, char counters, error displays. i18n: 8 new validation keys EN+LV. -->
     <!-- Session: 2026-03-28c — Step 6: item image upload. Backend: UploadItemImageAsync (800px max, WebP q80), DeleteImageAsync, 3 endpoints (upload/reorder/delete). Frontend: @dnd-kit drag-to-reorder (touch+mouse), SortableImageThumb, local preview via blob URLs, upload-on-save flow, at least 1 image validation. i18n: 4 new keys EN+LV. -->
     <!-- Session: 2026-04-25 — Auction bidding system (Phase 4 Step 7), backend error codes i18n, Playwright E2E tests (15 tests), Railway deployment, date picker UX fix, price input polish, Cloudinary config. Added roadmap task: unverified email UX (login allowed, guest permissions, warning banner). -->
+    <!-- Session: 2026-05-05 — Phase 3 Stalls: Stall model + CRUD + background images + stall items page with activity badges, attention filter, drag-and-drop custom ordering. Phase 7: Homepage feed with category chips, infinite scroll, public item detail page. -->
+    <!-- Session: 2026-05-06 — Item ordering (SortOrder + sort param + reorder endpoint). Activity badges (bid counts, highest bid, ended/ending soon). 3-step add item wizard (/my-stalls/[id]/items/new). Shared ImageManager component (arrow-based reorder, no dnd-kit). Reusable ImageLightbox. ConfirmDialog, ImageCropDialog. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -441,30 +443,30 @@
     <span class="phase-count" id="ph3-count"></span>
   </div>
   <div class="tasks" id="ph3">
-    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Shop model + migration (1 per user)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Stall model + migration (multiple per user)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Create / edit / delete stall API endpoints + reorder</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Stall background image upload (Cloudinary)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Create / edit shop API endpoints</div>
+      <div class="task-text">Public stall page (Next.js)</div>
       <div class="task-badge badge-planned">planned</div>
     </div>
-    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Shop banner image upload (Cloudinary)</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Public shop page (Next.js, SSR)</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Shop dashboard (owner view)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Stall dashboard (owner view — items grid, activity badges, filters, reorder)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
@@ -565,6 +567,31 @@
     <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Allow anonymous offers toggle per item (default off)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item ordering — SortOrder field, sort param (newest/oldest/price/custom), reorder endpoint</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Activity badges — bid count, highest bid, ended/ending soon indicators</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">3-step add item wizard (dedicated page, replaces modal for add)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Shared ImageManager — arrow-based reorder (mobile-friendly), used in add + edit</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Reusable ImageLightbox — fullscreen image preview on item cards</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
@@ -735,10 +762,15 @@
     <span class="phase-count" id="ph7-count"></span>
   </div>
   <div class="tasks" id="ph7">
-    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="7" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Latest items feed (homepage, SSR)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Latest items feed (homepage, category chips, infinite scroll)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Public item detail page</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
