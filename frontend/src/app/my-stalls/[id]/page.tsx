@@ -16,7 +16,7 @@ import {
   type StallResponse,
 } from "@/lib/stalls";
 import { ItemForm } from "@/components/item-form";
-import { BidsModal } from "@/components/bids-modal";
+import { OffersPopup } from "@/components/offers-popup";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImageLightbox } from "@/components/image-lightbox";
 import {
@@ -94,23 +94,33 @@ function ActivityBadges({ item, ts }: { item: ItemResponse; ts: (key: string, va
   const endingSoon = isEndingSoon(item);
   const hasBids = item.bidCount > 0;
 
-  if (!ended && !endingSoon && !hasBids) return null;
+  if (!ended && !endingSoon && !hasBids && !item.biddingPaused && !item.biddingClosed) return null;
 
   return (
     <div className="absolute bottom-2 left-2 z-10 flex flex-wrap gap-1">
-      {ended && (
+      {item.biddingClosed && (
+        <span className="flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
+          {ts("sold")}
+        </span>
+      )}
+      {item.biddingPaused && !item.biddingClosed && (
+        <span className="flex items-center gap-1 rounded-full bg-blue-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
+          {ts("dealInProgress")}
+        </span>
+      )}
+      {ended && !item.biddingPaused && !item.biddingClosed && (
         <span className="flex items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
           <AlertCircle className="size-3" />
           {ts("auctionEnded")}
         </span>
       )}
-      {!ended && endingSoon && (
+      {!ended && endingSoon && !item.biddingPaused && !item.biddingClosed && (
         <span className="flex items-center gap-1 rounded-full bg-yellow-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-black backdrop-blur-sm">
           <Clock className="size-3" />
           {ts("endingSoon")}
         </span>
       )}
-      {hasBids && !ended && (
+      {hasBids && !ended && !item.biddingPaused && !item.biddingClosed && (
         <span className="flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
           <Gavel className="size-3" />
           {ts("bidsCount", { count: item.bidCount })}
@@ -728,10 +738,12 @@ export default function StallItemsPage() {
         />
       )}
 
-      {/* Bids modal */}
+      {/* Offers popup */}
       {bidsItem && (
-        <BidsModal
-          item={bidsItem}
+        <OffersPopup
+          itemId={bidsItem.id}
+          itemTitle={bidsItem.title}
+          itemImages={bidsItem.images}
           onClose={() => setBidsItem(null)}
         />
       )}

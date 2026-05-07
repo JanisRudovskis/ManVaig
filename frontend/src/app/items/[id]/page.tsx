@@ -7,6 +7,7 @@ import Link from "next/link";
 import { fetchPublicItem, Condition } from "@/lib/items";
 import type { PublicItemDetail } from "@/lib/items";
 import { ImageGallery } from "@/components/image-gallery";
+import { OffersPopup } from "@/components/offers-popup";
 import { formatPrice, EndDateCountdown, isEnded } from "@/components/item-card-shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   TrendingUp,
   DollarSign,
   MessageCircle,
+  HandCoins,
+  Check,
   User,
   ArrowLeft,
 } from "lucide-react";
@@ -94,40 +97,70 @@ function DetailPricing({
 
 // === Action button ===
 
-function ActionButton({ item, t }: { item: PublicItemDetail; t: (key: string) => string }) {
-  const handleClick = () => {
-    // Placeholder — will be implemented in Phase 5 (Offers)
-    alert(t("comingSoon"));
-  };
-
-  // Don't show action button for the item's owner
-  if (item.isOwner) return null;
-
-  // No action if ended
-  if (isEnded(item.endDate)) return null;
-
-  let label: string;
-  let Icon = DollarSign;
-
-  if (!item.acceptOffers && item.price) {
-    label = t("buyNow");
-    Icon = DollarSign;
-  } else if (item.acceptOffers && item.endDate && !isEnded(item.endDate)) {
-    label = t("placeBid");
-    Icon = TrendingUp;
-  } else if (item.acceptOffers) {
-    label = t("makeOffer");
-    Icon = MessageCircle;
-  } else {
-    return null;
+function ActionButton({
+  item,
+  t,
+  onOpenOffers,
+}: {
+  item: PublicItemDetail;
+  t: (key: string) => string;
+  onOpenOffers: () => void;
+}) {
+  // Sold
+  if (item.biddingClosed) {
+    return (
+      <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-400">
+        <Check className="size-4" />
+        {t("sold")}
+      </div>
+    );
   }
 
-  return (
-    <Button onClick={handleClick} size="lg" className="mt-4 w-full">
-      <Icon className="mr-2 size-4" />
-      {label}
-    </Button>
-  );
+  // Deal in progress
+  if (item.biddingPaused) {
+    return (
+      <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-3 text-sm font-medium text-blue-400">
+        <HandCoins className="size-4" />
+        {t("dealInProgress")}
+      </div>
+    );
+  }
+
+  // Accepts offers — show button to open offers popup
+  if (item.acceptOffers) {
+    let label: string;
+    let Icon = HandCoins;
+
+    if (item.endDate && !isEnded(item.endDate)) {
+      label = t("placeBid");
+      Icon = TrendingUp;
+    } else if (isEnded(item.endDate)) {
+      label = t("auctionEnded");
+      Icon = HandCoins;
+    } else {
+      label = t("makeOffer");
+      Icon = MessageCircle;
+    }
+
+    return (
+      <Button onClick={onOpenOffers} size="lg" className="mt-4 w-full">
+        <Icon className="mr-2 size-4" />
+        {label}
+      </Button>
+    );
+  }
+
+  // Fixed price only — no offer system
+  if (!item.acceptOffers && item.price) {
+    return (
+      <Button onClick={onOpenOffers} size="lg" className="mt-4 w-full" disabled>
+        <DollarSign className="mr-2 size-4" />
+        {t("buyNow")}
+      </Button>
+    );
+  }
+
+  return null;
 }
 
 // === Loading skeleton ===
@@ -161,6 +194,7 @@ export default function ItemDetailPage() {
   const [item, setItem] = useState<PublicItemDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showOffers, setShowOffers] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -240,7 +274,7 @@ export default function ItemDetailPage() {
           {/* Pricing */}
           <div className="rounded-lg border border-border bg-card p-4">
             <DetailPricing item={item} t={t} />
-            <ActionButton item={item} t={t} />
+            <ActionButton item={item} t={t} onOpenOffers={() => setShowOffers(true)} />
           </div>
 
           {/* Location + Shipping */}
@@ -330,6 +364,16 @@ export default function ItemDetailPage() {
             {item.description}
           </p>
         </div>
+      )}
+
+      {/* Offers popup */}
+      {showOffers && item && (
+        <OffersPopup
+          itemId={item.id}
+          itemTitle={item.title}
+          itemImages={item.images}
+          onClose={() => setShowOffers(false)}
+        />
       )}
     </div>
   );

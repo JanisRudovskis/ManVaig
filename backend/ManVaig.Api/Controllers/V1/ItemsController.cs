@@ -665,37 +665,48 @@ public class ItemsController : ControllerBase
     }
 
     /// <summary>
-    /// Check if a timed offer item is locked (has active offers and end date).
+    /// Check if an item is locked due to active offer negotiations.
     /// Returns an error message if locked, null if editable.
-    /// Non-timed offer items are never locked (seller retains control).
+    /// Locked when: accepted bid in progress, completed (sold), or timed with active bids.
     /// </summary>
     private async Task<string?> CheckOfferLock(Item item)
     {
-        // Only timed items with offers can be locked
-        if (!item.AcceptOffers || !item.EndDate.HasValue)
+        if (!item.AcceptOffers)
             return null;
 
-        var hasOffers = await _db.Bids.AnyAsync(b => b.ItemId == item.Id);
+        // Items with an accepted bid are always locked (deal in progress)
+        var hasAccepted = await _db.Bids.AnyAsync(b => b.ItemId == item.Id && b.Status == BidStatus.Accepted);
+        if (hasAccepted)
+            return "OFFERS_LOCKED";
 
-        if (hasOffers)
+        // Items with a completed bid are always locked (sold)
+        var hasCompleted = await _db.Bids.AnyAsync(b => b.ItemId == item.Id && b.Status == BidStatus.Completed);
+        if (hasCompleted)
+            return "OFFERS_LOCKED";
+
+        // Timed items with active bids: locked during auction and 48h grace period
+        if (item.EndDate.HasValue)
         {
-            // Timed item with offers is locked
-            if (item.EndDate.Value > DateTime.UtcNow)
-                return "OFFERS_LOCKED";
+            var hasOffers = await _db.Bids.AnyAsync(b => b.ItemId == item.Id && b.Status == BidStatus.Active);
 
-            // Ended — check 48h grace period
-            var gracePeriodEnd = item.EndDate.Value.AddHours(48);
-            if (DateTime.UtcNow < gracePeriodEnd)
-                return "OFFERS_GRACE_PERIOD";
+            if (hasOffers)
+            {
+                if (item.EndDate.Value > DateTime.UtcNow)
+                    return "OFFERS_LOCKED";
+
+                var gracePeriodEnd = item.EndDate.Value.AddHours(48);
+                if (DateTime.UtcNow < gracePeriodEnd)
+                    return "OFFERS_GRACE_PERIOD";
+            }
         }
 
-        // No offers, or grace period expired → freely editable/deletable
         return null;
     }
 
     private static ItemResponse MapToResponse(Item item)
     {
         var activeBids = item.Bids?.Where(b => b.Status == BidStatus.Active).ToList();
+        var allBids = item.Bids?.ToList();
 
         return new ItemResponse
         {
@@ -722,6 +733,8 @@ public class ItemsController : ControllerBase
             UpdatedAt = item.UpdatedAt,
             BidCount = activeBids?.Count ?? 0,
             HighestBid = activeBids?.Count > 0 ? activeBids.Max(b => b.Amount) : null,
+            BiddingPaused = allBids?.Any(b => b.Status == BidStatus.Accepted) ?? false,
+            BiddingClosed = allBids?.Any(b => b.Status == BidStatus.Completed) ?? false,
             Images = item.Images?.Select(img => new ItemImageDto
             {
                 Id = img.Id,

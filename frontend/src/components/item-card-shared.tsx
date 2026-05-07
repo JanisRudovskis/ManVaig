@@ -114,13 +114,15 @@ interface PriceDisplayProps {
   t: (key: string, values?: Record<string, string | number>) => string;
   bidCount?: number;
   highestBid?: number | null;
+  biddingPaused?: boolean;
+  biddingClosed?: boolean;
   /** Hide the "ended" text when an activity badge already shows it */
   hideEndedStatus?: boolean;
 }
 
 export function PriceDisplay({
   price, acceptOffers, minOfferPrice, offerStep, endDate,
-  t, bidCount, highestBid, hideEndedStatus,
+  t, bidCount, highestBid, biddingPaused, biddingClosed, hideEndedStatus,
 }: PriceDisplayProps) {
   const priceClass = "text-lg font-bold text-emerald-400";
   const detailClass = "text-xs text-muted-foreground";
@@ -130,12 +132,22 @@ export function PriceDisplay({
 
   return (
     <div className="flex flex-col gap-0.5">
+      {/* Sold indicator */}
+      {biddingClosed && (
+        <span className="text-xs font-medium text-emerald-400">{t("sold")}</span>
+      )}
+
+      {/* Deal in progress indicator */}
+      {biddingPaused && !biddingClosed && (
+        <span className="text-xs font-medium text-blue-400">{t("dealInProgress")}</span>
+      )}
+
       {/* Main price line */}
       {hasActiveBids ? (
         <>
           <div className="flex items-center gap-1.5">
             <span className={priceClass}>{formatPrice(highestBid)}</span>
-                      </div>
+          </div>
           {bidCount != null && bidCount > 0 && (
             <span className={detailClass}>{t("bids", { count: bidCount })}</span>
           )}
@@ -143,7 +155,7 @@ export function PriceDisplay({
       ) : price != null ? (
         <div className="flex items-center gap-1.5">
           <span className={priceClass}>{formatPrice(price)}</span>
-                  </div>
+        </div>
       ) : acceptOffers ? (
         <div className="flex items-center gap-1.5">
           <span className={priceClass}>{t("offerOnly")}</span>
@@ -151,12 +163,12 @@ export function PriceDisplay({
       ) : null}
 
       {/* Detail line: offer info */}
-      {acceptOffers && !hasActiveBids && price != null && (
+      {acceptOffers && !hasActiveBids && price != null && !biddingClosed && !biddingPaused && (
         <span className={detailClass}>{t("acceptsOffers")}</span>
       )}
 
       {/* Min offer / offer step info */}
-      {acceptOffers && !hasActiveBids && minOfferPrice != null && (
+      {acceptOffers && !hasActiveBids && minOfferPrice != null && !biddingClosed && !biddingPaused && (
         <span className={detailClass}>
           {t("minOffer")}: {formatPrice(minOfferPrice)}
           {offerStep ? ` · ${t("offerStep")}: ${formatPrice(offerStep)}` : ""}

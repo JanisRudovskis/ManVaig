@@ -12,7 +12,6 @@ namespace ManVaig.Api.Controllers.V1;
 
 [ApiController]
 [Route("api/v1/items/{itemId:guid}/bids")]
-[Authorize]
 public class BidsController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -23,28 +22,34 @@ public class BidsController : ControllerBase
     }
 
     /// <summary>
-    /// Get bid history for an item (owner only).
+    /// Get bid list for an item (public — no auth required).
+    /// Response varies based on viewer role (owner, bidder, anonymous).
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetBids(Guid itemId)
+    public async Task<IActionResult> GetBids(Guid itemId, [FromQuery] int limit = 5)
     {
-        var userId = GetCurrentUserId();
-        if (userId == null) return Unauthorized();
+        limit = Math.Clamp(limit, 1, 200);
+        var item = await _db.Items
+            .Include(i => i.User)
+            .FirstOrDefaultAsync(i => i.Id == itemId);
 
-        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
-        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
-        if (!item.AcceptOffers) return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
+        if (item == null)
+            return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        if (item.Visibility == ItemVisibility.Private)
+            return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        if (!item.AcceptOffers)
+            return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
+
+        var currentUserId = GetCurrentUserId();
+        var isOwner = currentUserId.HasValue && item.UserId == currentUserId.Value;
 
         var bids = await _db.Bids
             .Where(b => b.ItemId == itemId)
             .OrderByDescending(b => b.Amount)
             .Include(b => b.User)
             .ToListAsync();
-
-        var auctionEnded = item.EndDate.HasValue && item.EndDate.Value <= DateTime.UtcNow;
-        var winnerExpiresAt = auctionEnded && item.EndDate.HasValue
-            ? item.EndDate.Value.AddHours(24)
-            : (DateTime?)null;
 
         // Build anonymized bidder labels: assign "Bidder #N" per unique user in order of first bid
         var bidderLabels = new Dictionary<Guid, int>();
@@ -58,31 +63,127 @@ public class BidsController : ControllerBase
             }
         }
 
-        // Find the winning bid (highest amount, status Won or first Active if not yet assigned)
-        var winningBid = bids.FirstOrDefault(b => b.Status == BidStatus.Won)
-            ?? (auctionEnded ? bids.FirstOrDefault() : null);
+        var activeBids = bids.Where(b => b.Status == BidStatus.Active).ToList();
+        var highestActive = activeBids.FirstOrDefault()?.Amount;
+        var biddingPaused = bids.Any(b => b.Status == BidStatus.Accepted);
+        var biddingClosed = bids.Any(b => b.Status == BidStatus.Completed);
+
+        // Calculate minimum next bid
+        decimal? minNextBid = null;
+        var topBid = activeBids.FirstOrDefault();
+        var viewerIsHighest = currentUserId.HasValue && topBid?.UserId == currentUserId.Value;
+
+        if (!biddingPaused && !biddingClosed)
+        {
+            if (highestActive.HasValue)
+            {
+                if (viewerIsHighest)
+                {
+                    // User is raising own bid — just needs to exceed current amount
+                    minNextBid = highestActive.Value + 0.01m;
+                }
+                else
+                {
+                    // Outbidding someone else — must respect offerStep
+                    minNextBid = highestActive.Value + (item.OfferStep ?? 0.01m);
+                }
+            }
+            else
+            {
+                minNextBid = item.MinOfferPrice ?? item.OfferStep ?? 0.01m;
+            }
+            // Floor: must be at least minOfferPrice
+            if (item.MinOfferPrice.HasValue && minNextBid < item.MinOfferPrice.Value)
+                minNextBid = item.MinOfferPrice.Value;
+        }
+
+        // Apply limit to the bids returned (but totals are computed from all)
+        var limitedBids = bids.Take(limit).ToList();
 
         var response = new BidListResponse
         {
-            TotalBids = bids.Count,
-            HighestBid = bids.FirstOrDefault()?.Amount,
-            AuctionEnded = auctionEnded,
-            WinnerExpiresAt = winnerExpiresAt,
-            Bids = bids.Select(b =>
+            TotalBids = activeBids.Count,
+            TotalAllBids = bids.Count,
+            HighestActiveBid = highestActive,
+            MinNextBid = minNextBid,
+            AcceptOffers = item.AcceptOffers,
+            Price = item.Price,
+            MinOfferPrice = item.MinOfferPrice,
+            OfferStep = item.OfferStep,
+            EndDate = item.EndDate,
+            IsOwner = isOwner,
+            BiddingPaused = biddingPaused,
+            BiddingClosed = biddingClosed,
+            UniqueBidders = bids.Where(b => b.Status == BidStatus.Active)
+                .Select(b => new { b.UserId, b.IsAnonymous }).Distinct().Count(),
+            FailedDealCount = bids.Count(b => b.Status == BidStatus.Failed),
+            Bids = limitedBids.Select(b =>
             {
-                var isWinner = winningBid != null && b.Id == winningBid.Id;
-                var revealIdentity = auctionEnded && isWinner;
+                var isOwnBid = currentUserId.HasValue && b.UserId == currentUserId.Value;
+                var isBidAcceptedOrCompleted = b.Status is BidStatus.Accepted or BidStatus.Completed;
+
+                // Determine what identity info to show
+                string? bidderName = null;
+                string? bidderAvatarUrl = null;
+                string? bidderInitial = null;
+                string bidderLabel;
+
+                if (b.IsAnonymous)
+                {
+                    bidderLabel = $"Bidder #{bidderLabels[b.UserId]}";
+                    if (isOwnBid)
+                    {
+                        // You always see your own name
+                        bidderName = b.User.DisplayName;
+                        bidderAvatarUrl = b.User.AvatarUrl;
+                        bidderInitial = b.User.DisplayName?.Length > 0
+                            ? b.User.DisplayName[0].ToString().ToUpper()
+                            : null;
+                    }
+                }
+                else
+                {
+                    bidderName = b.User.DisplayName ?? "User";
+                    bidderAvatarUrl = b.User.AvatarUrl;
+                    bidderInitial = bidderName.Length > 0
+                        ? bidderName[0].ToString().ToUpper()
+                        : null;
+                    bidderLabel = bidderName;
+                }
+
+                // Contact info: only for relevant parties after acceptance
+                string? bidderContact = null;
+                string? sellerContact = null;
+
+                if (isBidAcceptedOrCompleted)
+                {
+                    if (isOwner)
+                    {
+                        // Seller sees bidder's email
+                        bidderContact = b.User.Email;
+                    }
+                    if (isOwnBid)
+                    {
+                        // Accepted bidder sees seller's email
+                        sellerContact = item.User.Email;
+                    }
+                }
 
                 return new BidResponse
                 {
                     Id = b.Id,
-                    BidderLabel = $"Bidder #{bidderLabels[b.UserId]}",
-                    BidderName = revealIdentity ? b.User.DisplayName : null,
-                    BidderContact = revealIdentity ? b.User.Email : null,
+                    BidderName = bidderName,
+                    BidderAvatarUrl = bidderAvatarUrl,
+                    BidderInitial = bidderInitial,
+                    IsAnonymous = b.IsAnonymous,
+                    BidderLabel = bidderLabel,
+                    BidderContact = bidderContact,
+                    SellerContact = sellerContact,
                     Amount = b.Amount,
                     Status = b.Status.ToString(),
-                    IsWinner = isWinner,
-                    CreatedAt = b.CreatedAt
+                    IsOwnBid = isOwnBid,
+                    CreatedAt = b.CreatedAt,
+                    AcceptedAt = b.AcceptedAt
                 };
             }).ToList()
         };
@@ -94,6 +195,7 @@ public class BidsController : ControllerBase
     /// Place a bid/offer on an item that accepts offers.
     /// </summary>
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> PlaceBid(Guid itemId, [FromBody] PlaceBidRequest request)
     {
         var userId = GetCurrentUserId();
@@ -102,7 +204,7 @@ public class BidsController : ControllerBase
         var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
         if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
 
-        // Visibility check — don't allow bids on private items
+        // Visibility check
         if (item.Visibility == ItemVisibility.Private)
             return NotFound(new { error = "ITEM_NOT_FOUND" });
 
@@ -122,15 +224,36 @@ public class BidsController : ControllerBase
         if (request.Amount <= 0)
             return BadRequest(new { error = "BID_AMOUNT_POSITIVE" });
 
-        // Get current highest bid
-        var highestBid = await _db.Bids
-            .Where(b => b.ItemId == itemId)
+        // Check if bidding is paused (accepted bid) or closed (completed bid)
+        var hasAccepted = await _db.Bids.AnyAsync(b => b.ItemId == itemId && b.Status == BidStatus.Accepted);
+        if (hasAccepted)
+            return BadRequest(new { error = "BIDDING_PAUSED" });
+
+        var hasCompleted = await _db.Bids.AnyAsync(b => b.ItemId == itemId && b.Status == BidStatus.Completed);
+        if (hasCompleted)
+            return BadRequest(new { error = "BIDDING_CLOSED" });
+
+        // Get current highest ACTIVE bid (exclude Denied/Failed)
+        var highestActiveBid = await _db.Bids
+            .Where(b => b.ItemId == itemId && b.Status == BidStatus.Active)
             .OrderByDescending(b => b.Amount)
             .FirstOrDefaultAsync();
 
-        var currentHighest = highestBid?.Amount ?? 0;
+        var currentHighest = highestActiveBid?.Amount ?? 0;
 
-        // Must be higher than current highest (ascending offers)
+        // Find user's existing active bid with the same anonymity mode
+        // Each user can have max 1 anon + 1 non-anon active bid
+        var existingBid = await _db.Bids
+            .FirstOrDefaultAsync(b => b.ItemId == itemId
+                && b.UserId == userId.Value
+                && b.Status == BidStatus.Active
+                && b.IsAnonymous == request.IsAnonymous);
+
+        var canUpdate = existingBid != null;
+        // Skip offerStep when raising own bid that IS the current highest
+        var isRaisingHighest = canUpdate && existingBid!.Id == highestActiveBid?.Id;
+
+        // Must be higher than current highest active bid
         if (request.Amount <= currentHighest)
             return BadRequest(new { error = "BID_TOO_LOW" });
 
@@ -138,26 +261,38 @@ public class BidsController : ControllerBase
         if (item.MinOfferPrice.HasValue && request.Amount < item.MinOfferPrice.Value)
             return BadRequest(new { error = "BID_BELOW_STARTING" });
 
-        // Must respect offer step
-        if (item.OfferStep.HasValue && item.OfferStep.Value > 0 && highestBid != null)
+        // Must respect offer step (skip when raising own highest bid)
+        if (!isRaisingHighest && item.OfferStep.HasValue && item.OfferStep.Value > 0 && highestActiveBid != null)
         {
             var minNext = currentHighest + item.OfferStep.Value;
             if (request.Amount < minNext)
                 return BadRequest(new { error = "BID_STEP_TOO_SMALL" });
         }
 
-        // Create bid
-        var bid = new Bid
-        {
-            Id = Guid.NewGuid(),
-            ItemId = itemId,
-            UserId = userId.Value,
-            Amount = request.Amount,
-            Status = BidStatus.Active,
-            CreatedAt = DateTime.UtcNow
-        };
+        Bid bid;
 
-        _db.Bids.Add(bid);
+        if (canUpdate)
+        {
+            // Update existing bid in place (same user, same anonymity mode)
+            bid = existingBid!;
+            bid.Amount = request.Amount;
+            bid.CreatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            // Create new bid
+            bid = new Bid
+            {
+                Id = Guid.NewGuid(),
+                ItemId = itemId,
+                UserId = userId.Value,
+                Amount = request.Amount,
+                IsAnonymous = request.IsAnonymous,
+                Status = BidStatus.Active,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Bids.Add(bid);
+        }
 
         // Anti-sniping: only for timed items, if bid placed in last 10 minutes
         var antiSnipe = false;
@@ -176,15 +311,15 @@ public class BidsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe });
+        return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe, updated = canUpdate });
     }
 
     /// <summary>
-    /// Assign the next highest bidder as winner (seller only, after winner expires).
-    /// Only applicable to timed items.
+    /// Accept a bid — pauses bidding, reveals contact info (owner only).
     /// </summary>
-    [HttpPost("assign-next")]
-    public async Task<IActionResult> AssignNextWinner(Guid itemId)
+    [HttpPost("{bidId:guid}/accept")]
+    [Authorize]
+    public async Task<IActionResult> AcceptBid(Guid itemId, Guid bidId)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -192,56 +327,114 @@ public class BidsController : ControllerBase
         var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
         if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
 
-        if (!item.AcceptOffers)
-            return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
+        var bid = await _db.Bids
+            .Include(b => b.User)
+            .FirstOrDefaultAsync(b => b.Id == bidId && b.ItemId == itemId);
+        if (bid == null) return NotFound(new { error = "BID_NOT_FOUND" });
 
-        // Must be a timed item
-        if (!item.EndDate.HasValue)
-            return BadRequest(new { error = "NOT_TIMED_ITEM" });
+        if (bid.Status != BidStatus.Active)
+            return BadRequest(new { error = "BID_NOT_ACTIVE" });
 
-        // Must have ended
-        if (item.EndDate.Value > DateTime.UtcNow)
-            return BadRequest(new { error = "OFFERS_NOT_ENDED" });
+        // Check no other bid is already accepted
+        var hasAccepted = await _db.Bids.AnyAsync(b => b.ItemId == itemId && b.Status == BidStatus.Accepted);
+        if (hasAccepted)
+            return BadRequest(new { error = "ALREADY_HAS_ACCEPTED" });
 
-        // 24h must have passed since end
-        var expiryTime = item.EndDate.Value.AddHours(24);
-        if (DateTime.UtcNow < expiryTime)
-            return BadRequest(new { error = "WINNER_NOT_EXPIRED" });
+        // Check no bid is completed
+        var hasCompleted = await _db.Bids.AnyAsync(b => b.ItemId == itemId && b.Status == BidStatus.Completed);
+        if (hasCompleted)
+            return BadRequest(new { error = "BIDDING_CLOSED" });
 
-        var bids = await _db.Bids
-            .Where(b => b.ItemId == itemId)
-            .OrderByDescending(b => b.Amount)
-            .ToListAsync();
-
-        // Find current winner and mark as expired
-        var currentWinner = bids.FirstOrDefault(b => b.Status == BidStatus.Won);
-        if (currentWinner != null)
-        {
-            currentWinner.Status = BidStatus.Expired;
-        }
-        else
-        {
-            // No explicit winner yet — mark highest as expired
-            var highest = bids.FirstOrDefault(b => b.Status == BidStatus.Active);
-            if (highest != null)
-                highest.Status = BidStatus.Expired;
-        }
-
-        // Find next highest active bid (from a different user than expired ones)
-        var expiredUserIds = bids.Where(b => b.Status == BidStatus.Expired).Select(b => b.UserId).ToHashSet();
-        var nextWinner = bids.FirstOrDefault(b => b.Status == BidStatus.Active && !expiredUserIds.Contains(b.UserId));
-
-        if (nextWinner == null)
-            return BadRequest(new { error = "NO_MORE_BIDDERS" });
-
-        nextWinner.Status = BidStatus.Won;
-
-        // Reset the 24h timer: update EndDate to now so the new winner gets 24h
-        item.EndDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        bid.Status = BidStatus.Accepted;
+        bid.AcceptedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { winnerId = nextWinner.Id, amount = nextWinner.Amount });
+        return Ok(new
+        {
+            id = bid.Id,
+            amount = bid.Amount,
+            bidderName = bid.User.DisplayName,
+            bidderContact = bid.User.Email
+        });
+    }
+
+    /// <summary>
+    /// Complete a deal — marks item as sold (owner only).
+    /// </summary>
+    [HttpPost("{bidId:guid}/complete")]
+    [Authorize]
+    public async Task<IActionResult> CompleteBid(Guid itemId, Guid bidId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        var bid = await _db.Bids.FirstOrDefaultAsync(b => b.Id == bidId && b.ItemId == itemId);
+        if (bid == null) return NotFound(new { error = "BID_NOT_FOUND" });
+
+        if (bid.Status != BidStatus.Accepted)
+            return BadRequest(new { error = "BID_NOT_ACCEPTED" });
+
+        bid.Status = BidStatus.Completed;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { id = bid.Id, amount = bid.Amount });
+    }
+
+    /// <summary>
+    /// Mark deal as failed — reopens bidding (owner only).
+    /// </summary>
+    [HttpPost("{bidId:guid}/fail")]
+    [Authorize]
+    public async Task<IActionResult> FailBid(Guid itemId, Guid bidId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        var bid = await _db.Bids.FirstOrDefaultAsync(b => b.Id == bidId && b.ItemId == itemId);
+        if (bid == null) return NotFound(new { error = "BID_NOT_FOUND" });
+
+        if (bid.Status != BidStatus.Accepted)
+            return BadRequest(new { error = "BID_NOT_ACCEPTED" });
+
+        bid.Status = BidStatus.Failed;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { id = bid.Id, amount = bid.Amount });
+    }
+
+    /// <summary>
+    /// Deny a bid — seller rejects it, doesn't count for minimum (owner only).
+    /// </summary>
+    [HttpPost("{bidId:guid}/deny")]
+    [Authorize]
+    public async Task<IActionResult> DenyBid(Guid itemId, Guid bidId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        var bid = await _db.Bids.FirstOrDefaultAsync(b => b.Id == bidId && b.ItemId == itemId);
+        if (bid == null) return NotFound(new { error = "BID_NOT_FOUND" });
+
+        if (bid.Status != BidStatus.Active)
+            return BadRequest(new { error = "BID_NOT_ACTIVE" });
+
+        bid.Status = BidStatus.Denied;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { id = bid.Id, amount = bid.Amount });
     }
 
     private Guid? GetCurrentUserId()

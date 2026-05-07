@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchMyItems, ItemVisibility } from "@/lib/items";
 import type { ItemResponse } from "@/lib/items";
 import { ItemForm } from "@/components/item-form";
-import { BidsModal } from "@/components/bids-modal";
+import { OffersPopup } from "@/components/offers-popup";
 import {
   formatPrice,
   timeAgo,
@@ -261,9 +261,14 @@ export default function MyItemsPage() {
         />
       )}
 
-      {/* Bids modal */}
+      {/* Offers popup */}
       {bidsItem && (
-        <BidsModal item={bidsItem} onClose={() => setBidsItem(null)} />
+        <OffersPopup
+          itemId={bidsItem.id}
+          itemTitle={bidsItem.title}
+          itemImages={bidsItem.images}
+          onClose={() => setBidsItem(null)}
+        />
       )}
     </div>
   );

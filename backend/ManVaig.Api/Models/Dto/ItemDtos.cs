@@ -111,6 +111,10 @@ public class ItemResponse
     public int BidCount { get; set; }
     /// <summary>Highest active bid amount, null if no bids.</summary>
     public decimal? HighestBid { get; set; }
+    /// <summary>True when a bid has been accepted (deal in progress).</summary>
+    public bool BiddingPaused { get; set; }
+    /// <summary>True when a bid has been completed (item sold).</summary>
+    public bool BiddingClosed { get; set; }
 
     public List<ItemImageDto> Images { get; set; } = new();
     public List<string> Tags { get; set; } = new();

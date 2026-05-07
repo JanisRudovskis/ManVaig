@@ -47,6 +47,8 @@ public class PublicItemCardDto
     // Offer summary
     public int BidCount { get; set; }
     public decimal? HighestBid { get; set; }
+    public bool BiddingPaused { get; set; }
+    public bool BiddingClosed { get; set; }
 }
 
 // === Item detail DTO (for detail page) ===

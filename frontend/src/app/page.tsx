@@ -7,6 +7,7 @@ import type { PublicItemCard as PublicItemCardType } from "@/lib/items";
 import { CategoryChips } from "@/components/category-chips";
 import { PublicItemCard } from "@/components/public-item-card";
 import { ItemDetailModal } from "@/components/item-detail-modal";
+import { OffersPopup } from "@/components/offers-popup";
 import { ItemCardSkeleton } from "@/components/item-card-shared";
 import { Package, Loader2 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export default function HomeFeedPage() {
   const [error, setError] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [offerItem, setOfferItem] = useState<PublicItemCardType | null>(null);
 
   // Generation counter to prevent stale responses
   const genRef = useRef(0);
@@ -134,7 +136,12 @@ export default function HomeFeedPage() {
         <>
           <div className="flex flex-col gap-4">
             {items.map((item) => (
-              <PublicItemCard key={item.id} item={item} onClick={(i) => setSelectedItemId(i.id)} />
+              <PublicItemCard
+                key={item.id}
+                item={item}
+                onClick={(i) => setSelectedItemId(i.id)}
+                onOffer={(i) => setOfferItem(i)}
+              />
             ))}
           </div>
 
@@ -155,6 +162,16 @@ export default function HomeFeedPage() {
         <ItemDetailModal
           itemId={selectedItemId}
           onClose={() => setSelectedItemId(null)}
+        />
+      )}
+
+      {/* Offers popup */}
+      {offerItem && (
+        <OffersPopup
+          itemId={offerItem.id}
+          itemTitle={offerItem.title}
+          itemImages={offerItem.images}
+          onClose={() => setOfferItem(null)}
         />
       )}
     </div>

@@ -75,8 +75,12 @@ public class PublicItemsController : ControllerBase
                     Location = i.User.Location,
                     MemberSince = i.User.CreatedAt
                 },
-                BidCount = i.Bids.Count(),
-                HighestBid = i.Bids.Any() ? i.Bids.Max(b => b.Amount) : null
+                BidCount = i.Bids.Count(b => b.Status == BidStatus.Active),
+                HighestBid = i.Bids.Any(b => b.Status == BidStatus.Active)
+                    ? i.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
+                    : (decimal?)null,
+                BiddingPaused = i.Bids.Any(b => b.Status == BidStatus.Accepted),
+                BiddingClosed = i.Bids.Any(b => b.Status == BidStatus.Completed)
             })
             .ToListAsync();
 
@@ -161,10 +165,12 @@ public class PublicItemsController : ControllerBase
                 Bio = item.User?.Bio,
                 MemberSince = item.User?.CreatedAt ?? DateTime.UtcNow
             },
-            BidCount = item.Bids?.Count ?? 0,
-            HighestBid = item.Bids != null && item.Bids.Any()
-                ? item.Bids.Max(b => b.Amount)
-                : null
+            BidCount = item.Bids?.Count(b => b.Status == BidStatus.Active) ?? 0,
+            HighestBid = item.Bids != null && item.Bids.Any(b => b.Status == BidStatus.Active)
+                ? item.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
+                : null,
+            BiddingPaused = item.Bids?.Any(b => b.Status == BidStatus.Accepted) ?? false,
+            BiddingClosed = item.Bids?.Any(b => b.Status == BidStatus.Completed) ?? false
         };
 
         return Ok(detail);

@@ -36,6 +36,8 @@ export interface ItemResponse {
   updatedAt: string;
   bidCount: number;
   highestBid: number | null;
+  biddingPaused: boolean;
+  biddingClosed: boolean;
   images: ItemImage[];
   tags: string[];
 }
@@ -315,6 +317,8 @@ export interface PublicItemCard {
   seller: PublicSellerSummary;
   bidCount: number;
   highestBid: number | null;
+  biddingPaused: boolean;
+  biddingClosed: boolean;
 }
 
 export interface PublicItemDetail extends PublicItemCard {
@@ -331,29 +335,44 @@ export interface PublicItemListResponse {
   pageSize: number;
 }
 
-// === Bids ===
+// === Bids / Offers ===
 
 export interface BidResponse {
   id: string;
-  bidderLabel: string;
   bidderName: string | null;
+  bidderAvatarUrl: string | null;
+  bidderInitial: string | null;
+  isAnonymous: boolean;
+  bidderLabel: string;
   bidderContact: string | null;
+  sellerContact: string | null;
   amount: number;
-  status: string;
-  isWinner: boolean;
+  status: string; // Active, Accepted, Completed, Denied, Failed
+  isOwnBid: boolean;
   createdAt: string;
+  acceptedAt: string | null;
 }
 
 export interface BidListResponse {
   bids: BidResponse[];
   totalBids: number;
-  highestBid: number | null;
-  auctionEnded: boolean;
-  winnerExpiresAt: string | null;
+  totalAllBids: number;
+  highestActiveBid: number | null;
+  minNextBid: number | null;
+  acceptOffers: boolean;
+  price: number | null;
+  minOfferPrice: number | null;
+  offerStep: number | null;
+  endDate: string | null;
+  isOwner: boolean;
+  biddingPaused: boolean;
+  biddingClosed: boolean;
+  failedDealCount: number;
+  uniqueBidders: number;
 }
 
-export async function fetchBids(itemId: string): Promise<BidListResponse> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids`);
+export async function fetchPublicBids(itemId: string, limit = 5): Promise<BidListResponse> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids?limit=${limit}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "bids_fetch_failed");
@@ -361,13 +380,60 @@ export async function fetchBids(itemId: string): Promise<BidListResponse> {
   return res.json();
 }
 
-export async function assignNextWinner(itemId: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/assign-next`, {
+export async function placeBid(
+  itemId: string,
+  amount: number,
+  isAnonymous: boolean
+): Promise<{ id: string; amount: number; antiSnipe: boolean; updated: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount, isAnonymous }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "bid_place_failed");
+  }
+  return res.json();
+}
+
+export async function acceptBid(itemId: string, bidId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/accept`, {
     method: "POST",
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "assign_next_failed");
+    throw new Error(body.error ?? "bid_accept_failed");
+  }
+}
+
+export async function completeBid(itemId: string, bidId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/complete`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "bid_complete_failed");
+  }
+}
+
+export async function failBid(itemId: string, bidId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/fail`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "bid_fail_failed");
+  }
+}
+
+export async function denyBid(itemId: string, bidId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/deny`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "bid_deny_failed");
   }
 }
 

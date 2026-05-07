@@ -29,6 +29,7 @@ function getInitial(name: string): string {
 const sizeClasses = {
   xs: { container: "!size-6", text: "!text-[11px]" },
   sm: { container: "!size-8", text: "!text-xs" },
+  base: { container: "!size-10", text: "!text-sm" },
   md: { container: "!size-16", text: "!text-xl" },
   lg: { container: "!size-24", text: "!text-5xl" },
 };
@@ -36,7 +37,7 @@ const sizeClasses = {
 interface UserAvatarProps {
   displayName: string;
   avatarUrl: string | null;
-  size?: "xs" | "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "base" | "md" | "lg";
   className?: string;
   onClick?: () => void;
 }

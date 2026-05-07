@@ -6,6 +6,7 @@ import { fetchPublicItem, Condition } from "@/lib/items";
 import type { PublicItemDetail } from "@/lib/items";
 import { ImageGallery } from "@/components/image-gallery";
 import { formatPrice, EndDateCountdown, isEnded } from "@/components/item-card-shared";
+import { OffersPopup } from "@/components/offers-popup";
 import { Button } from "@/components/ui/button";
 import {
   X,
@@ -16,6 +17,8 @@ import {
   TrendingUp,
   DollarSign,
   MessageCircle,
+  HandCoins,
+  Check,
   Loader2,
 } from "lucide-react";
 
@@ -88,32 +91,66 @@ function DetailPricing({ item, t }: { item: PublicItemDetail; t: (key: string, v
 
 // === Action button ===
 
-function ActionButton({ item, t }: { item: PublicItemDetail; t: (key: string) => string }) {
-  // No action if ended
-  if (isEnded(item.endDate)) return null;
-
-  let label: string;
-  let Icon = DollarSign;
-
-  if (!item.acceptOffers && item.price) {
-    label = t("buyNow");
-    Icon = DollarSign;
-  } else if (item.acceptOffers && item.endDate && !isEnded(item.endDate)) {
-    label = t("placeBid");
-    Icon = TrendingUp;
-  } else if (item.acceptOffers) {
-    label = t("makeOffer");
-    Icon = MessageCircle;
-  } else {
-    return null;
+function ActionButton({
+  item,
+  t,
+  onOpenOffers,
+}: {
+  item: PublicItemDetail;
+  t: (key: string) => string;
+  onOpenOffers: () => void;
+}) {
+  if (item.biddingClosed) {
+    return (
+      <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-400">
+        <Check className="size-4" />
+        {t("sold")}
+      </div>
+    );
   }
 
-  return (
-    <Button onClick={() => alert(t("comingSoon"))} size="lg" className="mt-4 w-full">
-      <Icon className="mr-2 size-4" />
-      {label}
-    </Button>
-  );
+  if (item.biddingPaused) {
+    return (
+      <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-3 text-sm font-medium text-blue-400">
+        <HandCoins className="size-4" />
+        {t("dealInProgress")}
+      </div>
+    );
+  }
+
+  if (item.acceptOffers) {
+    let label: string;
+    let Icon = HandCoins;
+
+    if (item.endDate && !isEnded(item.endDate)) {
+      label = t("placeBid");
+      Icon = TrendingUp;
+    } else if (isEnded(item.endDate)) {
+      label = t("auctionEnded");
+      Icon = HandCoins;
+    } else {
+      label = t("makeOffer");
+      Icon = MessageCircle;
+    }
+
+    return (
+      <Button onClick={onOpenOffers} size="lg" className="mt-4 w-full">
+        <Icon className="mr-2 size-4" />
+        {label}
+      </Button>
+    );
+  }
+
+  if (!item.acceptOffers && item.price) {
+    return (
+      <Button size="lg" className="mt-4 w-full" disabled>
+        <DollarSign className="mr-2 size-4" />
+        {t("buyNow")}
+      </Button>
+    );
+  }
+
+  return null;
 }
 
 // === Modal ===
@@ -124,6 +161,7 @@ export function ItemDetailModal({ itemId, onClose }: ItemDetailModalProps) {
   const [item, setItem] = useState<PublicItemDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showOffers, setShowOffers] = useState(false);
 
   useEffect(() => {
     fetchPublicItem(itemId)
@@ -213,7 +251,7 @@ export function ItemDetailModal({ itemId, onClose }: ItemDetailModalProps) {
                 {/* Pricing */}
                 <div className="rounded-lg border border-border bg-card p-4">
                   <DetailPricing item={item} t={t} />
-                  <ActionButton item={item} t={t} />
+                  <ActionButton item={item} t={t} onOpenOffers={() => setShowOffers(true)} />
                 </div>
 
                 {/* Location + Shipping */}
@@ -301,6 +339,15 @@ export function ItemDetailModal({ itemId, onClose }: ItemDetailModalProps) {
           )}
         </div>
       </div>
+      {/* Offers popup */}
+      {showOffers && item && (
+        <OffersPopup
+          itemId={item.id}
+          itemTitle={item.title}
+          itemImages={item.images}
+          onClose={() => setShowOffers(false)}
+        />
+      )}
     </>
   );
 }

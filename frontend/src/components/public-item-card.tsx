@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ImageIcon, MapPin } from "lucide-react";
+import { ImageIcon, MapPin, HandCoins } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PriceDisplay, EndDatePill, timeAgo } from "@/components/item-card-shared";
 import type { PublicItemCard as PublicItemCardType } from "@/lib/items";
@@ -12,6 +12,7 @@ const HOVER_INTERVAL = 1500; // ms between slides on desktop hover
 interface PublicItemCardProps {
   item: PublicItemCardType;
   onClick?: (item: PublicItemCardType) => void;
+  onOffer?: (item: PublicItemCardType) => void;
 }
 
 // === Card Image Carousel ===
@@ -132,8 +133,9 @@ function CardImageCarousel({
 
 // === Public Item Card ===
 
-export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
+export function PublicItemCard({ item, onClick, onOffer }: PublicItemCardProps) {
   const t = useTranslations("items");
+  const to = useTranslations("offers");
 
   return (
     <button
@@ -162,6 +164,8 @@ export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
           t={t}
           bidCount={item.bidCount}
           highestBid={item.highestBid}
+          biddingPaused={item.biddingPaused}
+          biddingClosed={item.biddingClosed}
           hideEndedStatus
         />
       </div>
@@ -199,6 +203,29 @@ export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
         <span className="shrink-0 text-xs text-muted-foreground">
           {timeAgo(item.createdAt, t)}
         </span>
+
+        {/* Offer button */}
+        {item.acceptOffers && onOffer && (
+          <span
+            role="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOffer(item);
+            }}
+            className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-medium transition-colors ${
+              item.biddingClosed
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
+            }`}
+          >
+            <HandCoins className="size-3" />
+            {item.biddingClosed
+              ? to("sold")
+              : item.bidCount > 0
+                ? to("bids", { count: item.bidCount })
+                : to("offer")}
+          </span>
+        )}
       </div>
     </button>
   );
