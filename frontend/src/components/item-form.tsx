@@ -24,6 +24,9 @@ import { DateTimePicker } from "@/components/datetime-picker";
 import { ImageManager } from "@/components/image-manager";
 import type { FormImage } from "@/components/image-manager";
 import { LocationSearch } from "@/components/location-search";
+import { HelpPopover } from "@/components/help-popover";
+import { TipsBanner } from "@/components/tips-banner";
+import { useTipsDismissed } from "@/lib/use-tips-dismissed";
 import { getMyProfile } from "@/lib/auth";
 import {
   createItem,
@@ -89,6 +92,7 @@ export function ItemForm({
   const tc = useTranslations("categories");
   const locale = useLocale();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const { isTabDismissed, dismissTab } = useTipsDismissed();
 
   // Tab state
   const [activeTab, setActiveTab] = useState(0);
@@ -632,6 +636,9 @@ export function ItemForm({
 
   const tab1Content = (
     <div>
+      {!isTabDismissed("details") && (
+        <TipsBanner tab="details" onDismiss={() => dismissTab("details")} />
+      )}
       {/* Category */}
       <div className="mb-6">
         <Label className="mb-1.5">{t("fieldCategory")} *</Label>
@@ -662,6 +669,7 @@ export function ItemForm({
           onChange={setImages}
           error={errors.images}
         />
+        <p className="mt-2 text-xs text-muted-foreground">{t("imagesInlineHint")}</p>
       </div>
 
       {/* Basic Info fields */}
@@ -694,6 +702,7 @@ export function ItemForm({
               {t("charCount", { count: title.length, max: 100 })}
             </span>
           </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t("titleHint")}</p>
         </div>
 
         {/* Description */}
@@ -725,11 +734,12 @@ export function ItemForm({
               {t("charCount", { count: description.length, max: 2000 })}
             </span>
           </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t("descriptionHint")}</p>
         </div>
 
         {/* Condition */}
         <div className="mb-4">
-          <Label className="mb-1.5">{t("fieldCondition")}</Label>
+          <Label className="mb-1.5">{t("fieldCondition")} <HelpPopover helpKey="condition" /></Label>
           <div className="flex w-fit gap-0 rounded-md bg-muted p-0.5">
             {conditionOptions.map((opt) => (
               <button
@@ -775,6 +785,9 @@ export function ItemForm({
 
   const tab2Content = (
     <div>
+      {!isTabDismissed("pricing") && (
+        <TipsBanner tab="pricing" onDismiss={() => dismissTab("pricing")} />
+      )}
       {/* Pricing section */}
       <div className="mb-7">
         <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -804,8 +817,10 @@ export function ItemForm({
                 €
               </span>
             </div>
-            {errors.price && (
+            {errors.price ? (
               <p className="mt-1 text-xs text-destructive">{errors.price}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">{t("priceHint")}</p>
             )}
           </div>
         )}
@@ -814,8 +829,9 @@ export function ItemForm({
         <div className="rounded-lg border border-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <p className="text-sm font-medium">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
                 {t("acceptOffersLabel")}
+                <HelpPopover helpKey="acceptOffers" />
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {t("acceptOffersHint")}
@@ -833,7 +849,7 @@ export function ItemForm({
               {/* Min offer price (starting price) */}
               <div>
                 <Label className="mb-1.5">
-                  {t("fieldMinOfferPrice")}
+                  {t("fieldMinOfferPrice")} <HelpPopover helpKey="minOfferPrice" />
                 </Label>
                 <div className="flex max-w-[200px] rounded-md border border-border bg-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
                   <input
@@ -937,6 +953,7 @@ export function ItemForm({
                       <p className="text-sm font-medium">
                         {t("setEndDateLabel")}
                       </p>
+                      <HelpPopover helpKey="endDate" />
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {t("setEndDateHint")}
@@ -997,10 +1014,14 @@ export function ItemForm({
 
   const tab3Content = (
     <div>
+      {!isTabDismissed("terms") && (
+        <TipsBanner tab="terms" onDismiss={() => dismissTab("terms")} />
+      )}
       {/* Tags */}
       <div className="mb-7">
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t("sectionTags")}
+          <HelpPopover helpKey="tags" />
         </div>
         <p className="mb-4 text-xs text-muted-foreground">{t("tagPurpose")}</p>
         <div
@@ -1051,7 +1072,7 @@ export function ItemForm({
         </div>
 
         <div className="mb-4">
-          <Label className="mb-1.5">{t("fieldVisibility")}</Label>
+          <Label className="mb-1.5">{t("fieldVisibility")} <HelpPopover helpKey="visibility" /></Label>
           <select
             value={visibility}
             onChange={(e) => setVisibility(parseInt(e.target.value))}

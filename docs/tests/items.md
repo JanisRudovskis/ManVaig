@@ -100,3 +100,34 @@
 - [ ] PUT /api/v1/items/:id — locked timed item with offers → 403
 - [ ] Offer placement works on any offer-enabled item (not just old Auction type)
 - [ ] Anti-snipe extension only triggers on timed items
+
+## Help System — Inline Hints (Layer 1)
+
+- [ ] Title field: hint text visible below input ("Be specific...")
+- [ ] Description field: hint text visible below textarea
+- [ ] Images section: hint text visible below ImageManager
+- [ ] Price field: hint text visible below input (or error if invalid)
+- [ ] All hints display in LV when language switched
+
+## Help System — HelpPopover (Layer 2)
+
+- [ ] (?) icon visible next to: Condition, Tags, Accept Offers, End Date, Visibility, Min Offer Price
+- [ ] Clicking (?) opens popover with title + description
+- [ ] Tags popover shows good/bad examples (green/red labels)
+- [ ] Condition popover shows all 5 condition level descriptions
+- [ ] Popovers work on mobile (tap to open, tap outside to close)
+- [ ] Popovers render above edit modal (not hidden behind z-index)
+- [ ] All popover text translates correctly in LV
+
+## Help System — Tips Banner (Layer 3)
+
+- [ ] Tips banner appears at top of each tab (Details, Pricing, Terms) on first visit
+- [ ] Each banner shows 4 tips as bullet list with amber styling
+- [ ] Clicking X dismisses banner permanently (survives page refresh)
+- [ ] Cookie `manvaig_tips_dismissed` updates correctly (check DevTools → Cookies)
+- [ ] Dismissing one tab's tips does not affect other tabs
+- [ ] Sidebar More menu shows "Show listing tips" toggle with Lightbulb icon
+- [ ] When all tips visible: toggle shows checkmark, is disabled
+- [ ] When some tips dismissed: clicking toggle restores all tips
+- [ ] No console errors for missing i18n keys
+- [ ] All tip text translates correctly in LV

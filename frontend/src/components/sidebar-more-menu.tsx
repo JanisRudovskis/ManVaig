@@ -10,6 +10,7 @@ import {
   Moon,
   Globe,
   LogOut,
+  Lightbulb,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -23,6 +24,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth-context";
 import { locales, localeNames, type Locale } from "@/i18n/config";
 import { cn } from "@/lib/utils";
+import { useTipsDismissed } from "@/lib/use-tips-dismissed";
 
 type View = "main" | "language";
 
@@ -38,6 +40,7 @@ export function SidebarMoreMenu() {
   const router = useRouter();
   const { state: sidebarState } = useSidebar();
   const { isLoggedIn, logout } = useAuth();
+  const { anyDismissed, resetAll } = useTipsDismissed();
   const collapsed = sidebarState === "collapsed";
 
   const [open, setOpen] = useState(false);
@@ -112,6 +115,26 @@ export function SidebarMoreMenu() {
               <Globe className="size-4 shrink-0" />
               <span className="flex-1 text-left">{tLang("switchTo")}</span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+
+            {/* Listing tips toggle */}
+            <button
+              onClick={() => {
+                if (anyDismissed) {
+                  resetAll();
+                  setOpen(false);
+                }
+              }}
+              className={cn(
+                btnClass,
+                !anyDismissed && "opacity-50 cursor-default"
+              )}
+            >
+              <Lightbulb className="size-4 shrink-0" />
+              <span className="flex-1 text-left">{t("showListingTips")}</span>
+              {!anyDismissed && (
+                <Check className="size-4 shrink-0 text-muted-foreground" />
+              )}
             </button>
 
             {/* Separator + Logout (only when logged in) */}

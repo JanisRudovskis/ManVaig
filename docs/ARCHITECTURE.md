@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-07 (composable pricing, 5-condition enum, unified item form, delete confirmation dialog)
+> Last updated: 2026-05-07 (help system: inline hints, help popovers, dismissible tips banners)
 
 ---
 
@@ -177,7 +177,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `common`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `common`, `help`, `tips`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -263,7 +263,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color (xs/sm/md/lg sizes) |
 | AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload (updates auth context) |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
-| ItemForm | `components/item-form.tsx` | Unified add+edit item form (3 tabs: Details, Pricing, Terms). Modal for edit, embedded in wizard for add. Uses ImageManager, LocationSearch, DateTimePicker. Includes countdown delete confirmation dialog. |
+| ItemForm | `components/item-form.tsx` | Unified add+edit item form (3 tabs: Details, Pricing, Terms). Modal for edit, embedded in wizard for add. Uses ImageManager, LocationSearch, DateTimePicker. 3-layer help system: inline hints, HelpPopovers on complex fields, dismissible TipsBanners per tab. Includes countdown delete confirmation dialog. |
 | ImageManager | `components/image-manager.tsx` | Shared image add/delete/reorder — arrow-based (mobile-friendly), no dnd-kit. Used by both add wizard and edit modal. Exports `FormImage` type. |
 | ImageLightbox | `components/image-lightbox.tsx` | Fullscreen image preview overlay — arrow keys, escape, prev/next, counter. Reusable (used by ImageGallery + stall item cards). |
 | ImageGallery | `components/image-gallery.tsx` | Item detail page image gallery with thumbnails, uses ImageLightbox. |
@@ -272,6 +272,9 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
 | BidsModal | `components/bids-modal.tsx` | Offer/bid history popup with winner assignment. |
 | DateTimePicker | `components/datetime-picker.tsx` | Combined date + time picker for end dates. Uses shadcn Calendar + time inputs. |
+| HelpPopover | `components/help-popover.tsx` | Reusable `(?)` icon → click-triggered Popover with title, description, optional good/bad examples. Uses `help` i18n namespace. |
+| TipsBanner | `components/tips-banner.tsx` | Dismissible amber-tinted tips card with Lightbulb icon + bullet list. Per-tab content from `tips` i18n namespace. |
+| useTipsDismissed | `lib/use-tips-dismissed.ts` | Cookie-based hook for tip banner dismissal. Cookie `manvaig_tips_dismissed`, 365-day expiry. |
 
 ### shadcn/ui Components Installed
 

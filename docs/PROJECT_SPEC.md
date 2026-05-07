@@ -115,6 +115,7 @@
 - ✅ Inter font, warm dark theme
 - ✅ i18n — English + Latvian (next-intl, cookie-based, no URL prefixes)
 - ✅ Language switcher (popover dropdown, scalable)
+- ✅ In-form help system — 3 layers: inline hints, (?) help popovers with examples, dismissible tips banners per tab (cookie-persisted, re-enable via sidebar)
 
 ### Monetization
 - Free tier: 10 items per shop (reduced to 5 when paid plans launch)
@@ -330,6 +331,8 @@ Notification
 | 44 | 5-condition enum (New/LikeNew/Good/Fair/Poor) | Replaced 3-value (New/Used/Worn). Gives buyers better signal on item quality. Data migration: Used→Good, Worn→Poor. | 2026-05-07 |
 | 45 | Unified item form (add + edit) | Single 3-tab component (Details, Pricing, Terms) used by both add wizard and edit modal. Eliminates code duplication. | 2026-05-07 |
 | 46 | Countdown delete confirmation | 3s countdown for normal items, 5s for items with active offers. Prevents accidental deletion without friction for intentional deletes. | 2026-05-07 |
+| 47 | 3-layer in-form help system | Inline hints (always visible), HelpPopover (?) for complex fields with examples, dismissible TipsBanner per tab. Cookie-persisted dismissal, re-enable toggle in sidebar. | 2026-05-07 |
+| 48 | Tips dismissal in cookie (not localStorage) | SSR-aware, consistent with theme/language storage pattern. Permanent dismiss with re-enable toggle — no per-session dismiss to avoid "cookie banner" annoyance. | 2026-05-07 |
 
 ---
 

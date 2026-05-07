@@ -290,6 +290,7 @@
     <!-- Session: 2026-05-05 — Phase 3 Stalls: Stall model + CRUD + background images + stall items page with activity badges, attention filter, drag-and-drop custom ordering. Phase 7: Homepage feed with category chips, infinite scroll, public item detail page. -->
     <!-- Session: 2026-05-06 — Item ordering (SortOrder + sort param + reorder endpoint). Activity badges (bid counts, highest bid, ended/ending soon). 3-step add item wizard (/my-stalls/[id]/items/new). Shared ImageManager component (arrow-based reorder, no dnd-kit). Reusable ImageLightbox. ConfirmDialog, ImageCropDialog. -->
     <!-- Session: 2026-05-07 — Composable pricing system (replaced PricingType enum with AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate). 5-condition enum (New/LikeNew/Good/Fair/Poor, replaced New/Used/Worn). Unified item form (3-tab add+edit, replaced separate modal+wizard). 2-step add wizard (down from 3). Countdown delete confirmation dialog (3s/5s). Field-based card indicators (removed TypeTag). DateTimePicker component. Updated all controllers, DTOs, public projections, i18n (EN+LV). Two migrations: AddComposablePricing + UpdateConditionEnum. -->
+    <!-- Session: 2026-05-07b — 3-layer in-form help system: inline hints (title, description, images, price), HelpPopover (?) component (condition, tags, offers, end date, visibility, min offer), dismissible TipsBanner per tab with cookie persistence (manvaig_tips_dismissed). Re-enable toggle in sidebar More menu. EN+LV translations. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -883,6 +884,11 @@
       <div class="task-check">✓</div>
       <div class="task-text">Image upload works on mobile camera</div>
       <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="done" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">In-form help system — inline hints, (?) popovers with examples, dismissible tips banners per tab</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>

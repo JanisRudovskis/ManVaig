@@ -8,7 +8,8 @@
     "notifications": "Paziņojumi",
     "login": "Ielogoties",
     "logout": "Izlogoties",
-    "more": "Vairāk"
+    "more": "Vairāk",
+    "showListingTips": "Rādīt sludinājumu padomus"
   },
   "home": {
     "title": "Laipni lūgti ManVaig",
@@ -288,11 +289,14 @@
     "upload": "Augšupielādēt",
     "imagesHint": "Pirmais attēls ir vāka attēls. Maks. 5 attēli, 5MB katrs. Velciet, lai pārkārtotu, zvaigzne — vāka attēls.",
     "imagesHintSimple": "Pirmais attēls ir vāka attēls. Maks. 5 attēli, 5MB katrs. Izmantojiet bultiņas, lai pārkārtotu.",
+    "imagesInlineHint": "Pirmais attēls ir vāka foto. Fotografējiet dabiskā apgaismojumā, parādiet visas puses.",
     "uploading": "Augšupielādē...",
     "sectionBasicInfo": "Pamatinformācija",
     "fieldTitle": "Nosaukums",
+    "titleHint": "Esiet konkrēts — norādiet zīmolu, materiālu, krāsu, izmēru. Labi nosaukumi piesaista vairāk skatījumu.",
     "fieldTitlePlaceholder": "piem. Retro radio uztvērējs Philips 1962",
     "fieldDescription": "Apraksts",
+    "descriptionHint": "Aprakstiet stāvokļa detaļas, iekļautos piederumus, pārdošanas iemeslu.",
     "fieldDescriptionPlaceholder": "Aprakstiet priekšmetu, tā stāvokli, vēsturi...",
     "fieldCategory": "Kategorija",
     "categoryPlaceholder": "Izvēlieties kategoriju...",
@@ -307,6 +311,7 @@
     "condPoor": "Slikts",
     "sectionPricing": "Cenas iestatījumi",
     "fieldPrice": "Cena",
+    "priceHint": "Iestatiet fiksētu cenu. Pircēji to redzēs kā prasīto cenu.",
     "priceOptionalHint": "Atstājiet tukšu, ja vēlaties tikai piedāvājumus",
     "fieldInstantBuyPrice": "Tūlītējās pirkšanas cena",
     "instantBuyHint": "Pircēji var nekavējoties iegādāties par šo cenu",
@@ -524,5 +529,60 @@
     "previousImage": "Iepriekšējais",
     "nextImage": "Nākamais",
     "comingSoon": "Drīzumā"
+  },
+  "help": {
+    "condition": {
+      "title": "Stāvokļa novērtējums",
+      "body": "Izvēlieties novērtējumu, kas vislabāk apraksta jūsu priekšmeta pašreizējo stāvokli.",
+      "good": "Jauns — nelietots, oriģinālajā iepakojumā. Gandrīz jauns — atvērts, bet bez nolietojuma. Labs — pilnībā funkcionāls, neliels kosmētisks nolietojums. Normāls — darbojas, bet ir pamanāms nolietojums. Slikts — nepieciešams remonts vai būtiski bojājumi."
+    },
+    "tags": {
+      "title": "Labu birku izvēle",
+      "body": "Birkas palīdz pircējiem atrast jūsu sludinājumu meklēšanā. Izmantojiet konkrētus, aprakstošus vārdus, kurus pircējs varētu meklēt.",
+      "goodLabel": "Labas birkas",
+      "good": "\"samsung galaxy s24\", \"ādas jaka\", \"vintage vinils\"",
+      "badLabel": "Izvairīties",
+      "bad": "\"forši\", \"lēti\", \"jāredz\", \"wow\""
+    },
+    "acceptOffers": {
+      "title": "Kā darbojas piedāvājumi",
+      "body": "Kad iespējots, pircēji var iesniegt cenu piedāvājumus par jūsu priekšmetu. Katram jaunam piedāvājumam jābūt augstākam par iepriekšējo. Varat arī iestatīt minimālo piedāvājuma cenu, lai automātiski filtrētu pārāk zemus piedāvājumus."
+    },
+    "endDate": {
+      "title": "Sludinājumi ar termiņu",
+      "body": "Beigu datuma iestatīšana izveido izsoli ar termiņu. Kad termiņš beidzas, augstākais piedāvājums uzvar. Aizsardzība pret vēlīniem solījumiem: ja piedāvājums tiek saņemts pēdējās 10 minūtēs, termiņš automātiski pagarinās par 10 minūtēm."
+    },
+    "visibility": {
+      "title": "Redzamības opcijas",
+      "body": "Publisks — ikviens var atrast un skatīt. Tikai reģistrētiem — tikai ielogojušies lietotāji. Tikai ar saiti — tikai cilvēki ar tiešo saiti (nav meklēšanā). Privāts — tikai jūs redzat (noderīgi melnrakstiem)."
+    },
+    "minOfferPrice": {
+      "title": "Minimālā piedāvājuma cena",
+      "body": "Zemākā piedāvājuma summa, ko apsvērsiet. Piedāvājumi zem šīs summas tiek automātiski noraidīti. Atstājiet tukšu, lai pieņemtu jebkuru piedāvājuma summu."
+    }
+  },
+  "tips": {
+    "dismiss": "Slēpt padomus",
+    "details": {
+      "title": "Padomi labam sludinājumam",
+      "tip1": "Izmantojiet skaidru, konkrētu nosaukumu ar zīmolu, izmēru un galvenajām iezīmēm — tas ir pirmais, ko pircēji redz.",
+      "tip2": "Augšupielādējiet vismaz 3 fotoattēlus: priekšpuse, aizmugure un visi defekti. Dabisks apgaismojums darbojas vislabāk.",
+      "tip3": "Godīgi aprakstiet faktisko stāvokli — tas veido uzticību un samazina atgriešanas gadījumus.",
+      "tip4": "Iestatiet pareizo stāvokļa līmeni. \"Labs\" nozīmē nelielu nolietojumu; \"Gandrīz jauns\" nozīmē bez redzamām lietošanas pazīmēm."
+    },
+    "pricing": {
+      "title": "Cenu noteikšanas padomi",
+      "tip1": "Izpētiet līdzīgus sludinājumus pirms cenas noteikšanas — pārcenoti priekšmeti saņem mazāk skatījumu.",
+      "tip2": "Piedāvājumu iespējošana bieži noved pie ātrākas pārdošanas. Daudzi pircēji labprāt vienojas par cenu.",
+      "tip3": "Norādiet minimālo cenu — nebūs iespējams veikt zemāku piedāvājumu.",
+      "tip4": "Iestatiet beigu datumu — pircēji piedāvā ātrāk, kad laiks ir ierobežots."
+    },
+    "terms": {
+      "title": "Redzamības un birku padomi",
+      "tip1": "Birkas papildina nosaukumu un kategoriju — pievienojiet 3–5 birkas, lai pircēji atrastu jūsu sludinājumu vieglāk.",
+      "tip2": "Atstājiet sludinājumu publisku, ja nav iemesla ierobežot piekļuvi.",
+      "tip3": "Ieslēdziet viesu piedāvājumus — arī nereģistrēti lietotāji varēs izteikt piedāvājumu.",
+      "tip4": "Piegādes piedāvāšana paplašina potenciālo pircēju loku ārpus jūsu apkaimes."
+    }
   }
 }

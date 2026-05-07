@@ -8,7 +8,8 @@
     "notifications": "Notifications",
     "login": "Login",
     "logout": "Logout",
-    "more": "More"
+    "more": "More",
+    "showListingTips": "Show listing tips"
   },
   "home": {
     "title": "Welcome to ManVaig",
@@ -288,11 +289,14 @@
     "upload": "Upload",
     "imagesHint": "First image is the cover. Max 5 images, 5MB each. Drag to reorder, star to set cover.",
     "imagesHintSimple": "First image is the cover. Max 5 images, 5MB each. Use arrows to reorder.",
+    "imagesInlineHint": "First image is the cover photo. Use natural lighting, show all sides.",
     "uploading": "Uploading...",
     "sectionBasicInfo": "Basic Info",
     "fieldTitle": "Title",
+    "titleHint": "Be specific — include brand, material, color, size. Good titles get more views.",
     "fieldTitlePlaceholder": "e.g. Vintage Radio — Philips 1962",
     "fieldDescription": "Description",
+    "descriptionHint": "Describe condition details, included accessories, reason for selling.",
     "fieldDescriptionPlaceholder": "Describe the item, its condition, history...",
     "fieldCategory": "Category",
     "categoryPlaceholder": "Select category...",
@@ -307,6 +311,7 @@
     "condPoor": "Poor",
     "sectionPricing": "Price Settings",
     "fieldPrice": "Price",
+    "priceHint": "Set a fixed price. Buyers see this as the asking price.",
     "priceOptionalHint": "Leave empty for offer-only listing",
     "fieldInstantBuyPrice": "Instant buy price",
     "instantBuyHint": "Buyers can purchase immediately at this price",
@@ -524,5 +529,60 @@
     "previousImage": "Previous",
     "nextImage": "Next",
     "comingSoon": "Coming soon"
+  },
+  "help": {
+    "condition": {
+      "title": "Condition ratings",
+      "body": "Choose the rating that best describes your item's current state.",
+      "good": "New — unused, in original packaging. Like New — opened but no visible wear. Good — fully functional, minor cosmetic wear. Fair — works but has noticeable wear or damage. Poor — needs repair or has significant damage."
+    },
+    "tags": {
+      "title": "Choosing good tags",
+      "body": "Tags help buyers discover your item through search. Use specific, descriptive words that a buyer might search for.",
+      "goodLabel": "Good tags",
+      "good": "\"samsung galaxy s24\", \"leather jacket\", \"vintage vinyl\"",
+      "badLabel": "Avoid",
+      "bad": "\"cool stuff\", \"cheap\", \"must see\", \"wow\""
+    },
+    "acceptOffers": {
+      "title": "How offers work",
+      "body": "When enabled, buyers can submit price offers on your item. Each new offer must be higher than the previous one. You can also set a minimum offer price to filter out lowball offers automatically."
+    },
+    "endDate": {
+      "title": "Timed listings",
+      "body": "Setting an end date creates a timed auction. When the deadline passes, the highest offer wins. Anti-snipe protection: if an offer arrives in the last 10 minutes, the deadline extends by 10 minutes automatically."
+    },
+    "visibility": {
+      "title": "Visibility options",
+      "body": "Public — anyone can find and view. Registered Only — only logged-in users. Link Only — only people with a direct link (not in search). Private — only you can see (useful for drafts)."
+    },
+    "minOfferPrice": {
+      "title": "Minimum offer price",
+      "body": "The lowest offer amount you'll consider. Offers below this are automatically rejected. Leave empty to accept any offer amount."
+    }
+  },
+  "tips": {
+    "dismiss": "Dismiss tips",
+    "details": {
+      "title": "Tips for a great listing",
+      "tip1": "Use a clear, specific title with brand, size, and key features — this is the first thing buyers see.",
+      "tip2": "Upload at least 3 photos: front, back, and any flaws. Natural lighting works best.",
+      "tip3": "Describe the actual condition honestly — this builds trust and reduces returns.",
+      "tip4": "Set the right condition level. \"Good\" means minor wear; \"Like New\" means no visible use."
+    },
+    "pricing": {
+      "title": "Pricing tips",
+      "tip1": "Research similar items before setting your price — overpriced items get fewer views.",
+      "tip2": "Enabling offers often leads to faster sales. Many buyers prefer to negotiate.",
+      "tip3": "Set a reasonable minimum offer to filter out lowball offers automatically.",
+      "tip4": "Timed listings create urgency — consider setting an end date for high-demand items."
+    },
+    "terms": {
+      "title": "Visibility & tags tips",
+      "tip1": "Add 3–5 relevant tags to help your item appear in search results.",
+      "tip2": "Keep items Public unless you have a reason to restrict access.",
+      "tip3": "Enable guest offers if you want to reach buyers who don't have an account.",
+      "tip4": "Offering shipping expands your buyer pool beyond your local area."
+    }
   }
 }
