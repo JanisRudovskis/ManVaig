@@ -36,10 +36,15 @@ export function DateTimePicker({
       locale: locale === "lv" ? Latvian : undefined,
       minDate,
       defaultDate: value,
+      appendTo: document.body,
       onChange: (selectedDates) => {
         onChange(selectedDates[0] ?? undefined);
       },
     });
+
+    // The edit modal sets document.body pointer-events: none to lock background.
+    // Since the calendar is now appended to body, it inherits that — override it.
+    fpRef.current.calendarContainer.style.pointerEvents = "auto";
 
     return () => {
       fpRef.current?.destroy();
