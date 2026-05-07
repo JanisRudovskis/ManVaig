@@ -3,6 +3,8 @@ namespace ManVaig.Api.Models.Enums;
 public enum Condition
 {
     New = 0,
-    Used = 1,
-    Worn = 2
+    LikeNew = 1,
+    Good = 2,
+    Fair = 3,
+    Poor = 4
 }

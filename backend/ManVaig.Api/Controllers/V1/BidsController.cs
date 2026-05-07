@@ -33,7 +33,7 @@ public class BidsController : ControllerBase
 
         var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
         if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
-        if (item.PricingType != PricingType.Auction) return BadRequest(new { error = "NOT_AUCTION" });
+        if (!item.AcceptOffers) return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
 
         var bids = await _db.Bids
             .Where(b => b.ItemId == itemId)
@@ -41,9 +41,9 @@ public class BidsController : ControllerBase
             .Include(b => b.User)
             .ToListAsync();
 
-        var auctionEnded = item.AuctionEnd.HasValue && item.AuctionEnd.Value <= DateTime.UtcNow;
-        var winnerExpiresAt = auctionEnded && item.AuctionEnd.HasValue
-            ? item.AuctionEnd.Value.AddHours(24)
+        var auctionEnded = item.EndDate.HasValue && item.EndDate.Value <= DateTime.UtcNow;
+        var winnerExpiresAt = auctionEnded && item.EndDate.HasValue
+            ? item.EndDate.Value.AddHours(24)
             : (DateTime?)null;
 
         // Build anonymized bidder labels: assign "Bidder #N" per unique user in order of first bid
@@ -91,7 +91,7 @@ public class BidsController : ControllerBase
     }
 
     /// <summary>
-    /// Place a bid on an auction item.
+    /// Place a bid/offer on an item that accepts offers.
     /// </summary>
     [HttpPost]
     public async Task<IActionResult> PlaceBid(Guid itemId, [FromBody] PlaceBidRequest request)
@@ -106,13 +106,13 @@ public class BidsController : ControllerBase
         if (item.Visibility == ItemVisibility.Private)
             return NotFound(new { error = "ITEM_NOT_FOUND" });
 
-        // Must be an auction
-        if (item.PricingType != PricingType.Auction)
-            return BadRequest(new { error = "NOT_AUCTION" });
+        // Must accept offers
+        if (!item.AcceptOffers)
+            return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
 
-        // Auction must be active (not ended)
-        if (!item.AuctionEnd.HasValue || item.AuctionEnd.Value <= DateTime.UtcNow)
-            return BadRequest(new { error = "AUCTION_ENDED" });
+        // If timed, must not have ended
+        if (item.EndDate.HasValue && item.EndDate.Value <= DateTime.UtcNow)
+            return BadRequest(new { error = "OFFERS_ENDED" });
 
         // Can't bid on own item
         if (item.UserId == userId.Value)
@@ -130,18 +130,18 @@ public class BidsController : ControllerBase
 
         var currentHighest = highestBid?.Amount ?? 0;
 
-        // Must be higher than current highest
+        // Must be higher than current highest (ascending offers)
         if (request.Amount <= currentHighest)
             return BadRequest(new { error = "BID_TOO_LOW" });
 
-        // Must be >= starting price (MinBidPrice is used as starting price for auctions)
-        if (item.MinBidPrice.HasValue && request.Amount < item.MinBidPrice.Value)
+        // Must be >= min offer price (floor)
+        if (item.MinOfferPrice.HasValue && request.Amount < item.MinOfferPrice.Value)
             return BadRequest(new { error = "BID_BELOW_STARTING" });
 
-        // Must respect bid step
-        if (item.BidStep.HasValue && item.BidStep.Value > 0 && highestBid != null)
+        // Must respect offer step
+        if (item.OfferStep.HasValue && item.OfferStep.Value > 0 && highestBid != null)
         {
-            var minNext = currentHighest + item.BidStep.Value;
+            var minNext = currentHighest + item.OfferStep.Value;
             if (request.Amount < minNext)
                 return BadRequest(new { error = "BID_STEP_TOO_SMALL" });
         }
@@ -159,23 +159,29 @@ public class BidsController : ControllerBase
 
         _db.Bids.Add(bid);
 
-        // Anti-sniping: if bid placed in last 10 minutes, extend auction by 10 minutes
-        var timeUntilEnd = item.AuctionEnd.Value - DateTime.UtcNow;
-        if (timeUntilEnd.TotalMinutes <= 10)
+        // Anti-sniping: only for timed items, if bid placed in last 10 minutes
+        var antiSnipe = false;
+        if (item.EndDate.HasValue)
         {
-            item.AuctionEnd = DateTime.SpecifyKind(
-                DateTime.UtcNow.AddMinutes(10),
-                DateTimeKind.Utc
-            );
+            var timeUntilEnd = item.EndDate.Value - DateTime.UtcNow;
+            if (timeUntilEnd.TotalMinutes <= 10)
+            {
+                item.EndDate = DateTime.SpecifyKind(
+                    DateTime.UtcNow.AddMinutes(10),
+                    DateTimeKind.Utc
+                );
+                antiSnipe = true;
+            }
         }
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe = timeUntilEnd.TotalMinutes <= 10 });
+        return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe });
     }
 
     /// <summary>
     /// Assign the next highest bidder as winner (seller only, after winner expires).
+    /// Only applicable to timed items.
     /// </summary>
     [HttpPost("assign-next")]
     public async Task<IActionResult> AssignNextWinner(Guid itemId)
@@ -186,15 +192,19 @@ public class BidsController : ControllerBase
         var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId.Value);
         if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
 
-        if (item.PricingType != PricingType.Auction)
-            return BadRequest(new { error = "NOT_AUCTION" });
+        if (!item.AcceptOffers)
+            return BadRequest(new { error = "OFFERS_NOT_ACCEPTED" });
 
-        // Auction must have ended
-        if (!item.AuctionEnd.HasValue || item.AuctionEnd.Value > DateTime.UtcNow)
-            return BadRequest(new { error = "AUCTION_NOT_ENDED" });
+        // Must be a timed item
+        if (!item.EndDate.HasValue)
+            return BadRequest(new { error = "NOT_TIMED_ITEM" });
 
-        // 24h must have passed since auction end
-        var expiryTime = item.AuctionEnd.Value.AddHours(24);
+        // Must have ended
+        if (item.EndDate.Value > DateTime.UtcNow)
+            return BadRequest(new { error = "OFFERS_NOT_ENDED" });
+
+        // 24h must have passed since end
+        var expiryTime = item.EndDate.Value.AddHours(24);
         if (DateTime.UtcNow < expiryTime)
             return BadRequest(new { error = "WINNER_NOT_EXPIRED" });
 
@@ -226,8 +236,8 @@ public class BidsController : ControllerBase
 
         nextWinner.Status = BidStatus.Won;
 
-        // Reset the 24h timer: update AuctionEnd to now so the new winner gets 24h
-        item.AuctionEnd = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        // Reset the 24h timer: update EndDate to now so the new winner gets 24h
+        item.EndDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         await _db.SaveChangesAsync();
 

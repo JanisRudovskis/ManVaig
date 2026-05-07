@@ -1,20 +1,9 @@
 "use client";
 
-import { Clock, ImageIcon } from "lucide-react";
+import { Clock, MessageCircle, ImageIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PricingType } from "@/lib/items";
 
 // === Helpers ===
-
-export function pricingTypeKey(type: number): string {
-  switch (type) {
-    case PricingType.Fixed: return "fixed";
-    case PricingType.FixedOffers: return "offers";
-    case PricingType.Bidding: return "bidding";
-    case PricingType.Auction: return "auction";
-    default: return "fixed";
-  }
-}
 
 export function formatPrice(price: number | null): string {
   if (price == null) return "";
@@ -37,117 +26,14 @@ export function timeAgo(
   return t("daysAgo", { count: diffDays });
 }
 
-export function isAuctionEnded(auctionEnd: string | null, pricingType: number): boolean {
-  if (pricingType !== PricingType.Auction || !auctionEnd) return false;
-  return new Date(auctionEnd).getTime() < Date.now();
+export function isEnded(endDate: string | null): boolean {
+  if (!endDate) return false;
+  return new Date(endDate).getTime() < Date.now();
 }
 
-// === Type Tag ===
+// === End Date Countdown ===
 
-export function TypeTag({ type, t }: { type: number; t: (key: string) => string }) {
-  const key = pricingTypeKey(type);
-  const colorMap: Record<string, string> = {
-    fixed: "bg-blue-500",
-    offers: "bg-purple-500",
-    bidding: "bg-orange-500",
-    auction: "bg-orange-500",
-  };
-
-  return (
-    <span
-      className={`absolute top-0 left-0 z-10 rounded-tl-[calc(var(--radius)*1.4)] rounded-br-[calc(var(--radius)*0.6)] px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white ${colorMap[key]}`}
-    >
-      {t(`type_${key}`)}
-    </span>
-  );
-}
-
-// === Price Display ===
-
-interface PriceDisplayProps {
-  pricingType: number;
-  price: number | null;
-  minBidPrice: number | null;
-  bidStep: number | null;
-  auctionEnd: string | null;
-  t: (key: string, values?: Record<string, string | number>) => string;
-  bidCount?: number;
-  highestBid?: number | null;
-  /** Hide the "ended" text when an activity badge already shows it */
-  hideEndedStatus?: boolean;
-}
-
-export function PriceDisplay({ pricingType, price, minBidPrice, bidStep, auctionEnd, t, bidCount, highestBid, hideEndedStatus }: PriceDisplayProps) {
-  const priceClass = "text-lg font-bold text-emerald-400";
-  const detailClass = "text-xs text-muted-foreground";
-
-  switch (pricingType) {
-    case PricingType.Fixed:
-      return <span className={priceClass}>{formatPrice(price)}</span>;
-
-    case PricingType.FixedOffers:
-      return (
-        <div className="flex flex-col gap-0.5">
-          <span className={priceClass}>{formatPrice(price)}</span>
-          <span className={detailClass}>{t("acceptsOffers")}</span>
-        </div>
-      );
-
-    case PricingType.Bidding:
-      return (
-        <div className="flex flex-col gap-0.5">
-          {highestBid != null ? (
-            <>
-              <span className={priceClass}>{formatPrice(highestBid)}</span>
-              {bidCount != null && bidCount > 0 && (
-                <span className={detailClass}>{t("bids", { count: bidCount })}</span>
-              )}
-            </>
-          ) : (
-            <>
-              {minBidPrice ? (
-                <span className={detailClass}>{t("minBid")}: {formatPrice(minBidPrice)}</span>
-              ) : null}
-              <span className={priceClass}>{t("openBidding")}</span>
-            </>
-          )}
-        </div>
-      );
-
-    case PricingType.Auction:
-      return (
-        <div className="flex flex-col gap-0.5">
-          {highestBid != null ? (
-            <>
-              <span className={priceClass}>{formatPrice(highestBid)}</span>
-              {bidCount != null && bidCount > 0 && (
-                <span className={detailClass}>{t("bids", { count: bidCount })}</span>
-              )}
-            </>
-          ) : minBidPrice ? (
-            <span className={detailClass}>
-              {t("startPrice")}: {formatPrice(minBidPrice)}
-              {bidStep ? ` · ${t("step")}: ${formatPrice(bidStep)}` : ""}
-            </span>
-          ) : null}
-          <span className={highestBid != null ? detailClass : priceClass}>{t("auction")}</span>
-          {auctionEnd && isAuctionEnded(auctionEnd, pricingType) && (highestBid == null || highestBid === undefined) && (
-            <span className="text-xs font-medium text-destructive">{t("noBids")}</span>
-          )}
-          {auctionEnd && !(hideEndedStatus && isAuctionEnded(auctionEnd, pricingType)) && (
-            <AuctionCountdown end={auctionEnd} t={t} />
-          )}
-        </div>
-      );
-
-    default:
-      return null;
-  }
-}
-
-// === Auction Countdown ===
-
-export function AuctionCountdown({ end, t }: { end: string; t: (key: string) => string }) {
+export function EndDateCountdown({ end, t }: { end: string; t: (key: string) => string }) {
   const endTime = new Date(end).getTime();
   const now = Date.now();
   const diff = endTime - now;
@@ -173,6 +59,111 @@ export function AuctionCountdown({ end, t }: { end: string; t: (key: string) => 
       <Clock className="size-3.5 shrink-0" />
       {t("endsIn")} {text}
     </span>
+  );
+}
+
+// === End Date Pill (overlay on image for timed items) ===
+
+export function EndDatePill({ end, t }: { end: string; t: (key: string) => string }) {
+  const endTime = new Date(end).getTime();
+  const now = Date.now();
+  const diff = endTime - now;
+
+  if (diff <= 0) {
+    return (
+      <span className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-lg bg-destructive/90 px-3 py-1.5 text-xs font-semibold text-white shadow-md">
+        <Clock className="size-3.5" />
+        {t("ended")}
+      </span>
+    );
+  }
+
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+
+  const isUrgent1h = diff < 3600000;
+  const isUrgent24h = diff < 86400000;
+  const bgClass = isUrgent1h
+    ? "bg-destructive/90"
+    : isUrgent24h
+      ? "bg-orange-500/90"
+      : "bg-black/60";
+
+  let text = "";
+  if (days > 0) text = `${days}d ${hours}h`;
+  else if (hours > 0) text = `${hours}h ${minutes}m`;
+  else text = `${minutes}m`;
+
+  return (
+    <span className={`absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-lg ${bgClass} px-3 py-1.5 text-xs font-semibold text-white shadow-md`}>
+      <Clock className="size-3.5" />
+      {text}
+    </span>
+  );
+}
+
+// === Price Display (field-based, no PricingType switch) ===
+
+interface PriceDisplayProps {
+  price: number | null;
+  acceptOffers: boolean;
+  minOfferPrice: number | null;
+  offerStep: number | null;
+  endDate: string | null;
+  t: (key: string, values?: Record<string, string | number>) => string;
+  bidCount?: number;
+  highestBid?: number | null;
+  /** Hide the "ended" text when an activity badge already shows it */
+  hideEndedStatus?: boolean;
+}
+
+export function PriceDisplay({
+  price, acceptOffers, minOfferPrice, offerStep, endDate,
+  t, bidCount, highestBid, hideEndedStatus,
+}: PriceDisplayProps) {
+  const priceClass = "text-lg font-bold text-emerald-400";
+  const detailClass = "text-xs text-muted-foreground";
+
+  // Has active offers/bids?
+  const hasActiveBids = highestBid != null && highestBid > 0;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {/* Main price line */}
+      {hasActiveBids ? (
+        <>
+          <div className="flex items-center gap-1.5">
+            <span className={priceClass}>{formatPrice(highestBid)}</span>
+                      </div>
+          {bidCount != null && bidCount > 0 && (
+            <span className={detailClass}>{t("bids", { count: bidCount })}</span>
+          )}
+        </>
+      ) : price != null ? (
+        <div className="flex items-center gap-1.5">
+          <span className={priceClass}>{formatPrice(price)}</span>
+                  </div>
+      ) : acceptOffers ? (
+        <div className="flex items-center gap-1.5">
+          <span className={priceClass}>{t("offerOnly")}</span>
+        </div>
+      ) : null}
+
+      {/* Detail line: offer info */}
+      {acceptOffers && !hasActiveBids && price != null && (
+        <span className={detailClass}>{t("acceptsOffers")}</span>
+      )}
+
+      {/* Min offer / offer step info */}
+      {acceptOffers && !hasActiveBids && minOfferPrice != null && (
+        <span className={detailClass}>
+          {t("minOffer")}: {formatPrice(minOfferPrice)}
+          {offerStep ? ` · ${t("offerStep")}: ${formatPrice(offerStep)}` : ""}
+        </span>
+      )}
+
+    </div>
   );
 }
 

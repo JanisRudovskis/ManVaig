@@ -26,11 +26,14 @@ public class PublicItemCardDto
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = default!;
     public Condition Condition { get; set; }
-    public PricingType PricingType { get; set; }
+
+    // Composable pricing fields
     public decimal? Price { get; set; }
-    public decimal? MinBidPrice { get; set; }
-    public decimal? BidStep { get; set; }
-    public DateTime? AuctionEnd { get; set; }
+    public bool AcceptOffers { get; set; }
+    public decimal? MinOfferPrice { get; set; }
+    public decimal? OfferStep { get; set; }
+    public DateTime? EndDate { get; set; }
+
     public string? Location { get; set; }
     public bool CanShip { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -41,7 +44,7 @@ public class PublicItemCardDto
     // Seller summary (never exposes UserId, email, phone)
     public PublicSellerSummaryDto Seller { get; set; } = default!;
 
-    // Auction summary
+    // Offer summary
     public int BidCount { get; set; }
     public decimal? HighestBid { get; set; }
 }

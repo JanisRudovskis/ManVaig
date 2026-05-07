@@ -12,6 +12,7 @@ interface CategoryChipsProps {
 
 export function CategoryChips({ selected, onChange }: CategoryChipsProps) {
   const t = useTranslations("feed");
+  const tc = useTranslations("categories");
   const [categories, setCategories] = useState<CategoryDto[]>([]);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function CategoryChips({ selected, onChange }: CategoryChipsProps) {
           className={`${chipBase} ${selected === cat.id ? chipActive : chipInactive}`}
           onClick={() => onChange(cat.id)}
         >
-          {cat.name}
+          {tc.has(String(cat.id)) ? tc(String(cat.id)) : cat.name}
         </button>
       ))}
     </div>

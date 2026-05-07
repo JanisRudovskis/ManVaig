@@ -329,6 +329,6 @@ export function ItemGallery({
 /** Format item price for display in the gallery */
 function formatPrice(item: ItemResponse): string {
   if (item.price != null) return `€${item.price.toFixed(2)}`;
-  if (item.minBidPrice != null) return `€${item.minBidPrice.toFixed(2)}`;
+  if (item.minOfferPrice != null) return `€${item.minOfferPrice.toFixed(2)}`;
   return "";
 }

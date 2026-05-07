@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/lib/auth-context";
-import { fetchMyItems, reorderItems, PricingType, ItemVisibility } from "@/lib/items";
+import { fetchMyItems, reorderItems, ItemVisibility } from "@/lib/items";
 import type { ItemResponse } from "@/lib/items";
 import {
   fetchStall,
@@ -21,8 +21,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImageLightbox } from "@/components/image-lightbox";
 import {
   timeAgo,
-  isAuctionEnded,
-  TypeTag,
+  isEnded,
+  EndDatePill,
   PriceDisplay,
   ItemCardSkeleton,
 } from "@/components/item-card-shared";
@@ -32,32 +32,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  rectSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
   Package,
   Plus,
   Pencil,
   ImageIcon,
   HandCoins,
   ChevronLeft,
+  ChevronRight,
   Loader2,
   X,
   Trash2,
   Upload,
-  GripVertical,
+  ArrowLeftRight,
   AlertCircle,
   Clock,
   Gavel,
@@ -74,33 +60,29 @@ function visibilityKey(vis: number): string | null {
   }
 }
 
-function VisibilityTag({ visibility, t }: { visibility: number; t: (key: string) => string }) {
+function VisibilityLabel({ visibility, t }: { visibility: number; t: (key: string) => string }) {
   const key = visibilityKey(visibility);
   if (!key) return null;
   const colorMap: Record<string, string> = {
-    private: "bg-zinc-500",
-    registered: "bg-yellow-500 text-black",
-    linkOnly: "bg-teal-500",
+    private: "text-red-400",
+    registered: "text-red-400",
+    linkOnly: "text-red-400",
   };
   return (
-    <span className={`absolute top-0 right-0 z-10 rounded-tr-[calc(var(--radius)*1.4)] rounded-bl-[calc(var(--radius)*0.6)] px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white ${colorMap[key]}`}>
+    <span className={`text-xs font-semibold ${colorMap[key]}`}>
       {t(`vis_${key}`)}
     </span>
   );
 }
 
-/** Check if an item "needs attention" — ended auction, has bids, or ending soon */
-function needsAttention(item: ItemResponse): boolean {
-  const ended = isAuctionEnded(item.auctionEnd, item.pricingType);
-  if (ended) return true;
-  if (item.bidCount > 0) return true;
-  if (isEndingSoon(item)) return true;
-  return false;
+/** Check if an item has ended (timed offer that expired) */
+function isItemEnded(item: ItemResponse): boolean {
+  return item.acceptOffers && isEnded(item.endDate);
 }
 
 function isEndingSoon(item: ItemResponse): boolean {
-  if (item.pricingType !== PricingType.Auction || !item.auctionEnd) return false;
-  const end = new Date(item.auctionEnd).getTime();
+  if (!item.endDate) return false;
+  const end = new Date(item.endDate).getTime();
   const now = Date.now();
   return end > now && end - now < 24 * 60 * 60 * 1000;
 }
@@ -108,7 +90,7 @@ function isEndingSoon(item: ItemResponse): boolean {
 // === Activity Badges ===
 
 function ActivityBadges({ item, ts }: { item: ItemResponse; ts: (key: string, values?: Record<string, string | number>) => string }) {
-  const ended = isAuctionEnded(item.auctionEnd, item.pricingType);
+  const ended = isEnded(item.endDate);
   const endingSoon = isEndingSoon(item);
   const hasBids = item.bidCount > 0;
 
@@ -190,7 +172,7 @@ function StallDescription({ description, ts }: { description: string | null; ts:
 // === Item Card ===
 
 function ItemCard({
-  item, t, ts, onEdit, onViewBids, onImageClick, reorderMode,
+  item, t, ts, onEdit, onViewBids, onImageClick, reorderMode, index, total, onMoveLeft, onMoveRight,
 }: {
   item: ItemResponse;
   t: (key: string, values?: Record<string, string | number>) => string;
@@ -199,18 +181,18 @@ function ItemCard({
   onViewBids?: (item: ItemResponse) => void;
   onImageClick?: (item: ItemResponse) => void;
   reorderMode?: boolean;
+  index?: number;
+  total?: number;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
 }) {
-  const ended = isAuctionEnded(item.auctionEnd, item.pricingType);
+  const ended = isEnded(item.endDate);
   const primaryImage = item.images.find((img) => img.isPrimary) ?? item.images[0];
+  const isFirst = (index ?? 0) === 0;
+  const isLast = (index ?? 0) === (total ?? 1) - 1;
+
   return (
     <div className={`relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80 ${ended ? "opacity-60 hover:opacity-80" : ""}`}>
-      {reorderMode && (
-        <div className="absolute top-2 left-2 z-20 flex size-8 items-center justify-center rounded-lg bg-background/80 backdrop-blur-sm text-muted-foreground cursor-grab active:cursor-grabbing">
-          <GripVertical className="size-4" />
-        </div>
-      )}
-      <TypeTag type={item.pricingType} t={t} />
-      <VisibilityTag visibility={item.visibility} t={t} />
       <div
         className={`relative aspect-[4/3] w-full overflow-hidden bg-muted ${!reorderMode && primaryImage ? "cursor-zoom-in" : ""}`}
         onClick={() => { if (!reorderMode && primaryImage && onImageClick) onImageClick(item); }}
@@ -222,20 +204,44 @@ function ItemCard({
             <ImageIcon className="size-12 text-muted-foreground" />
           </div>
         )}
+        {item.endDate && !isEnded(item.endDate) && <EndDatePill end={item.endDate} t={t} />}
         <ActivityBadges item={item} ts={ts} />
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <span className="line-clamp-2 text-sm font-semibold leading-tight">{item.title}</span>
-        <PriceDisplay pricingType={item.pricingType} price={item.price} minBidPrice={item.minBidPrice} bidStep={item.bidStep} auctionEnd={item.auctionEnd} t={t} bidCount={item.bidCount} highestBid={item.highestBid} hideEndedStatus />
+        <PriceDisplay price={item.price} acceptOffers={item.acceptOffers} minOfferPrice={item.minOfferPrice} offerStep={item.offerStep} endDate={item.endDate} t={t} bidCount={item.bidCount} highestBid={item.highestBid} hideEndedStatus />
       </div>
-      {!reorderMode && (
+      {reorderMode ? (
+        <div className="flex items-center justify-between bg-black/50 px-2 py-1.5">
+          <button
+            type="button"
+            onClick={onMoveLeft}
+            disabled={isFirst}
+            className={`flex size-8 items-center justify-center rounded text-white transition-colors ${isFirst ? "opacity-30 pointer-events-none" : "hover:bg-white/20 active:bg-white/30"}`}
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="text-xs font-medium text-white/70">{(index ?? 0) + 1} / {total}</span>
+          <button
+            type="button"
+            onClick={onMoveRight}
+            disabled={isLast}
+            className={`flex size-8 items-center justify-center rounded text-white transition-colors ${isLast ? "opacity-30 pointer-events-none" : "hover:bg-white/20 active:bg-white/30"}`}
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      ) : (
         <>
           <hr className="mx-3 border-border" />
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="truncate text-xs text-muted-foreground">{t("listed")} {timeAgo(item.createdAt, t)}</span>
+            <div className="flex min-w-0 items-center gap-2 truncate">
+              <span className="truncate text-xs text-muted-foreground">{t("listed")} {timeAgo(item.createdAt, t)}</span>
+              <VisibilityLabel visibility={item.visibility} t={t} />
+            </div>
             <div className="flex shrink-0 items-center gap-1">
-              {item.pricingType === PricingType.Auction && onViewBids && (
-                <button onClick={() => onViewBids(item)} className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("type_auction")}>
+              {item.acceptOffers && onViewBids && (
+                <button onClick={() => onViewBids(item)} className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("viewBids")}>
                   <HandCoins className="size-4" />
                 </button>
               )}
@@ -246,35 +252,6 @@ function ItemCard({
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-// === Sortable wrapper for drag-and-drop ===
-
-function SortableItemCard(props: {
-  item: ItemResponse;
-  t: (key: string, values?: Record<string, string | number>) => string;
-  ts: (key: string, values?: Record<string, string | number>) => string;
-  onEdit: (item: ItemResponse) => void;
-  onViewBids?: (item: ItemResponse) => void;
-  onImageClick?: (item: ItemResponse) => void;
-  reorderMode: boolean;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: props.item.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 50 : undefined,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...(props.reorderMode ? listeners : {})}>
-      <ItemCard {...props} />
     </div>
   );
 }
@@ -315,14 +292,6 @@ export default function StallItemsPage() {
   const [deletingStall, setDeletingStall] = useState(false);
   const bgInputRef = useRef<HTMLInputElement>(null);
 
-  // DnD sensors
-  const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: 8 },
-  });
-  const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: { delay: 200, tolerance: 5 },
-  });
-  const sensors = useSensors(pointerSensor, touchSensor);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -367,19 +336,12 @@ export default function StallItemsPage() {
     loadData();
   };
 
-  // Reorder handling
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  // Reorder handling (arrow-based swap)
+  const moveItem = async (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= items.length) return;
 
-    const oldIndex = items.findIndex((i) => i.id === active.id);
-    const newIndex = items.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    // Optimistic reorder
     const reordered = [...items];
-    const [moved] = reordered.splice(oldIndex, 1);
-    reordered.splice(newIndex, 0, moved);
+    [reordered[fromIndex], reordered[toIndex]] = [reordered[toIndex], reordered[fromIndex]];
     setItems(reordered);
 
     // Save to backend
@@ -387,7 +349,6 @@ export default function StallItemsPage() {
     try {
       await reorderItems(stallId, reordered.map((i) => i.id));
     } catch {
-      // Revert on error
       loadData();
     } finally {
       setReorderSaving(false);
@@ -396,10 +357,10 @@ export default function StallItemsPage() {
 
   // Filter logic (client-side)
   const filteredItems = activeFilter === "attention"
-    ? items.filter(needsAttention)
+    ? items.filter(isItemEnded)
     : items;
 
-  const attentionCount = items.filter(needsAttention).length;
+  const endedCount = items.filter(isItemEnded).length;
 
   const startEditingStall = () => {
     if (!stall) return;
@@ -639,9 +600,10 @@ export default function StallItemsPage() {
       {/* Filter pills + reorder */}
       {items.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 ${reorderMode ? "opacity-50 pointer-events-none" : ""}`}>
             <button
               onClick={() => setActiveFilter("all")}
+              disabled={reorderMode}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 activeFilter === "all"
                   ? "bg-foreground text-background"
@@ -650,17 +612,18 @@ export default function StallItemsPage() {
             >
               {ts("filterAll")} ({items.length})
             </button>
-            {attentionCount > 0 && (
+            {endedCount > 0 && (
               <button
                 onClick={() => { setActiveFilter("attention"); setReorderMode(false); }}
+                disabled={reorderMode}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   activeFilter === "attention"
                     ? "bg-red-500 text-white"
                     : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
                 }`}
               >
-                <AlertCircle className="mr-1 inline size-3" />
-                {ts("filterAttention")} ({attentionCount})
+                <Clock className="mr-1 inline size-3" />
+                {ts("filterEnded")} ({endedCount})
               </button>
             )}
           </div>
@@ -673,30 +636,26 @@ export default function StallItemsPage() {
             {t("addItem")}
           </Button>
 
-          {/* Reorder button */}
-          <Button
-            variant={reorderMode ? "default" : "outline"}
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => setReorderMode(!reorderMode)}
-            disabled={reorderSaving}
-          >
-            {reorderSaving ? (
-              <Loader2 className="size-3.5 mr-1 animate-spin" />
-            ) : (
-              <GripVertical className="size-3.5 mr-1" />
-            )}
-            {reorderMode ? ts("reorderDone") : ts("reorderItems")}
-          </Button>
+          {/* Reorder button — only when "All" filter is active */}
+          {activeFilter === "all" && (
+            <Button
+              variant={reorderMode ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setReorderMode(!reorderMode)}
+              disabled={reorderSaving}
+            >
+              {reorderSaving ? (
+                <Loader2 className="size-3.5 mr-1 animate-spin" />
+              ) : (
+                <ArrowLeftRight className="size-3.5 mr-1" />
+              )}
+              {reorderMode ? ts("reorderDone") : ts("reorderItems")}
+            </Button>
+          )}
         </div>
       )}
 
-      {/* Reorder hint */}
-      {reorderMode && (
-        <p className="mb-3 text-xs text-muted-foreground italic">
-          {ts("reorderHint")}
-        </p>
-      )}
 
       {/* Items grid */}
       <div>
@@ -713,28 +672,24 @@ export default function StallItemsPage() {
           </Button>
         </div>
       ) : reorderMode ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={filteredItems.map((i) => i.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-              {filteredItems.map((item) => (
-                <SortableItemCard
-                  key={item.id}
-                  item={item}
-                  t={t}
-                  ts={ts}
-                  onEdit={handleEdit}
-                  onViewBids={(item) => setBidsItem(item)}
-                  onImageClick={(item) => setLightboxItem(item)}
-                  reorderMode={true}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          {filteredItems.map((item, index) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              t={t}
+              ts={ts}
+              onEdit={handleEdit}
+              onViewBids={(item) => setBidsItem(item)}
+              onImageClick={(item) => setLightboxItem(item)}
+              reorderMode={true}
+              index={index}
+              total={filteredItems.length}
+              onMoveLeft={() => moveItem(index, index - 1)}
+              onMoveRight={() => moveItem(index, index + 1)}
+            />
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {filteredItems.map((item) => (

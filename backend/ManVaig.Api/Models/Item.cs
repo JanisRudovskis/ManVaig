@@ -17,13 +17,14 @@ public class Item
 
     public string Title { get; set; } = default!;
     public string? Description { get; set; }
-    public Condition Condition { get; set; } = Condition.Used;
+    public Condition Condition { get; set; } = Condition.Good;
 
-    public PricingType PricingType { get; set; } = PricingType.Fixed;
+    // Composable pricing fields (replaced PricingType enum)
     public decimal? Price { get; set; }
-    public decimal? MinBidPrice { get; set; }
-    public decimal? BidStep { get; set; }
-    public DateTime? AuctionEnd { get; set; }
+    public bool AcceptOffers { get; set; }
+    public decimal? MinOfferPrice { get; set; }
+    public decimal? OfferStep { get; set; }
+    public DateTime? EndDate { get; set; }
 
     public ItemVisibility Visibility { get; set; } = ItemVisibility.Public;
     public string? Location { get; set; }

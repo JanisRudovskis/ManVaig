@@ -70,7 +70,7 @@ export function BidsModal({ item, onClose }: BidsModalProps) {
             {bidData.highestBid != null && (
               <div className="text-right">
                 <span className="text-xs text-muted-foreground">
-                  {bidData.auctionEnded ? t("winner") : "Top"}
+                  {bidData.auctionEnded ? t("winner") : t("topBid")}
                 </span>
                 <p className="text-lg font-bold text-emerald-400">
                   €{bidData.highestBid.toFixed(2)}

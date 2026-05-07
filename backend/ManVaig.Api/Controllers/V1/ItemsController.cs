@@ -52,8 +52,8 @@ public class ItemsController : ControllerBase
         query = sort switch
         {
             "oldest" => query.OrderBy(i => i.CreatedAt),
-            "priceAsc" => query.OrderBy(i => i.Price ?? i.MinBidPrice ?? decimal.MaxValue),
-            "priceDesc" => query.OrderByDescending(i => i.Price ?? i.MinBidPrice ?? 0),
+            "priceAsc" => query.OrderBy(i => i.Price ?? i.MinOfferPrice ?? decimal.MaxValue),
+            "priceDesc" => query.OrderByDescending(i => i.Price ?? i.MinOfferPrice ?? 0),
             "custom" => query.OrderBy(i => i.SortOrder).ThenByDescending(i => i.CreatedAt),
             _ => query.OrderByDescending(i => i.CreatedAt), // "newest" and fallback
         };
@@ -133,10 +133,19 @@ public class ItemsController : ControllerBase
         if (!categoryExists)
             return BadRequest(new { error = "INVALID_CATEGORY" });
 
-        // Validate pricing fields
-        var pricingError = ValidatePricingFields(request.PricingType, request.Price, request.MinBidPrice, request.BidStep, request.AuctionEnd);
+        // Validate pricing fields (composable)
+        var pricingError = ValidatePricingFields(
+            request.Price, request.AcceptOffers,
+            request.MinOfferPrice, request.OfferStep, request.EndDate);
         if (pricingError != null)
             return BadRequest(new { error = pricingError });
+
+        // Silently clear irrelevant fields when offers disabled
+        var minOfferPrice = request.AcceptOffers ? request.MinOfferPrice : null;
+        var offerStep = request.AcceptOffers ? request.OfferStep : null;
+        var endDate = request.AcceptOffers && request.EndDate.HasValue
+            ? DateTime.SpecifyKind(request.EndDate.Value, DateTimeKind.Utc)
+            : (DateTime?)null;
 
         // Resolve stall
         Guid stallId;
@@ -179,11 +188,11 @@ public class ItemsController : ControllerBase
             Title = request.Title,
             Description = request.Description,
             Condition = request.Condition,
-            PricingType = request.PricingType,
             Price = request.Price,
-            MinBidPrice = request.MinBidPrice,
-            BidStep = request.BidStep,
-            AuctionEnd = request.AuctionEnd.HasValue ? DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc) : null,
+            AcceptOffers = request.AcceptOffers,
+            MinOfferPrice = minOfferPrice,
+            OfferStep = offerStep,
+            EndDate = endDate,
             Visibility = request.Visibility,
             Location = request.Location,
             CanShip = request.CanShip,
@@ -224,8 +233,8 @@ public class ItemsController : ControllerBase
 
         if (item == null) return NotFound(new { error = "Item not found." });
 
-        // Check auction lock
-        var lockError = await CheckAuctionLock(item);
+        // Check offer lock (timed items with active offers)
+        var lockError = await CheckOfferLock(item);
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
@@ -262,27 +271,37 @@ public class ItemsController : ControllerBase
         }
 
         // Update pricing fields
-        if (request.PricingType.HasValue)
-        {
-            item.PricingType = request.PricingType.Value;
-        }
+        if (request.AcceptOffers.HasValue)
+            item.AcceptOffers = request.AcceptOffers.Value;
 
         if (request.Price.HasValue) item.Price = request.Price.Value;
-        if (request.MinBidPrice.HasValue) item.MinBidPrice = request.MinBidPrice.Value;
-        if (request.BidStep.HasValue) item.BidStep = request.BidStep.Value;
-        if (request.AuctionEnd.HasValue) item.AuctionEnd = DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc);
+        if (request.MinOfferPrice.HasValue) item.MinOfferPrice = request.MinOfferPrice.Value;
+        if (request.OfferStep.HasValue) item.OfferStep = request.OfferStep.Value;
+        if (request.EndDate.HasValue) item.EndDate = DateTime.SpecifyKind(request.EndDate.Value, DateTimeKind.Utc);
 
-        // Allow clearing pricing fields when switching pricing type
+        // Allow clearing pricing fields when toggling offers off
         if (request.ClearPricingFields)
         {
             item.Price = request.Price;
-            item.MinBidPrice = request.MinBidPrice;
-            item.BidStep = request.BidStep;
-            item.AuctionEnd = request.AuctionEnd.HasValue ? DateTime.SpecifyKind(request.AuctionEnd.Value, DateTimeKind.Utc) : null;
+            item.MinOfferPrice = request.MinOfferPrice;
+            item.OfferStep = request.OfferStep;
+            item.EndDate = request.EndDate.HasValue
+                ? DateTime.SpecifyKind(request.EndDate.Value, DateTimeKind.Utc)
+                : null;
+        }
+
+        // Silently clear irrelevant fields when offers disabled
+        if (!item.AcceptOffers)
+        {
+            item.MinOfferPrice = null;
+            item.OfferStep = null;
+            item.EndDate = null;
         }
 
         // Validate final pricing state
-        var pricingError = ValidatePricingFields(item.PricingType, item.Price, item.MinBidPrice, item.BidStep, item.AuctionEnd);
+        var pricingError = ValidatePricingFields(
+            item.Price, item.AcceptOffers,
+            item.MinOfferPrice, item.OfferStep, item.EndDate);
         if (pricingError != null)
             return BadRequest(new { error = pricingError });
 
@@ -316,8 +335,8 @@ public class ItemsController : ControllerBase
 
         if (item == null) return NotFound(new { error = "Item not found." });
 
-        // Check auction lock
-        var lockError = await CheckAuctionLock(item);
+        // Check offer lock
+        var lockError = await CheckOfferLock(item);
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
@@ -352,8 +371,8 @@ public class ItemsController : ControllerBase
 
         if (item == null) return NotFound(new { error = "Item not found." });
 
-        // Check auction lock
-        var lockError = await CheckAuctionLock(item);
+        // Check offer lock
+        var lockError = await CheckOfferLock(item);
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
@@ -425,7 +444,7 @@ public class ItemsController : ControllerBase
 
         if (item == null) return NotFound(new { error = "Item not found." });
 
-        var lockError = await CheckAuctionLock(item);
+        var lockError = await CheckOfferLock(item);
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
@@ -506,7 +525,7 @@ public class ItemsController : ControllerBase
 
         if (item == null) return NotFound(new { error = "Item not found." });
 
-        var lockError = await CheckAuctionLock(item);
+        var lockError = await CheckOfferLock(item);
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
@@ -603,70 +622,74 @@ public class ItemsController : ControllerBase
         }
     }
 
-    private static string? ValidatePricingFields(PricingType type, decimal? price, decimal? minBid, decimal? bidStep, DateTime? auctionEnd)
+    /// <summary>
+    /// Composable pricing validation.
+    /// </summary>
+    private static string? ValidatePricingFields(
+        decimal? price, bool acceptOffers,
+        decimal? minOfferPrice, decimal? offerStep, DateTime? endDate)
     {
-        // Per-type required fields
-        switch (type)
-        {
-            case PricingType.Fixed:
-                if (!price.HasValue || price.Value <= 0)
-                    return "PRICE_REQUIRED";
-                break;
+        // Must have price or accept offers (otherwise nothing for buyers to do)
+        if (!price.HasValue && !acceptOffers)
+            return "NO_BUYER_ACTION";
 
-            case PricingType.FixedOffers:
-                if (!price.HasValue || price.Value <= 0)
-                    return "PRICE_REQUIRED";
-                if (minBid.HasValue && minBid.Value > price.Value)
-                    return "MIN_OFFER_EXCEEDS_PRICE";
-                break;
+        // Price must be positive when set
+        if (price.HasValue && price.Value <= 0)
+            return "PRICE_POSITIVE";
 
-            case PricingType.Bidding:
-                // MinBidPrice is optional for open bidding
-                break;
+        // End date requires offers to be enabled
+        if (endDate.HasValue && !acceptOffers)
+            return "ENDDATE_REQUIRES_OFFERS";
 
-            case PricingType.Auction:
-                if (!auctionEnd.HasValue)
-                    return "AUCTION_END_REQUIRED";
-                if (auctionEnd.Value <= DateTime.UtcNow.AddHours(1))
-                    return "AUCTION_END_TOO_SOON";
-                break;
-        }
+        // End date must be at least 1 hour in the future
+        if (endDate.HasValue && endDate.Value <= DateTime.UtcNow.AddHours(5))
+            return "ENDDATE_TOO_SOON";
 
-        // Cross-field: no negative values
-        if (price.HasValue && price.Value < 0)
-            return "PRICE_NEGATIVE";
-        if (minBid.HasValue && minBid.Value < 0)
-            return "MIN_BID_NEGATIVE";
-        if (bidStep.HasValue && bidStep.Value <= 0)
-            return "BID_STEP_POSITIVE";
+        // Min offer price can't exceed listed price
+        if (minOfferPrice.HasValue && price.HasValue && minOfferPrice.Value > price.Value)
+            return "MIN_OFFER_EXCEEDS_PRICE";
+
+        // No negative values
+        if (minOfferPrice.HasValue && minOfferPrice.Value < 0)
+            return "MIN_OFFER_NEGATIVE";
+
+        // Offer step is required when offers are enabled
+        if (acceptOffers && !offerStep.HasValue)
+            return "OFFER_STEP_REQUIRED";
+
+        // Offer step must be positive when set
+        if (offerStep.HasValue && offerStep.Value <= 0)
+            return "OFFER_STEP_POSITIVE";
 
         return null;
     }
 
     /// <summary>
-    /// Check if an auction item is locked (has bids, in grace period, etc.).
+    /// Check if a timed offer item is locked (has active offers and end date).
     /// Returns an error message if locked, null if editable.
+    /// Non-timed offer items are never locked (seller retains control).
     /// </summary>
-    private async Task<string?> CheckAuctionLock(Item item)
+    private async Task<string?> CheckOfferLock(Item item)
     {
-        if (item.PricingType != PricingType.Auction)
+        // Only timed items with offers can be locked
+        if (!item.AcceptOffers || !item.EndDate.HasValue)
             return null;
 
-        var hasBids = await _db.Bids.AnyAsync(b => b.ItemId == item.Id);
+        var hasOffers = await _db.Bids.AnyAsync(b => b.ItemId == item.Id);
 
-        if (hasBids)
+        if (hasOffers)
         {
-            // Auction with bids is locked
-            if (!item.AuctionEnd.HasValue || item.AuctionEnd.Value > DateTime.UtcNow)
-                return "AUCTION_LOCKED";
+            // Timed item with offers is locked
+            if (item.EndDate.Value > DateTime.UtcNow)
+                return "OFFERS_LOCKED";
 
-            // Auction ended — check 48h grace period
-            var gracePeriodEnd = item.AuctionEnd.Value.AddHours(48);
+            // Ended — check 48h grace period
+            var gracePeriodEnd = item.EndDate.Value.AddHours(48);
             if (DateTime.UtcNow < gracePeriodEnd)
-                return "AUCTION_GRACE_PERIOD";
+                return "OFFERS_GRACE_PERIOD";
         }
 
-        // No bids, or grace period expired → freely editable/deletable
+        // No offers, or grace period expired → freely editable/deletable
         return null;
     }
 
@@ -685,11 +708,11 @@ public class ItemsController : ControllerBase
             CategoryId = item.CategoryId,
             CategoryName = item.Category?.Name ?? "",
             Condition = item.Condition,
-            PricingType = item.PricingType,
             Price = item.Price,
-            MinBidPrice = item.MinBidPrice,
-            BidStep = item.BidStep,
-            AuctionEnd = item.AuctionEnd,
+            AcceptOffers = item.AcceptOffers,
+            MinOfferPrice = item.MinOfferPrice,
+            OfferStep = item.OfferStep,
+            EndDate = item.EndDate,
             Visibility = item.Visibility,
             Location = item.Location,
             CanShip = item.CanShip,

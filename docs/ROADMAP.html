@@ -276,7 +276,7 @@
 <div class="header">
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
-    <p>// click any task to toggle status · last updated 2026-04-25</p>
+    <p>// click any task to toggle status · last updated 2026-05-07</p>
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
     <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
@@ -289,6 +289,7 @@
     <!-- Session: 2026-04-25 — Auction bidding system (Phase 4 Step 7), backend error codes i18n, Playwright E2E tests (15 tests), Railway deployment, date picker UX fix, price input polish, Cloudinary config. Added roadmap task: unverified email UX (login allowed, guest permissions, warning banner). -->
     <!-- Session: 2026-05-05 — Phase 3 Stalls: Stall model + CRUD + background images + stall items page with activity badges, attention filter, drag-and-drop custom ordering. Phase 7: Homepage feed with category chips, infinite scroll, public item detail page. -->
     <!-- Session: 2026-05-06 — Item ordering (SortOrder + sort param + reorder endpoint). Activity badges (bid counts, highest bid, ended/ending soon). 3-step add item wizard (/my-stalls/[id]/items/new). Shared ImageManager component (arrow-based reorder, no dnd-kit). Reusable ImageLightbox. ConfirmDialog, ImageCropDialog. -->
+    <!-- Session: 2026-05-07 — Composable pricing system (replaced PricingType enum with AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate). 5-condition enum (New/LikeNew/Good/Fair/Poor, replaced New/Used/Worn). Unified item form (3-tab add+edit, replaced separate modal+wizard). 2-step add wizard (down from 3). Countdown delete confirmation dialog (3s/5s). Field-based card indicators (removed TypeTag). DateTimePicker component. Updated all controllers, DTOs, public projections, i18n (EN+LV). Two migrations: AddComposablePricing + UpdateConditionEnum. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -592,6 +593,26 @@
     <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Reusable ImageLightbox — fullscreen image preview on item cards</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Composable pricing — replaced PricingType enum with toggle-based fields (AcceptOffers, EndDate, etc.)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">5-condition enum (New / LikeNew / Good / Fair / Poor) — replaced 3-value</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Unified item form — 3-tab component (Details, Pricing, Terms) for both add + edit</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Countdown delete confirmation dialog (3s normal, 5s with active offers)</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">

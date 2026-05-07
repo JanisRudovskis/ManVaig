@@ -14,16 +14,19 @@ export interface ItemImage {
 export interface ItemResponse {
   id: string;
   userId: string;
+  stallId: string;
+  stallName: string;
   title: string;
   description: string | null;
   categoryId: number;
   categoryName: string;
   condition: number; // 0=New, 1=Used, 2=Worn
-  pricingType: number; // 0=Fixed, 1=FixedOffers, 2=Bidding, 3=Auction
+  // Composable pricing fields
   price: number | null;
-  minBidPrice: number | null;
-  bidStep: number | null;
-  auctionEnd: string | null;
+  acceptOffers: boolean;
+  minOfferPrice: number | null;
+  offerStep: number | null;
+  endDate: string | null;
   visibility: number; // 0=Public, 1=RegisteredOnly, 2=LinkOnly, 3=Private
   location: string | null;
   canShip: boolean;
@@ -61,11 +64,12 @@ export interface CreateItemData {
   description?: string;
   categoryId: number;
   condition?: number;
-  pricingType?: number;
+  // Composable pricing fields
   price?: number | null;
-  minBidPrice?: number | null;
-  bidStep?: number | null;
-  auctionEnd?: string | null;
+  acceptOffers?: boolean;
+  minOfferPrice?: number | null;
+  offerStep?: number | null;
+  endDate?: string | null;
   visibility?: number;
   location?: string;
   canShip?: boolean;
@@ -78,32 +82,29 @@ export interface UpdateItemData {
   description?: string;
   categoryId?: number;
   condition?: number;
-  pricingType?: number;
+  // Composable pricing fields
   price?: number | null;
-  minBidPrice?: number | null;
-  bidStep?: number | null;
-  auctionEnd?: string | null;
+  acceptOffers?: boolean;
+  minOfferPrice?: number | null;
+  offerStep?: number | null;
+  endDate?: string | null;
   visibility?: number;
   location?: string;
   canShip?: boolean;
   allowGuestOffers?: boolean;
   tags?: string[];
   clearPricingFields?: boolean;
+  stallId?: string;
 }
 
 // === Enums (matching backend) ===
 
-export const PricingType = {
-  Fixed: 0,
-  FixedOffers: 1,
-  Bidding: 2,
-  Auction: 3,
-} as const;
-
 export const Condition = {
   New: 0,
-  Used: 1,
-  Worn: 2,
+  LikeNew: 1,
+  Good: 2,
+  Fair: 3,
+  Poor: 4,
 } as const;
 
 export const ItemVisibility = {
@@ -112,6 +113,29 @@ export const ItemVisibility = {
   LinkOnly: 2,
   Private: 3,
 } as const;
+
+// === Pricing helpers ===
+
+/** Item accepts offers from buyers */
+export function hasOffers(item: { acceptOffers: boolean }): boolean {
+  return item.acceptOffers;
+}
+
+/** Item has a timed end date */
+export function isTimed(item: { endDate: string | null }): boolean {
+  return item.endDate != null;
+}
+
+/** Item has ended (end date in the past) */
+export function isEnded(item: { endDate: string | null }): boolean {
+  if (!item.endDate) return false;
+  return new Date(item.endDate).getTime() < Date.now();
+}
+
+/** Item is fixed-price only (no offers) */
+export function isFixedOnly(item: { acceptOffers: boolean; price: number | null }): boolean {
+  return !item.acceptOffers && item.price != null;
+}
 
 // === API Functions ===
 
@@ -277,11 +301,12 @@ export interface PublicItemCard {
   categoryId: number;
   categoryName: string;
   condition: number;
-  pricingType: number;
+  // Composable pricing fields
   price: number | null;
-  minBidPrice: number | null;
-  bidStep: number | null;
-  auctionEnd: string | null;
+  acceptOffers: boolean;
+  minOfferPrice: number | null;
+  offerStep: number | null;
+  endDate: string | null;
   location: string | null;
   canShip: boolean;
   createdAt: string;

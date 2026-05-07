@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ImageIcon, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { TypeTag, PriceDisplay, timeAgo } from "@/components/item-card-shared";
+import { PriceDisplay, EndDatePill, timeAgo } from "@/components/item-card-shared";
 import type { PublicItemCard as PublicItemCardType } from "@/lib/items";
 import type { ItemImage } from "@/lib/items";
 
@@ -19,9 +19,13 @@ interface PublicItemCardProps {
 function CardImageCarousel({
   images,
   alt,
+  endDate,
+  t,
 }: {
   images: ItemImage[];
   alt: string;
+  endDate: string | null;
+  t: (key: string) => string;
 }) {
   const sorted = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
   const total = sorted.length;
@@ -82,8 +86,9 @@ function CardImageCarousel({
 
   if (total === 0) {
     return (
-      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted">
+      <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
         <ImageIcon className="size-12 text-muted-foreground" />
+        {endDate && <EndDatePill end={endDate} t={t} />}
       </div>
     );
   }
@@ -102,6 +107,9 @@ function CardImageCarousel({
         alt={alt}
         className="size-full object-cover"
       />
+
+      {/* End date pill */}
+      {endDate && <EndDatePill end={endDate} t={t} />}
 
       {/* Dot indicators */}
       {total > 1 && (
@@ -132,11 +140,13 @@ export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
       onClick={() => onClick?.(item)}
       className="group relative flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-border/60"
     >
-      {/* Type tag */}
-      <TypeTag type={item.pricingType} t={t} />
-
-      {/* Image carousel */}
-      <CardImageCarousel images={item.images} alt={item.title} />
+      {/* Image carousel with end date pill */}
+      <CardImageCarousel
+        images={item.images}
+        alt={item.title}
+        endDate={item.endDate}
+        t={t}
+      />
 
       {/* Info */}
       <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -144,14 +154,15 @@ export function PublicItemCard({ item, onClick }: PublicItemCardProps) {
           {item.title}
         </span>
         <PriceDisplay
-          pricingType={item.pricingType}
           price={item.price}
-          minBidPrice={item.minBidPrice}
-          bidStep={item.bidStep}
-          auctionEnd={item.auctionEnd}
+          acceptOffers={item.acceptOffers}
+          minOfferPrice={item.minOfferPrice}
+          offerStep={item.offerStep}
+          endDate={item.endDate}
           t={t}
           bidCount={item.bidCount}
           highestBid={item.highestBid}
+          hideEndedStatus
         />
       </div>
 

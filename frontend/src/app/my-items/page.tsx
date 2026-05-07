@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/lib/auth-context";
-import { fetchMyItems, PricingType, ItemVisibility } from "@/lib/items";
+import { fetchMyItems, ItemVisibility } from "@/lib/items";
 import type { ItemResponse } from "@/lib/items";
 import { ItemForm } from "@/components/item-form";
 import { BidsModal } from "@/components/bids-modal";
 import {
   formatPrice,
   timeAgo,
-  isAuctionEnded,
-  TypeTag,
+  isEnded,
+  EndDatePill,
   PriceDisplay,
   ItemCardSkeleton,
 } from "@/components/item-card-shared";
@@ -31,22 +31,18 @@ function visibilityKey(vis: number): string | null {
   }
 }
 
-// === Visibility Tag ===
+// === Visibility Label ===
 
-function VisibilityTag({ visibility, t }: { visibility: number; t: (key: string) => string }) {
+function VisibilityLabel({ visibility, t }: { visibility: number; t: (key: string) => string }) {
   const key = visibilityKey(visibility);
   if (!key) return null;
-
   const colorMap: Record<string, string> = {
-    private: "bg-zinc-500",
-    registered: "bg-yellow-500 text-black",
-    linkOnly: "bg-teal-500",
+    private: "text-red-400",
+    registered: "text-red-400",
+    linkOnly: "text-red-400",
   };
-
   return (
-    <span
-      className={`absolute top-0 right-0 z-10 rounded-tr-[calc(var(--radius)*1.4)] rounded-bl-[calc(var(--radius)*0.6)] px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white ${colorMap[key]}`}
-    >
+    <span className={`text-xs font-semibold ${colorMap[key]}`}>
       {t(`vis_${key}`)}
     </span>
   );
@@ -65,21 +61,15 @@ function ItemCard({
   onEdit: (item: ItemResponse) => void;
   onViewBids?: (item: ItemResponse) => void;
 }) {
-  const ended = isAuctionEnded(item.auctionEnd, item.pricingType);
+  const ended = isEnded(item.endDate);
   const primaryImage = item.images.find((img) => img.isPrimary) ?? item.images[0];
 
   return (
     <div
       className={`relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80 ${ended ? "opacity-60 hover:opacity-80" : ""}`}
     >
-      {/* Type tag */}
-      <TypeTag type={item.pricingType} t={t} />
-
-      {/* Visibility tag */}
-      <VisibilityTag visibility={item.visibility} t={t} />
-
       {/* Image */}
-      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted">
+      <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
         {primaryImage ? (
           <img
             src={primaryImage.url}
@@ -89,6 +79,7 @@ function ItemCard({
         ) : (
           <ImageIcon className="size-12 text-muted-foreground" />
         )}
+        {item.endDate && <EndDatePill end={item.endDate} t={t} />}
       </div>
 
       {/* Info */}
@@ -97,11 +88,11 @@ function ItemCard({
           {item.title}
         </span>
         <PriceDisplay
-          pricingType={item.pricingType}
           price={item.price}
-          minBidPrice={item.minBidPrice}
-          bidStep={item.bidStep}
-          auctionEnd={item.auctionEnd}
+          acceptOffers={item.acceptOffers}
+          minOfferPrice={item.minOfferPrice}
+          offerStep={item.offerStep}
+          endDate={item.endDate}
           t={t}
         />
       </div>
@@ -109,15 +100,18 @@ function ItemCard({
       {/* Separator + Footer */}
       <hr className="mx-3 border-border" />
       <div className="flex items-center justify-between px-3 py-2">
-        <span className="truncate text-xs text-muted-foreground">
-          {t("listed")} {timeAgo(item.createdAt, t)}
-        </span>
+        <div className="flex min-w-0 items-center gap-2 truncate">
+          <span className="truncate text-xs text-muted-foreground">
+            {t("listed")} {timeAgo(item.createdAt, t)}
+          </span>
+          <VisibilityLabel visibility={item.visibility} t={t} />
+        </div>
         <div className="flex shrink-0 items-center gap-1">
-          {item.pricingType === PricingType.Auction && onViewBids && (
+          {item.acceptOffers && onViewBids && (
             <button
               onClick={() => onViewBids(item)}
               className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title={t("type_auction")}
+              title={t("viewBids")}
             >
               <HandCoins className="size-4" />
             </button>
@@ -164,7 +158,6 @@ export default function MyItemsPage() {
   const [maxItems, setMaxItems] = useState(10);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<"add" | "edit">("add");
   const [editingItem, setEditingItem] = useState<ItemResponse | null>(null);
   const [bidsItem, setBidsItem] = useState<ItemResponse | null>(null);
 
@@ -190,13 +183,10 @@ export default function MyItemsPage() {
   }, [authLoading, isLoggedIn, router]);
 
   const handleAdd = () => {
-    setFormMode("add");
-    setEditingItem(null);
-    setFormOpen(true);
+    router.push("/my-stalls");
   };
 
   const handleEdit = (item: ItemResponse) => {
-    setFormMode("edit");
     setEditingItem(item);
     setFormOpen(true);
   };
@@ -260,10 +250,10 @@ export default function MyItemsPage() {
         </div>
       )}
 
-      {/* Add/Edit form modal */}
-      {formOpen && (
+      {/* Edit form modal */}
+      {formOpen && editingItem && (
         <ItemForm
-          mode={formMode}
+          mode="edit"
           item={editingItem}
           onClose={handleFormClose}
           onSaved={handleFormSaved}

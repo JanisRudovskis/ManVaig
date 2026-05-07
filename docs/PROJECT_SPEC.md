@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-03-27 (rev 12 — items management model updates, prototype-driven decisions)
-> **Status:** 🟢 Phase 2 auth done, Phase 4 items in progress
+> **Last updated:** 2026-05-07 (rev 13 — composable pricing, 5-condition enum, unified item form)
+> **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done
 
 ---
 
@@ -57,19 +57,21 @@
 - 💡 Multiple shops per user (DB supports it, UI limited to 1 for now)
 
 ### Item Listings
-- 🕐 Add item (title, description, category, tags, images, condition, pricing type)
-- 🕐 Edit / delete item
-- 🕐 Seller "My Items" management page (card grid, type/visibility tags)
-- 🕐 Pricing types: Fixed Price / Fixed + Offers / Open Bidding / Auction
-- 🕐 Image upload (max 5 per item, compressed via Cloudinary)
-- 🕐 Category system (12 flat categories + free-form tags)
-- 🕐 Item location (Nominatim autocomplete, city+country) + can ship flag
-- 🕐 Visibility: Public / RegisteredOnly / LinkOnly / Private (all active in UI)
-- 🕐 Allow guest offers toggle per item (default off)
-- 🕐 Item limit per user (MaxItems, default 10, manually adjustable in DB for v1, purchasable in future)
-- 🕐 Ended auctions become readonly (winner visible)
-- 🕐 Auction bidders list (view who placed bids)
-- 🕐 Public item detail page (deferred to Phase 5)
+- ✅ Add item (2-step wizard: describe → pricing + terms)
+- ✅ Edit / delete item (unified 3-tab form: Details, Pricing, Terms)
+- ✅ Seller "My Items" management page (card grid, field-based indicators)
+- ✅ Composable pricing: Price (optional) + Accept Offers toggle + End Date toggle
+- ✅ 5-condition enum: New / LikeNew / Good / Fair / Poor
+- ✅ Image upload (max 5 per item, compressed via Cloudinary)
+- ✅ Category system (12 flat categories + free-form tags)
+- ✅ Item location (Nominatim autocomplete, city+country) + can ship flag
+- ✅ Visibility: Public / RegisteredOnly / LinkOnly / Private
+- ✅ Allow guest offers toggle per item (default off)
+- ✅ Item limit per user (MaxItems, default 10, manually adjustable in DB for v1)
+- ✅ Timed items with active offers become readonly (winner visible)
+- ✅ Offer/bid history (view who placed offers)
+- ✅ Public item detail page
+- ✅ Countdown delete confirmation dialog (3s/5s safety timer)
 - 💡 Advanced filters (price range, condition, location)
 
 ### Offer System
@@ -211,23 +213,27 @@ Tag
 
 Item
   - Id (uuid)
-  - UserId → User                            ← direct link for v1 (no Shop dependency); migrate to ShopId in Phase 3
+  - UserId → User
+  - StallId → Stall (nullable)              ← items belong to a stall
   - CategoryId → Category
   - Title
   - Description
-  - Condition (enum: New / Used / Worn)
-  - PricingType (enum: Fixed / FixedOffers / Bidding / Auction)
-  - Price (decimal, nullable)                ← used by Fixed & FixedOffers
-  - MinBidPrice (decimal, nullable)          ← floor price for Bidding & Auction
-  - BidStep (decimal, nullable)              ← minimum increment for Auction
-  - AuctionEnd (DateTime, nullable)          ← end time for Auction only
+  - Condition (enum: New / LikeNew / Good / Fair / Poor)
+  - Price (decimal, nullable)                ← listed/asking price (optional)
+  - AcceptOffers (bool, default false)       ← whether buyers can make offers
+  - MinOfferPrice (decimal, nullable)        ← floor price for offers
+  - OfferStep (decimal, nullable)            ← minimum increment between offers
+  - EndDate (DateTime, nullable)             ← when offers close (timed items)
   - Visibility (enum: Public / RegisteredOnly / LinkOnly / Private, default: Public)
   - Location (string, nullable)              ← Nominatim autocomplete, stores "City, Country"
   - CanShip (bool, default false)            ← local pickup vs shipping
   - AllowGuestOffers (bool, default false)   ← unregistered users can submit offers
+  - SortOrder (int, default 0)              ← custom ordering within stall
   - CreatedAt
   - UpdatedAt
-  NOTE: no Status enum for v1. Seller removes item when done. Ended auctions derived from AuctionEnd < now (readonly).
+  NOTE: no PricingType enum — type derived from field combination (price-only, offers, timed, etc.)
+  NOTE: must have Price OR AcceptOffers=true (cannot have neither)
+  NOTE: no Status enum for v1. Seller removes item when done. Ended items derived from EndDate < now.
   NOTE: item count enforced against User.MaxItems at API level
 
 ItemImage
@@ -320,6 +326,10 @@ Notification
 | 40 | No item Status enum for v1 | No sold history, no "Under Offer". Seller removes item when done. Ended auctions derived from AuctionEnd < now. | 2026-03-27 |
 | 41 | Item location via Nominatim | OpenStreetMap Nominatim autocomplete (free, global, no API key). Stores "City, Country" string. Pre-filled from user profile. | 2026-03-27 |
 | 42 | AllowAnonymousOffers → AllowGuestOffers | Renamed for clarity. "Guest" = unregistered user. | 2026-03-27 |
+| 43 | ~~PricingType enum~~ → Composable pricing fields | Replaced 4-value enum with AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate. Type derived from field combination. More flexible, no artificial limits. | 2026-05-07 |
+| 44 | 5-condition enum (New/LikeNew/Good/Fair/Poor) | Replaced 3-value (New/Used/Worn). Gives buyers better signal on item quality. Data migration: Used→Good, Worn→Poor. | 2026-05-07 |
+| 45 | Unified item form (add + edit) | Single 3-tab component (Details, Pricing, Terms) used by both add wizard and edit modal. Eliminates code duplication. | 2026-05-07 |
+| 46 | Countdown delete confirmation | 3s countdown for normal items, 5s for items with active offers. Prevents accidental deletion without friction for intentional deletes. | 2026-05-07 |
 
 ---
 
@@ -357,7 +367,7 @@ Notification
 - [x] Anonymous offers — seller opt-in per item; contact snapshot stored on Offer
 - [x] Contact blacklist — deferred post-v1
 - [x] No built-in messaging in v1 — deferred to future
-- [x] PricingType enum (Fixed/FixedOffers/Bidding/Auction) — replaces single MinimumOfferPrice
+- [x] ~~PricingType enum~~ → Composable pricing fields (AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate)
 - [x] Item → User for v1 (not Shop) — migrate to ShopId in Phase 3
 - [x] MaxItems on User (default 10) — manually set in DB for v1, purchasable in future
 - [x] No item Status enum — seller removes when done, ended auctions derived from AuctionEnd

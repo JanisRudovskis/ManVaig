@@ -18,14 +18,14 @@ public class CreateItemRequest
 
     public int CategoryId { get; set; }
 
-    public Condition Condition { get; set; } = Condition.Used;
+    public Condition Condition { get; set; } = Condition.Good;
 
-    public PricingType PricingType { get; set; } = PricingType.Fixed;
-
+    // Composable pricing fields
     public decimal? Price { get; set; }
-    public decimal? MinBidPrice { get; set; }
-    public decimal? BidStep { get; set; }
-    public DateTime? AuctionEnd { get; set; }
+    public bool AcceptOffers { get; set; }
+    public decimal? MinOfferPrice { get; set; }
+    public decimal? OfferStep { get; set; }
+    public DateTime? EndDate { get; set; }
 
     public ItemVisibility Visibility { get; set; } = ItemVisibility.Public;
 
@@ -50,12 +50,12 @@ public class UpdateItemRequest
 
     public Condition? Condition { get; set; }
 
-    public PricingType? PricingType { get; set; }
-
+    // Composable pricing fields
     public decimal? Price { get; set; }
-    public decimal? MinBidPrice { get; set; }
-    public decimal? BidStep { get; set; }
-    public DateTime? AuctionEnd { get; set; }
+    public bool? AcceptOffers { get; set; }
+    public decimal? MinOfferPrice { get; set; }
+    public decimal? OfferStep { get; set; }
+    public DateTime? EndDate { get; set; }
 
     public ItemVisibility? Visibility { get; set; }
 
@@ -69,7 +69,7 @@ public class UpdateItemRequest
 
     /// <summary>
     /// Sentinel to distinguish "field not sent" from "set to null".
-    /// When true, nullable pricing fields (Price, MinBidPrice, BidStep, AuctionEnd)
+    /// When true, nullable pricing fields (Price, MinOfferPrice, OfferStep, EndDate)
     /// will be cleared even if sent as null.
     /// </summary>
     public bool ClearPricingFields { get; set; }
@@ -91,11 +91,14 @@ public class ItemResponse
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = default!;
     public Condition Condition { get; set; }
-    public PricingType PricingType { get; set; }
+
+    // Composable pricing fields
     public decimal? Price { get; set; }
-    public decimal? MinBidPrice { get; set; }
-    public decimal? BidStep { get; set; }
-    public DateTime? AuctionEnd { get; set; }
+    public bool AcceptOffers { get; set; }
+    public decimal? MinOfferPrice { get; set; }
+    public decimal? OfferStep { get; set; }
+    public DateTime? EndDate { get; set; }
+
     public ItemVisibility Visibility { get; set; }
     public string? Location { get; set; }
     public bool CanShip { get; set; }

@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { fetchPublicItem, PricingType, Condition } from "@/lib/items";
+import { fetchPublicItem, Condition } from "@/lib/items";
 import type { PublicItemDetail } from "@/lib/items";
 import { ImageGallery } from "@/components/image-gallery";
-import { formatPrice, AuctionCountdown, pricingTypeKey } from "@/components/item-card-shared";
+import { formatPrice, EndDateCountdown, isEnded } from "@/components/item-card-shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,6 @@ import {
   Package,
   Truck,
   Tag,
-  Clock,
   TrendingUp,
   DollarSign,
   MessageCircle,
@@ -28,9 +27,11 @@ import {
 function conditionLabel(condition: number, t: (key: string) => string): string {
   switch (condition) {
     case Condition.New: return t("condNew");
-    case Condition.Used: return t("condUsed");
-    case Condition.Worn: return t("condWorn");
-    default: return t("condUsed");
+    case Condition.LikeNew: return t("condLikeNew");
+    case Condition.Good: return t("condGood");
+    case Condition.Fair: return t("condFair");
+    case Condition.Poor: return t("condPoor");
+    default: return t("condGood");
   }
 }
 
@@ -46,74 +47,49 @@ function DetailPricing({
   const priceClass = "text-2xl font-bold text-emerald-400";
   const labelClass = "text-sm text-muted-foreground";
 
-  switch (item.pricingType) {
-    case PricingType.Fixed:
-      return (
-        <div className="flex flex-col gap-1">
-          <span className={priceClass}>{formatPrice(item.price)}</span>
-          <span className={labelClass}>{t("fixedPrice")}</span>
-        </div>
-      );
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Main price */}
+      {item.price != null ? (
+        <span className={priceClass}>{formatPrice(item.price)}</span>
+      ) : item.acceptOffers ? (
+        <span className={priceClass}>{t("openBidding")}</span>
+      ) : null}
 
-    case PricingType.FixedOffers:
-      return (
-        <div className="flex flex-col gap-1">
-          <span className={priceClass}>{formatPrice(item.price)}</span>
-          <span className={labelClass}>{t("acceptsOffers")}</span>
-        </div>
-      );
+      {/* Accepts offers label */}
+      {item.acceptOffers && (
+        <span className={labelClass}>{t("acceptsOffers")}</span>
+      )}
 
-    case PricingType.Bidding:
-      return (
-        <div className="flex flex-col gap-1">
-          {item.highestBid != null ? (
-            <>
-              <span className={priceClass}>{formatPrice(item.highestBid)}</span>
-              <span className={labelClass}>{t("highestBid")} · {t("bids", { count: item.bidCount })}</span>
-            </>
-          ) : (
-            <>
-              <span className={priceClass}>{t("openBidding")}</span>
-              {item.minBidPrice != null && (
-                <span className={labelClass}>{t("startingPrice")}: {formatPrice(item.minBidPrice)}</span>
-              )}
-            </>
-          )}
-        </div>
-      );
+      {/* Highest bid info */}
+      {item.acceptOffers && item.highestBid != null && (
+        <span className={labelClass}>
+          {t("highestBid")}: {formatPrice(item.highestBid)} · {t("bids", { count: item.bidCount })}
+        </span>
+      )}
 
-    case PricingType.Auction:
-      return (
-        <div className="flex flex-col gap-2">
-          {item.highestBid != null ? (
-            <>
-              <span className={priceClass}>{formatPrice(item.highestBid)}</span>
-              <span className={labelClass}>{t("highestBid")} · {t("bids", { count: item.bidCount })}</span>
-            </>
-          ) : (
-            <>
-              <span className={priceClass}>{formatPrice(item.minBidPrice)}</span>
-              <span className={labelClass}>{t("startingPrice")}</span>
-            </>
-          )}
-          {item.bidStep != null && (
-            <span className={labelClass}>{t("bidStep")}: {formatPrice(item.bidStep)}</span>
-          )}
-          {item.auctionEnd && (
-            <div className="mt-1">
-              <AuctionCountdown end={item.auctionEnd} t={(key: string) => {
-                if (key === "ended") return t("auctionEnded");
-                if (key === "endsIn") return t("endsIn");
-                return key;
-              }} />
-            </div>
-          )}
-        </div>
-      );
+      {/* Min offer */}
+      {item.acceptOffers && item.minOfferPrice != null && (
+        <span className={labelClass}>{t("minOffer")}: {formatPrice(item.minOfferPrice)}</span>
+      )}
 
-    default:
-      return null;
-  }
+      {/* Offer step */}
+      {item.acceptOffers && item.offerStep != null && (
+        <span className={labelClass}>{t("offerStep")}: {formatPrice(item.offerStep)}</span>
+      )}
+
+      {/* End date countdown */}
+      {item.endDate && (
+        <div className="mt-1">
+          <EndDateCountdown end={item.endDate} t={(key: string) => {
+            if (key === "ended") return t("auctionEnded");
+            if (key === "endsIn") return t("endsIn");
+            return key;
+          }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // === Action button ===
@@ -127,31 +103,23 @@ function ActionButton({ item, t }: { item: PublicItemDetail; t: (key: string) =>
   // Don't show action button for the item's owner
   if (item.isOwner) return null;
 
-  const isAuctionEnded = item.pricingType === PricingType.Auction
-    && item.auctionEnd
-    && new Date(item.auctionEnd).getTime() < Date.now();
-
-  if (isAuctionEnded) return null;
+  // No action if ended
+  if (isEnded(item.endDate)) return null;
 
   let label: string;
   let Icon = DollarSign;
 
-  switch (item.pricingType) {
-    case PricingType.Fixed:
-      label = t("buyNow");
-      Icon = DollarSign;
-      break;
-    case PricingType.FixedOffers:
-      label = t("makeOffer");
-      Icon = MessageCircle;
-      break;
-    case PricingType.Bidding:
-    case PricingType.Auction:
-      label = t("placeBid");
-      Icon = TrendingUp;
-      break;
-    default:
-      label = t("makeOffer");
+  if (!item.acceptOffers && item.price) {
+    label = t("buyNow");
+    Icon = DollarSign;
+  } else if (item.acceptOffers && item.endDate && !isEnded(item.endDate)) {
+    label = t("placeBid");
+    Icon = TrendingUp;
+  } else if (item.acceptOffers) {
+    label = t("makeOffer");
+    Icon = MessageCircle;
+  } else {
+    return null;
   }
 
   return (
@@ -187,6 +155,7 @@ export default function ItemDetailPage() {
   const params = useParams();
   const router = useRouter();
   const t = useTranslations("itemDetail");
+  const tc = useTranslations("categories");
   const id = params.id as string;
 
   const [item, setItem] = useState<PublicItemDetail | null>(null);
@@ -233,14 +202,6 @@ export default function ItemDetailPage() {
     );
   }
 
-  const typeKey = pricingTypeKey(item.pricingType);
-  const typeColorMap: Record<string, string> = {
-    fixed: "bg-blue-500",
-    offers: "bg-purple-500",
-    bidding: "bg-orange-500",
-    auction: "bg-orange-500",
-  };
-
   return (
     <div className="mx-auto max-w-[900px] px-4 py-6 md:px-6 md:py-8">
       {/* Back link */}
@@ -261,11 +222,8 @@ export default function ItemDetailPage() {
 
         {/* Right: Info */}
         <div className="flex flex-col gap-4">
-          {/* Type + Condition badges */}
+          {/* Condition badge */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase text-white ${typeColorMap[typeKey]}`}>
-              {t(typeKey === "fixed" ? "fixedPrice" : typeKey === "offers" ? "acceptsOffers" : typeKey === "bidding" ? "openBidding" : "auction")}
-            </span>
             <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
               {conditionLabel(item.condition, t)}
             </span>
@@ -276,7 +234,7 @@ export default function ItemDetailPage() {
 
           {/* Category */}
           <span className="text-sm text-muted-foreground">
-            {t("category")}: {item.categoryName}
+            {t("category")}: {tc.has(String(item.categoryId)) ? tc(String(item.categoryId)) : item.categoryName}
           </span>
 
           {/* Pricing */}

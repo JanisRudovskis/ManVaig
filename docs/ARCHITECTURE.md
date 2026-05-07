@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-06 (stalls system, item ordering, activity badges, add item wizard, shared ImageManager)
+> Last updated: 2026-05-07 (composable pricing, 5-condition enum, unified item form, delete confirmation dialog)
 
 ---
 
@@ -115,6 +115,17 @@ All routes under `/api/v1/`:
 
 **Items ↔ Stalls**: Items have optional `StallId`. `GET /api/v1/items` supports `?stallId=` filter + `?sort=newest|oldest|priceAsc|priceDesc|custom` parameter.
 
+**Composable Pricing**: Items no longer use a `PricingType` enum. Instead, pricing is derived from composable fields:
+- `Price` (decimal?) — listed/asking price
+- `AcceptOffers` (bool) — whether buyers can make offers
+- `MinOfferPrice` (decimal?) — floor for offers
+- `OfferStep` (decimal?) — minimum increment between offers
+- `EndDate` (DateTime?) — when offers close (timed items)
+
+Valid combinations: price-only, price+offers, offers-only, any with end date (when offers enabled). Must have price OR acceptOffers enabled.
+
+**Condition Enum**: 5 values — New(0), LikeNew(1), Good(2), Fair(3), Poor(4). Migrated from old 3-value (New/Used/Worn).
+
 **Item Ordering**: `SortOrder` field on Item. `PUT /api/v1/items/reorder` endpoint (same pattern as stalls). Custom sort orders items by SortOrder then CreatedAt.
 
 **Bid Summary on Items**: `ItemResponse` includes `BidCount` and `HighestBid` (computed from Bids navigation property, active bids only).
@@ -166,7 +177,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `common`
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -229,7 +240,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/my-items` | `MyItemsPage` + `ItemForm` modal | Client component, auth required |
 | `/my-stalls` | `MyStallsPage` | Stall list + create, auth required |
 | `/my-stalls/[id]` | `StallItemsPage` | Stall items grid, activity badges, filters, reorder, edit stall |
-| `/my-stalls/[id]/items/new` | `AddItemPage` | 3-step wizard: category+type → describe → terms |
+| `/my-stalls/[id]/items/new` | `AddItemPage` | 2-step wizard: step 1 = describe (category, images, details), step 2 = pricing + terms (uses ItemForm) |
 | `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
 
 ### Component Map
@@ -252,13 +263,15 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color (xs/sm/md/lg sizes) |
 | AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload (updates auth context) |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
-| ItemForm | `components/item-form.tsx` | Edit item modal (uses ImageManager, LocationSearch) |
+| ItemForm | `components/item-form.tsx` | Unified add+edit item form (3 tabs: Details, Pricing, Terms). Modal for edit, embedded in wizard for add. Uses ImageManager, LocationSearch, DateTimePicker. Includes countdown delete confirmation dialog. |
 | ImageManager | `components/image-manager.tsx` | Shared image add/delete/reorder — arrow-based (mobile-friendly), no dnd-kit. Used by both add wizard and edit modal. Exports `FormImage` type. |
 | ImageLightbox | `components/image-lightbox.tsx` | Fullscreen image preview overlay — arrow keys, escape, prev/next, counter. Reusable (used by ImageGallery + stall item cards). |
 | ImageGallery | `components/image-gallery.tsx` | Item detail page image gallery with thumbnails, uses ImageLightbox. |
 | ConfirmDialog | `components/confirm-dialog.tsx` | Generic confirmation dialog (title, message, confirm/cancel). |
-| ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, TypeTag, AuctionCountdown, timeAgo, isAuctionEnded. |
-| BidsModal | `components/bids-modal.tsx` | Auction bid history popup with winner assignment. |
+| ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, EndDateCountdown, timeAgo, isEnded. Field-based indicators (no TypeTag). |
+| ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
+| BidsModal | `components/bids-modal.tsx` | Offer/bid history popup with winner assignment. |
+| DateTimePicker | `components/datetime-picker.tsx` | Combined date + time picker for end dates. Uses shadcn Calendar + time inputs. |
 
 ### shadcn/ui Components Installed
 
@@ -330,9 +343,9 @@ Interactive HTML prototype for the seller's "My Items" page. Serves as the desig
 
 **Add/Edit Form (slide-in panel):**
 - Images: up to 5, drag-to-reorder, star marks primary, delete per image
-- Basic Info: Title*, Description, Category* (12 broad categories dropdown), Location (Nominatim autocomplete), Condition (New/Used/Worn segmented)
-- Pricing Type: 4 cards — Fixed Price, Fixed + Offers, Open Bidding, Auction
-  - Each type shows relevant fields (price, min bid, step, auction end date)
+- Basic Info: Title*, Description, Category* (12 broad categories dropdown), Location (Nominatim autocomplete), Condition (New/LikeNew/Good/Fair/Poor segmented)
+- Composable Pricing: Price field (optional) + Accept Offers toggle + End Date toggle
+  - Progressive disclosure: sub-fields appear when toggles are ON
 - Tags: free-form tag input (max 10)
 - Visibility & Options: Public/Registered/Link Only/Private dropdown, guest offers toggle, can-ship toggle
 - Delete button: only in Edit mode, bottom of form
@@ -371,40 +384,45 @@ Build order for items management (from prototype → actual environment):
 **Key model decisions (from plan audit):**
 - Item → UserId (not ShopId) — no Shop dependency in v1, migrate in Phase 3
 - Category: flat (Id, Name, SortOrder) — no tree hierarchy
-- PricingType enum: Fixed / FixedOffers / Bidding / Auction
-- No Status enum — seller removes item, ended auctions derived from AuctionEnd < now
+- Composable pricing: AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate (replaced PricingType enum)
+- Condition: 5-value enum (New, LikeNew, Good, Fair, Poor) — replaced 3-value (New, Used, Worn)
+- No Status enum — seller removes item, ended items derived from EndDate < now
 - MaxItems on User (default 10) — manually set in DB, purchasable in future
 - Location: Nominatim autocomplete, stores "City, Country" string
 
-**Validation rules (agreed 2026-03-28):**
+**Validation rules (updated 2026-05-07 — composable pricing):**
 
-Common (all pricing types):
+Common:
 - Title — required, 3–100 chars
 - Category — required
-- Condition — required (New / Used / Worn)
-- Images — at least 1 required (enforce in Step 6 when upload lands)
+- Condition — required (New / LikeNew / Good / Fair / Poor)
+- Images — at least 1 required
 - Description — optional, max 2000 chars
 - Location — optional, max 200 chars
 - Tags — max 10, each max 30 chars
 
-Per pricing type:
-- **Fixed Price** — Price required, > 0, max 2 decimals
-- **Fixed + Offers** — Price required, > 0; MinOfferPrice optional (> 0, <= Price)
-- **Open Bidding** — no price required; MinBidPrice optional > 0; BidStep optional > 0
-- **Auction** — StartingPrice required > 0; AuctionEnd required (min 1h in future); BidStep optional > 0
+Composable pricing rules:
+- Must have price OR acceptOffers enabled (error: `NO_BUYER_ACTION`)
+- Price > 0 when set (error: `PRICE_POSITIVE`)
+- MinOfferPrice/OfferStep silently cleared when acceptOffers=false
+- EndDate requires acceptOffers=true (error: `ENDDATE_REQUIRES_OFFERS`)
+- EndDate must be ≥ 1h in future (error: `ENDDATE_TOO_SOON`)
+- MinOfferPrice ≤ Price when both set (error: `MIN_OFFER_EXCEEDS_PRICE`)
+- MinOfferPrice ≥ 0, OfferStep > 0 when set
 
-**Auction lifecycle:**
+**Offer lock lifecycle (timed items):**
 
 | State | Condition | Seller can do |
 |-------|-----------|--------------|
-| Draft | 0 bids | Edit everything, delete freely |
-| Active (locked) | 1+ bids | Nothing — fully readonly |
-| Ended (grace) | AuctionEnd passed, < 48h | Readonly, cannot delete. Winner visible. |
+| Draft | 0 offers | Edit everything, delete freely |
+| Active (locked) | EndDate set + AcceptOffers + 1+ active offers | Nothing — fully readonly |
+| Ended (grace) | EndDate passed, < 48h | Readonly, cannot delete. Winner visible. |
 | Settled | Grace period (48h) expired | Can delete/archive |
 
-- 0 bids at end → no grace period, seller can edit/delete immediately
-- No reserve price in v1 — starting price is effectively the reserve
-- Enforced both frontend (show/hide fields, i18n errors) and backend (same rules + 403 on locked auction edit/delete)
+- Non-timed offer items are NOT locked (seller retains control until manual accept)
+- 0 offers at end → no grace period, seller can edit/delete immediately
+- Anti-snipe: only applies when EndDate is set
+- Enforced both frontend (show/hide fields, i18n errors) and backend (same rules + 403 on locked item edit/delete)
 
 
 ## Phase Completion
@@ -412,8 +430,8 @@ Per pricing type:
 - **Phase 1** (Scaffolding): 6/7 done — Railway deploy working (backend + frontend + PostgreSQL)
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
-- **Phase 4** (Items): nearly complete — prototype, models, API, My Items page, Add/Edit form, validation, image upload, item ordering + reorder, activity badges (bid count, highest bid, ended/ending soon), 3-step add item wizard, shared ImageManager, ImageLightbox. Remaining: public item detail SSR improvements
-- **Phase 5** (Bidding): Auction bidding system implemented (Bid model, endpoints, bid history UI)
+- **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
+- **Phase 5** (Bidding): Bidding system implemented (Bid model, endpoints, bid history UI). Updated to use composable pricing fields.
 - **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page done. Remaining: browse page, category/tag filters
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
 - **Phase 6**: Not started

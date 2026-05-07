@@ -146,8 +146,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.Property(i => i.Description).HasMaxLength(5000);
             entity.Property(i => i.Location).HasMaxLength(200);
             entity.Property(i => i.Price).HasPrecision(10, 2);
-            entity.Property(i => i.MinBidPrice).HasPrecision(10, 2);
-            entity.Property(i => i.BidStep).HasPrecision(10, 2);
+            entity.Property(i => i.MinOfferPrice).HasPrecision(10, 2);
+            entity.Property(i => i.OfferStep).HasPrecision(10, 2);
 
             entity.HasOne(i => i.User)
                 .WithMany(u => u.Items)
