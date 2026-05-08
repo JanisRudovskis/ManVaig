@@ -57,7 +57,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
   Project to existing `PublicStallResponse` DTO (Id, Name, Slug, Description, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, AccentColor, ItemCount = public items only, PreviewImageUrls = up to 4 primary image URLs from public items, Owner = DisplayName/AvatarUrl/Location). Order by ItemCount desc then CreatedAt desc. Return `PublicStallListResponse`.
 - **Verify:** `cd backend && dotnet build ManVaig.sln`; `curl "http://localhost:5100/api/v1/public/stalls?q=test"` returns 200 JSON.
 - **Parallel:** false (depends on Tasks 1 and 3)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 5: Frontend — extend lib/items.ts + lib/stalls.ts with search clients
 - **Files:** `frontend/src/lib/items.ts`, `frontend/src/lib/stalls.ts`, `frontend/src/app/page.tsx` (call-site update)
