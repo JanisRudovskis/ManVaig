@@ -177,7 +177,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   Import `Users` from `lucide-react` (already imports other lucide icons in this file). The `t` for `nav` is already in scope. Add `nav.findPeople` to BOTH `en.json` ("Find people") and `lv.json` ("Atrast cilvēkus").
 - **Verify:** Open sidebar → click hamburger ("More") → popover opens → "Find people" is the first entry, with the Users icon. Click → popover closes, navigates to `/people`. Switch language to LV → entry shows "Atrast cilvēkus".
 - **Parallel:** false (depends on Task 6 page existing for the click target to resolve)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 8: Frontend — add `people.*` i18n strings (EN + LV)
 - **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`

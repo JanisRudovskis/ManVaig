@@ -9,7 +9,8 @@
     "login": "Login",
     "logout": "Logout",
     "more": "More",
-    "showListingTips": "Show listing tips"
+    "showListingTips": "Show listing tips",
+    "findPeople": "Find people"
   },
   "home": {
     "title": "Welcome to ManVaig",
