@@ -22,7 +22,7 @@ import {
 
 const navItems = [
   { key: "home", href: "/", icon: Home },
-  { key: "browse", href: "/browse", icon: Search },
+  { key: "browse", href: "/search", icon: Search },
   { key: "myStalls", href: "/my-stalls", icon: Store, auth: true },
   { key: "sell", href: "/sell", icon: PlusCircle },
   { key: "notifications", href: "/notifications", icon: Bell },
