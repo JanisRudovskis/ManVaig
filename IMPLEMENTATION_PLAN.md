@@ -72,7 +72,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   - Return `Ok(new PublicUserListResponse { Users = users, TotalCount = totalCount, Page = page, PageSize = pageSize })`.
 - **Verify:** `cd backend && dotnet build ManVaig.sln`. After API restart: `curl "http://localhost:5100/api/v1/public/users?q=cak&pageSize=5"` returns 200 JSON; should include the seed user "Čaks" (display name `Caks` — verify exact casing). `curl "http://localhost:5100/api/v1/public/users?q=ABC123XYZ"` returns 200 with `users: []`, `totalCount: 0`.
 - **Parallel:** false (depends on Task 1)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 3: Frontend — `lib/users.ts` with `fetchPublicUsers`
 - **Files:** `frontend/src/lib/users.ts` (new)
