@@ -101,7 +101,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   Use plain `fetch` (no `authFetch`). Build URLSearchParams; only append `q` when truthy and trimmed. API base URL same as other lib files (`process.env.NEXT_PUBLIC_API_URL`).
 - **Verify:** `cd frontend && npx tsc --noEmit` — 0 errors.
 - **Parallel:** true (independent)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 4: Frontend — `useRelativeTime` hook for "Active N ago" labels
 - **Files:** `frontend/src/lib/use-relative-time.ts` (new)
@@ -122,7 +122,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   `format.relativeTime` returns localized strings like "5 minutes ago" / "pirms 5 minūtēm" — i18n is free.
 - **Verify:** `cd frontend && npx tsc --noEmit`.
 - **Parallel:** true (independent)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 5: Frontend — `PublicUserCard` component + skeleton variant
 - **Files:** `frontend/src/components/public-user-card.tsx` (new)
@@ -136,7 +136,7 @@ Build a `/people` page (people directory) where any visitor can search for users
 - Export `PublicUserCardSkeleton` alongside (avatar circle + 3 text lines). Match height of the real card.
 - **Verify:** `cd frontend && npx tsc --noEmit`. Renders on `/people` in Task 6.
 - **Parallel:** true (does not block Tasks 1–4)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 6: Frontend — `/people` page (server wrapper + client)
 - **Files:** `frontend/src/app/people/page.tsx` (new server-page wrapper), `frontend/src/app/people/people-client.tsx` (new client component)
