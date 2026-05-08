@@ -34,7 +34,11 @@ export default function HomeFeedPage() {
   const loadPage = useCallback(
     async (pageNum: number, cat: number | null, gen: number, append: boolean) => {
       try {
-        const data = await fetchPublicItems(pageNum, PAGE_SIZE, cat);
+        const data = await fetchPublicItems({
+          page: pageNum,
+          pageSize: PAGE_SIZE,
+          categoryId: cat,
+        });
 
         // Ignore stale responses
         if (gen !== genRef.current) return;

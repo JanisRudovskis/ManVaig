@@ -294,6 +294,7 @@
     <!-- Session: 2026-05-07c/08 — Phase 5 Bidding redesign: BidStatus enum (Active/Accepted/Completed/Denied/Failed/Expired), IsAnonymous + AcceptedAt fields, BidsController rewrite (public GET, place bid with update-in-place, accept/complete/fail/deny endpoints), public offers popup (bottom sheet mobile / centered modal desktop), full /items/[id]/offers page with tab blink, useOffersBids hook (polling 10s/3s retry, Web Audio API sound, slide-in animations, reliability indicators), anonymous bidding toggle, two-tap bid confirm, custom +/- step buttons, reverse numbering, image gallery lightbox, body scroll lock, speaker icon (replacing bell for future notifications). 60+ i18n keys EN+LV. Deleted bids-modal.tsx. -->
     <!-- Session: 2026-05-08b — Profile pages a11y + UX polish: ProfilePopup migrated to shadcn Dialog (focus trap, aria-modal, Escape, scroll lock all from base-ui Radix). ProfileCard edit-mode: sticky Save/Cancel footer, hoisted profile-visibility master switch above email/phone, label association via htmlFor, aria-disabled + native disabled on channels block when private (replaces opacity-only). Removed maxLength on bio textarea (counter goes red over 1000, validate() shows i18n error). Owner now sees same chip-style contact display as public visitors. Email/phone change forms lifted into ChangeEmailDialog + ChangePhoneDialog (replaces nested edit-within-edit; cooldown timer lifted to EmailManagement so it persists across dialog open/close). Color contrast: emerald/blue/green/amber chip text bumped to 700 light / 300 dark to pass WCAG AA. Smartphone→Phone icon consistency across card. Extracted lib/profile-utils.ts (getLastSeenStatus + formatMemberDate, was duplicated). View-all-listings link added to public profile (stub route). 4 new i18n keys EN+LV (close, viewAllListings, changeEmailDescription, changePhoneDescription, addPhoneDescription). -->
     <!-- Session: 2026-05-08c — Profile polish (5 tasks): phone change rate limiting (30-day cooldown for verified phones, LastPhoneChangedAt migration), email/phone button alignment (justify-between), WhatsApp as sub-toggle of Show Phone (indented, auto-clear), inline Telegram username input, mobile UI audit (responsive buttons, error layout, separators). Private profile visibility fix: removed IsProfilePublic filter from GetPublicProfile/GetUserListings — private profiles now return limited response (avatar+name) for anonymous visitors, full profile for authenticated users. Frontend sends auth token in public profile fetches. Contact channels always editable regardless of profile visibility. Updated i18n (profilePrivate, profilePrivateLoginHint, profilePrivateDescription). 3 migrations: AddLastSeenAt, AddTelegramUsername, AddLastPhoneChangedAt. -->
+    <!-- Session: 2026-05-08d — Search page (/search): unified Items|Stalls segmented tab toggle, ?q= server-side text search across item title/description/tags + stall name/description/owner display name, Postgres unaccent extension migration for diacritic folding (riga matches Rīga), debounced (300ms) input with min 2 chars, Enter-key skips debounce, hint chips (bicycle/watch/drill/ring) with per-locale queries, Load more pagination (20/page), per-tab placeholders, plural-aware live region (i18n {count, plural} ICU), skeleton loading, empty/no-results/error states, robots: noindex metadata. New: PublicStallsController (/api/v1/public/stalls), ?q= on PublicItemsController, AddUnaccentExtension migration, PublicStallCard component (3-thumb-cap on <sm:, 4 from sm: up), useDebouncedValue hook, Search namespace in EN+LV i18n. Sidebar Browse retargeted /browse → /search. Implemented via ralph-loop autonomous build (8/10 tasks autonomously) + manual finish (sidebar + visual audit). Lighthouse mobile: a11y 100, best-practices 100, agentic-browsing 100. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -797,10 +798,15 @@
       <div class="task-text">Filter by category</div>
       <div class="task-badge badge-planned">planned</div>
     </div>
-    <div class="task" data-status="planned" data-phase="7" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="7" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Search / filter by tags</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Search page (/search) — unified Items + Stalls tabs, ?q= text search, diacritic-folded, debounced, paginated</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="7" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Search / filter by tags (server-side ILIKE on title + description + tag name + stall name + owner)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="7" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>

@@ -81,3 +81,11 @@ public class PublicStallOwnerDto
     public string? AvatarUrl { get; set; }
     public string? Location { get; set; }
 }
+
+public class PublicStallListResponse
+{
+    public List<PublicStallResponse> Stalls { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+}

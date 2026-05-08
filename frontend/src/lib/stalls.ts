@@ -59,6 +59,36 @@ export interface PublicStallResponse {
   };
 }
 
+export interface PublicStallListResponse {
+  stalls: PublicStallResponse[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface FetchPublicStallsOptions {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  signal?: AbortSignal;
+}
+
+export async function fetchPublicStalls(
+  options: FetchPublicStallsOptions = {}
+): Promise<PublicStallListResponse> {
+  const { page = 1, pageSize = 20, q, signal } = options;
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const trimmedQ = q?.trim();
+  if (trimmedQ) params.set("q", trimmedQ);
+
+  const res = await fetch(`${API_URL}/api/v1/public/stalls?${params}`, { signal });
+  if (!res.ok) throw new Error("stalls_browse_fetch_failed");
+  return res.json();
+}
+
 // === API functions ===
 
 export async function fetchMyStalls(): Promise<StallListResponse> {
