@@ -725,5 +725,31 @@
     "error_bid_complete_failed": "Neizdevās pabeigt darījumu",
     "error_bid_fail_failed": "Neizdevās atzīmēt darījumu kā neizdevušos",
     "error_bid_deny_failed": "Neizdevās noraidīt piedāvājumu"
+  },
+  "search": {
+    "title": "Meklēt",
+    "placeholderItems": "Meklēt preces…",
+    "placeholderStalls": "Meklēt stendus…",
+    "clearSearch": "Notīrīt meklēšanu",
+    "tabs": {
+      "items": "Preces",
+      "stalls": "Stendi"
+    },
+    "loading": "Meklē…",
+    "loadingMore": "Ielādē vēl…",
+    "loadMore": "Ielādēt vairāk",
+    "emptyInitial": "Sāc rakstīt, lai meklētu",
+    "emptyInitialDescription": "Izmēģini kādu no šiem vai ieraksti pats",
+    "hints": {
+      "bicycle": "velosipēds",
+      "watch": "pulkstenis",
+      "drill": "urbis",
+      "ring": "gredzens"
+    },
+    "noResultsItems": "Pēc {q} nav atrastas preces",
+    "noResultsStalls": "Pēc {q} nav atrasti stendi",
+    "noResultsDescription": "Mēģini citus atslēgvārdus",
+    "errorLoadFailed": "Neizdevās ielādēt rezultātus. Lūdzu, mēģiniet vēlreiz.",
+    "retry": "Mēģināt vēlreiz"
   }
 }

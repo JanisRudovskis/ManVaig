@@ -33,3 +33,6 @@ playwright/.cache/
 # === Claude Code ===
 .claude/settings.local.json
 .claude/plans/
+
+# Ralph loop artifacts
+.ralph/

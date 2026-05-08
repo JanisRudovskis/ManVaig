@@ -725,5 +725,31 @@
     "error_bid_complete_failed": "Failed to complete deal",
     "error_bid_fail_failed": "Failed to mark deal as failed",
     "error_bid_deny_failed": "Failed to deny bid"
+  },
+  "search": {
+    "title": "Search",
+    "placeholderItems": "Search items…",
+    "placeholderStalls": "Search stalls…",
+    "clearSearch": "Clear search",
+    "tabs": {
+      "items": "Items",
+      "stalls": "Stalls"
+    },
+    "loading": "Searching…",
+    "loadingMore": "Loading more…",
+    "loadMore": "Load more",
+    "emptyInitial": "Start typing to search",
+    "emptyInitialDescription": "Try one of these or type your own",
+    "hints": {
+      "bicycle": "bicycle",
+      "watch": "watch",
+      "drill": "drill",
+      "ring": "ring"
+    },
+    "noResultsItems": "No items match {q}",
+    "noResultsStalls": "No stalls match {q}",
+    "noResultsDescription": "Try different keywords",
+    "errorLoadFailed": "Could not load results. Please try again.",
+    "retry": "Try again"
   }
 }

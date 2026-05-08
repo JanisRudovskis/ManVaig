@@ -73,7 +73,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
 - **Action:** Mobile-first card. Visual primitives must match `PublicItemCard`: same `rounded-xl`, same `border`, same shadow class, comparable height range (160–220px) so a mixed-card scroll feels coherent. Layout: header strip with `headerImageUrl` (or accent gradient fallback — overlay `bg-black/30` if text sits on the strip, since `AccentColor` is user-supplied and contrast is unguaranteed); avatar/thumbnail circle with `thumbnailUrl` or initials; stall name (truncate); owner display name + small avatar + location; item count badge; preview thumbnails strip — **cap at 3 thumbnails on `< sm:` (i.e., `< 640px`); show 4 from `sm:` upward**. Click links via `next/link` to `/u/{owner.displayName}` (existing public profile route — safe target until public stall page lands). Use shadcn `Card` + `Avatar` + `Badge`. Skeleton variant `PublicStallCardSkeleton` exported alongside.
 - **Verify:** `cd frontend && npx tsc --noEmit`; renders on /search page in Task 7.
 - **Parallel:** true (independent of Task 7 once Task 5 types exist)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 7: Frontend — /search page with tab toggle, debounced search, pagination
 - **Files:** `frontend/src/app/search/page.tsx` (new), `frontend/src/lib/use-debounced-value.ts` (new)
@@ -97,7 +97,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
     - Layout: `mx-auto max-w-[600px] px-4 py-6 md:px-6 md:py-8` (matches homepage).
 - **Verify:** `cd frontend && npm run build` succeeds; navigate to `/search`, see empty-initial state with icon + chips; tap a chip → fires search immediately; type a 1-char keyword → no fetch; type 2+ chars → debounced fetch fires once after 300ms; press Enter mid-typing → fetch fires immediately; tab toggle re-fetches and resets page; URL updates with `?tab=…&q=…`; reload preserves state; "Load more" appends results; clear button resets to empty state.
 - **Parallel:** false
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 8: Frontend — i18n strings for search page (EN + LV)
 - **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`
@@ -116,7 +116,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
   - LV translations mirror EN keys with Latvian copy ("Meklēt", "Bodes", "Preces", "Sāc rakstīt, lai meklētu", "Nekas nav atrasts", "Mēģini citus atslēgvārdus", "Ielādēt vairāk").
 - **Verify:** `cd frontend && npm run build`. All `t("…")` lookups in Task 7 resolve in both locales.
 - **Parallel:** true (with Task 6)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 9: Frontend — wire sidebar Browse -> /search
 - **Files:** `frontend/src/components/app-sidebar.tsx`
