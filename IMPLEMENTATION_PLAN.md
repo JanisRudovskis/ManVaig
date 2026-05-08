@@ -43,7 +43,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
 - **Action:** Append a `PublicStallListResponse` class: `List<PublicStallResponse> Stalls`, `int TotalCount`, `int Page`, `int PageSize`. Used by Task 4.
 - **Verify:** `cd backend && dotnet build ManVaig.sln`.
 - **Parallel:** true (independent; Task 4 references this)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 4: Backend — create PublicStallsController with browse + search
 - **Files:** `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs` (new)
