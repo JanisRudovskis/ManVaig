@@ -54,7 +54,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   Namespace `ManVaig.Api.Models.Dto`. Mirror naming convention of `PublicStallListResponse` in `StallDtos.cs`.
 - **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
 - **Parallel:** true (independent of all others)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 2: Backend — create `PublicUsersController` with browse + search + privacy filter
 - **Files:** `backend/ManVaig.Api/Controllers/V1/PublicUsersController.cs` (new)
