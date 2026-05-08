@@ -3,6 +3,7 @@ using System.Security.Claims;
 using ManVaig.Api.Data;
 using ManVaig.Api.Models;
 using ManVaig.Api.Models.Dto;
+using ManVaig.Api.Models.Enums;
 using ManVaig.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -36,7 +37,7 @@ public class ProfileController : ControllerBase
         var user = await GetCurrentUserWithBadges();
         if (user == null) return Unauthorized();
 
-        return Ok(MapToResponse(user, isOwner: true));
+        return Ok(await MapToResponse(user, isOwner: true));
     }
 
     [HttpPut("profile")]
@@ -51,6 +52,12 @@ public class ProfileController : ControllerBase
         if (request.Phone != null) user.Phone = request.Phone;
         if (request.IsProfilePublic.HasValue) user.IsProfilePublic = request.IsProfilePublic.Value;
         if (request.EnabledChannels.HasValue) user.EnabledChannels = request.EnabledChannels.Value;
+        if (request.TelegramUsername != null)
+        {
+            // Strip leading @ if present
+            var tgName = request.TelegramUsername.Trim().TrimStart('@');
+            user.TelegramUsername = string.IsNullOrEmpty(tgName) ? null : tgName;
+        }
 
         if (request.DisplayedBadgeIds != null)
         {
@@ -87,7 +94,7 @@ public class ProfileController : ControllerBase
 
         // Reload badges for response
         user = await GetCurrentUserWithBadges();
-        return Ok(MapToResponse(user!, isOwner: true));
+        return Ok(await MapToResponse(user!, isOwner: true));
     }
 
     [HttpPost("profile/avatar")]
@@ -123,13 +130,94 @@ public class ProfileController : ControllerBase
                 .ThenInclude(db => db.BadgeDefinition)
             .FirstOrDefaultAsync(u => u.DisplayName != null
                 && u.DisplayName.ToLower() == displayName.ToLower()
-                && u.IsActive
-                && u.IsProfilePublic);
+                && u.IsActive);
 
         if (user == null)
             return NotFound(new { error = "Profile not found." });
 
-        return Ok(MapToResponse(user, isOwner: false));
+        // Private profile + anonymous viewer → limited response (avatar + name only)
+        if (!user.IsProfilePublic && User.Identity?.IsAuthenticated != true)
+        {
+            return Ok(new UserProfileResponse
+            {
+                UserId = user.Id,
+                DisplayName = user.DisplayName ?? "",
+                AvatarUrl = user.AvatarUrl,
+                IsProfilePublic = false,
+                MemberSince = user.CreatedAt,
+            });
+        }
+
+        return Ok(await MapToResponse(user, isOwner: false));
+    }
+
+    /// <summary>
+    /// Get public listings for a user (no auth required).
+    /// </summary>
+    [HttpGet("users/{displayName}/listings")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetUserListings(string displayName, [FromQuery] int limit = 6)
+    {
+        limit = Math.Clamp(limit, 1, 20);
+
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.DisplayName != null
+                && u.DisplayName.ToLower() == displayName.ToLower()
+                && u.IsActive);
+
+        if (user == null)
+            return NotFound(new { error = "Profile not found." });
+
+        // Private profile + anonymous viewer → no listings
+        if (!user.IsProfilePublic && User.Identity?.IsAuthenticated != true)
+            return Ok(Array.Empty<PublicItemCardDto>());
+
+        var items = await _db.Items
+            .Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(limit)
+            .Select(i => new PublicItemCardDto
+            {
+                Id = i.Id,
+                Title = i.Title,
+                CategoryId = i.CategoryId,
+                CategoryName = i.Category.Name,
+                Condition = i.Condition,
+                Price = i.Price,
+                AcceptOffers = i.AcceptOffers,
+                MinOfferPrice = i.MinOfferPrice,
+                OfferStep = i.OfferStep,
+                EndDate = i.EndDate,
+                Location = i.Location,
+                CanShip = i.CanShip,
+                CreatedAt = i.CreatedAt,
+                Images = i.Images
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => new ItemImageDto
+                    {
+                        Id = img.Id,
+                        Url = img.Url,
+                        SortOrder = img.SortOrder,
+                        IsPrimary = img.IsPrimary
+                    }).ToList(),
+                Tags = i.ItemTags.Select(it => it.Tag.Name).ToList(),
+                Seller = new PublicSellerSummaryDto
+                {
+                    DisplayName = user.DisplayName ?? "User",
+                    AvatarUrl = user.AvatarUrl,
+                    Location = user.Location,
+                    MemberSince = user.CreatedAt
+                },
+                BidCount = i.Bids.Count(b => b.Status == BidStatus.Active),
+                HighestBid = i.Bids.Any(b => b.Status == BidStatus.Active)
+                    ? i.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
+                    : (decimal?)null,
+                BiddingPaused = i.Bids.Any(b => b.Status == BidStatus.Accepted),
+                BiddingClosed = i.Bids.Any(b => b.Status == BidStatus.Completed)
+            })
+            .ToListAsync();
+
+        return Ok(items);
     }
 
     private string? GetCurrentUserId()
@@ -149,8 +237,40 @@ public class ProfileController : ControllerBase
             .FirstOrDefaultAsync(u => u.Id.ToString() == userId);
     }
 
-    private static UserProfileResponse MapToResponse(ApplicationUser user, bool isOwner)
+    private async Task<UserProfileResponse> MapToResponse(ApplicationUser user, bool isOwner)
     {
+        // Compute stats
+        var stallCount = await _db.Stalls.CountAsync(s => s.UserId == user.Id);
+        var activeListingCount = await _db.Items.CountAsync(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public);
+        var completedDealCount = await _db.Bids.CountAsync(b =>
+            b.Status == BidStatus.Completed && b.Item.UserId == user.Id);
+
+        var channels = user.EnabledChannels;
+
+        // Build public contact links (only for public viewers, based on enabled channels)
+        string? publicEmail = null;
+        string? publicPhone = null;
+        string? publicWhatsAppUrl = null;
+        string? publicTelegramUrl = null;
+
+        if (!isOwner)
+        {
+            if (channels.HasFlag(CommunicationChannels.ShowEmail) && user.EmailConfirmed)
+                publicEmail = user.Email;
+
+            if (channels.HasFlag(CommunicationChannels.ShowPhone) && !string.IsNullOrEmpty(user.Phone))
+                publicPhone = user.Phone;
+
+            // WhatsApp requires both ShowPhone AND WhatsApp flags (it's a sub-option of phone)
+            if (channels.HasFlag(CommunicationChannels.ShowPhone)
+                && channels.HasFlag(CommunicationChannels.WhatsApp)
+                && !string.IsNullOrEmpty(user.Phone))
+                publicWhatsAppUrl = $"https://wa.me/{user.Phone.Replace(" ", "").Replace("+", "")}";
+
+            if (channels.HasFlag(CommunicationChannels.Telegram) && !string.IsNullOrEmpty(user.TelegramUsername))
+                publicTelegramUrl = $"https://t.me/{user.TelegramUsername}";
+        }
+
         return new UserProfileResponse
         {
             UserId = user.Id,
@@ -158,13 +278,22 @@ public class ProfileController : ControllerBase
             Email = isOwner ? user.Email : null,
             EmailConfirmed = isOwner ? user.EmailConfirmed : null,
             Phone = isOwner ? user.Phone : null,
-            PhoneVerified = isOwner ? false : null, // Always false in v1
+            PhoneVerified = isOwner ? user.PhoneNumberConfirmed : null,
             AvatarUrl = user.AvatarUrl,
             Bio = user.Bio,
             Location = user.Location,
             IsProfilePublic = user.IsProfilePublic,
             EnabledChannels = user.EnabledChannels,
+            TelegramUsername = isOwner ? user.TelegramUsername : null,
             MemberSince = user.CreatedAt,
+            LastSeenAt = user.LastSeenAt,
+            PublicEmail = publicEmail,
+            PublicPhone = publicPhone,
+            PublicWhatsAppUrl = publicWhatsAppUrl,
+            PublicTelegramUrl = publicTelegramUrl,
+            StallCount = stallCount,
+            ActiveListingCount = activeListingCount,
+            CompletedDealCount = completedDealCount,
             DisplayedBadges = user.DisplayedBadges
                 .OrderBy(db => db.SortOrder)
                 .Select(db => new BadgeDto

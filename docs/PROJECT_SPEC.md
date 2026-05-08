@@ -74,25 +74,29 @@
 - ✅ Countdown delete confirmation dialog (3s/5s safety timer)
 - 💡 Advanced filters (price range, condition, location)
 
-### Offer System
-- 🕐 Make an offer on an item (price + optional message)
-- 🕐 Anonymous offers — no registration required (if seller enables per item)
-- 🕐 Anonymous offer popup — collect phone / email / messenger + optional notes (min 1 required)
-- 🕐 Enforce minimum offer price if set by seller
-- 🕐 Block seller from making offer on own item (API guard)
-- 🕐 New offer from same buyer replaces previous — registered users only (anonymous always new)
-- 💡 Contact blacklist — block specific phone/email/messenger values from making offers
-- 🕐 Shop owner receives offer notification (SignalR + email)
-- 🕐 Owner can accept / decline / counter offer
-- 🕐 Counter offer → buyer receives CounterPending notification, can accept or decline
-- 🕐 On accept → all other pending offers silently declined
-- 🕐 On item deletion → all pending offers cancelled, no notification sent
-- 🕐 Offer history visible to item owner
-- 🕐 On offer accepted → buyer sees seller contact details + item ID to arrange transaction
-- 🕐 Item status set to Sold after acceptance
-- 💡 Buyer offer status tracking dashboard
+### Bidding / Offer System
+- ✅ Public bid list — anyone can see bid history (GET /api/v1/items/{id}/bids, no auth)
+- ✅ Place bid (auth required) — amount > highest active, respects minOfferPrice + offerStep
+- ✅ Anonymous bidding — toggle per bid, hides bidder identity in public view
+- ✅ Update-in-place — max 1 anon + 1 non-anon active bid per user per item
+- ✅ Seller accept/deny workflow — accept pauses bidding, deny strikes through bid
+- ✅ Two-phase acceptance — Accepted → Completed (sold) or Failed (deal fell through, reopens bidding)
+- ✅ Contact info reveal — bidder email ↔ seller email shown after acceptance
+- ✅ Anti-snipe — bids in last 10 min extend EndDate by 10 min
+- ✅ Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + place bid form
+- ✅ Full offers page — /items/{id}/offers route, openable in new tab
+- ✅ Real-time polling (10s, 3s retry on failure) + tab focus refresh
+- ✅ Sound notification (Web Audio API coin drop) on new external bids
+- ✅ Tab title blink when new bid in background tab
+- ✅ Two-tap confirm on bid submission (prevents accidental bids)
+- ✅ Image gallery — click thumbnail to browse item photos during auction
+- ✅ Reliability indicators — stale data warning, connection lost detection
+- 💡 Auto-bidding (proxy bids) — premium users set max limit, system bids for them
+- 💡 Auction audit log — track all bid events for dispute resolution
+- 💡 Bid cancellation — 2-minute grace period after placement
+- 💡 Buyer bid tracking dashboard ("My Bids" page)
 - 💡 Built-in messaging system (v2)
-- 💡 Offer expiry (auto-decline after X days)
+- 💡 Contact blacklist — block specific values per shop
 
 ### Discovery
 - 🕐 Homepage with latest items
@@ -249,25 +253,20 @@ ItemTag  (join table)
   - ItemId → Item
   - TagId → Tag
 
-Offer
+Bid
   - Id (uuid)
   - ItemId → Item
-  - BuyerId → User (nullable)                ← null = anonymous offer
-  - ContactPhone (string, nullable)          ← anonymous offers only
-  - ContactEmail (string, nullable)          ← anonymous offers only
-  - ContactMessenger (string, nullable)      ← anonymous offers only (FB / Telegram / etc.)
-  - ContactNotes (string, nullable)          ← anonymous offers only
+  - UserId → User
   - Amount (decimal)
-  - Currency (string, default "EUR")         ← EUR always in v1, ready for multi-currency later
-  - Message (string, nullable)
-  - Status (enum: Pending / Accepted / Declined / Countered / CounterPending)
-  - CounterAmount (decimal, nullable)
+  - IsAnonymous (bool, default false)        ← hides bidder identity in public view
+  - Status (enum: Active=0 / Accepted=1 / Completed=2 / Denied=3 / Failed=4 / Expired=5)
+  - AcceptedAt (DateTime, nullable)          ← when seller accepted this bid
   - CreatedAt
-  - UpdatedAt
-  RULE: BuyerId OR at least one contact field must be present (enforced at API level)
-  NOTE: one active offer per buyer per item (registered) — anonymous offers always create new
-  NOTE: on accept → all other pending offers auto-declined silently, accepted buyer notified
-  NOTE: for anonymous offers, contact info visible to seller immediately (no reveal step needed)
+  RULE: max 1 anonymous + 1 non-anonymous active bid per user per item (update-in-place)
+  NOTE: Active → Accepted (seller accepts) → Completed (deal done) or Failed (deal fell through)
+  NOTE: Accepted bid pauses bidding (no new bids). Failed bid reopens bidding.
+  NOTE: Contact info revealed to both parties after acceptance (bidder email ↔ seller email)
+  NOTE: Anti-snipe: bids in last 10 min of timed auction extend EndDate by 10 min
 
 Notification
   - Id (uuid)

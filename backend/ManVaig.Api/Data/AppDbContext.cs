@@ -36,6 +36,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.Property(u => u.Bio).HasMaxLength(1000);
             entity.Property(u => u.Location).HasMaxLength(200);
             entity.Property(u => u.Phone).HasMaxLength(30);
+            entity.Property(u => u.TelegramUsername).HasMaxLength(50);
             entity.Property(u => u.MaxItems).HasDefaultValue(10);
         });
 

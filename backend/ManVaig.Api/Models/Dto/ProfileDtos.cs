@@ -15,8 +15,21 @@ public class UserProfileResponse
     public string? Location { get; set; }
     public bool IsProfilePublic { get; set; }
     public CommunicationChannels EnabledChannels { get; set; }
+    public string? TelegramUsername { get; set; }
     public DateTime MemberSince { get; set; }
+    public DateTime? LastSeenAt { get; set; }
     public List<BadgeDto> DisplayedBadges { get; set; } = new();
+
+    // Public contact info (only populated for public viewers when channel is enabled)
+    public string? PublicEmail { get; set; }
+    public string? PublicPhone { get; set; }
+    public string? PublicWhatsAppUrl { get; set; }
+    public string? PublicTelegramUrl { get; set; }
+
+    // Stats (computed, not stored)
+    public int StallCount { get; set; }
+    public int ActiveListingCount { get; set; }
+    public int CompletedDealCount { get; set; }
 }
 
 public class BadgeDto
@@ -40,5 +53,9 @@ public class UpdateProfileRequest
 
     public bool? IsProfilePublic { get; set; }
     public CommunicationChannels? EnabledChannels { get; set; }
+
+    [MaxLength(50)]
+    public string? TelegramUsername { get; set; }
+
     public List<int>? DisplayedBadgeIds { get; set; }
 }

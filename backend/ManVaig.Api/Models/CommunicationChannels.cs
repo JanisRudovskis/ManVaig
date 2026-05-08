@@ -6,5 +6,6 @@ public enum CommunicationChannels
     None = 0,
     WhatsApp = 1,
     Telegram = 2,
-    // Future: Viber = 4, Signal = 8
+    ShowEmail = 4,
+    ShowPhone = 8,
 }

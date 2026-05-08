@@ -254,6 +254,46 @@ public class AuthController : ControllerBase
         return Ok(GenerateAuthResponse(user));
     }
 
+    [HttpPost("change-phone")]
+    [Authorize]
+    public async Task<IActionResult> ChangePhone([FromBody] ChangePhoneRequest request)
+    {
+        var user = await GetCurrentUser();
+        if (user == null) return Unauthorized();
+
+        // Verify password
+        var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
+        if (!passwordValid)
+            return BadRequest(new { error = "INVALID_PASSWORD" });
+
+        // Rate limit: verified phones can only be changed once per 30 days
+        if (user.PhoneNumberConfirmed && user.LastPhoneChangedAt.HasValue)
+        {
+            var nextChangeAt = user.LastPhoneChangedAt.Value.AddDays(30);
+            if (DateTime.UtcNow < nextChangeAt)
+                return BadRequest(new
+                {
+                    error = "PHONE_CHANGE_TOO_SOON",
+                    nextChangeAt = nextChangeAt.ToString("o")
+                });
+        }
+
+        var newPhone = request.NewPhone.Trim();
+
+        // Check if same as current
+        if (string.Equals(user.PhoneNumber, newPhone, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "SAME_PHONE" });
+
+        // Update phone — marks as unconfirmed
+        user.PhoneNumber = newPhone;
+        user.Phone = newPhone;
+        user.PhoneNumberConfirmed = false;
+        user.LastPhoneChangedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new { phone = newPhone, phoneVerified = false });
+    }
+
     // --- Helper methods ---
 
     private async Task<ApplicationUser?> GetCurrentUser()

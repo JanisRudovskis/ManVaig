@@ -72,3 +72,12 @@ public class ChangeEmailRequest
 
     public string? Language { get; set; }
 }
+
+public class ChangePhoneRequest
+{
+    [Required, MaxLength(30)]
+    public string NewPhone { get; set; } = default!;
+
+    [Required]
+    public string Password { get; set; } = default!;
+}

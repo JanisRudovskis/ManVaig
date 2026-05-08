@@ -221,6 +221,30 @@ export async function resendConfirmationWithRateLimit(
   return res.json();
 }
 
+// --- Phone management ---
+
+export async function changePhone(
+  newPhone: string,
+  password: string
+): Promise<{ phone: string; phoneVerified: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/auth/change-phone`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPhone, password }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err = new Error(body.error ?? "change_phone_failed");
+    if (body.nextChangeAt) {
+      (err as Error & { nextChangeAt?: string }).nextChangeAt = body.nextChangeAt;
+    }
+    throw err;
+  }
+
+  return res.json();
+}
+
 // --- Profile API ---
 
 export interface Badge {
@@ -242,8 +266,19 @@ export interface UserProfile {
   location: string | null;
   isProfilePublic: boolean;
   enabledChannels: number;
+  telegramUsername: string | null;
   memberSince: string;
+  lastSeenAt: string | null;
   displayedBadges: Badge[];
+  // Public contact info (only populated for public viewers)
+  publicEmail: string | null;
+  publicPhone: string | null;
+  publicWhatsAppUrl: string | null;
+  publicTelegramUrl: string | null;
+  // Stats
+  stallCount: number;
+  activeListingCount: number;
+  completedDealCount: number;
 }
 
 export interface UpdateProfileData {
@@ -252,6 +287,7 @@ export interface UpdateProfileData {
   phone?: string;
   isProfilePublic?: boolean;
   enabledChannels?: number;
+  telegramUsername?: string;
   displayedBadgeIds?: number[];
 }
 
@@ -299,13 +335,35 @@ export async function uploadAvatar(
 export async function getPublicProfile(
   displayName: string
 ): Promise<UserProfile> {
+  const token = getToken();
+  const headers: HeadersInit = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(
-    `${API_URL}/api/v1/users/${encodeURIComponent(displayName)}`
+    `${API_URL}/api/v1/users/${encodeURIComponent(displayName)}`,
+    { headers }
   );
 
   if (!res.ok) {
     if (res.status === 404) throw new Error("profile_not_found");
     throw new Error("profile_fetch_failed");
   }
+  return res.json();
+}
+
+export async function getUserListings(
+  displayName: string,
+  limit = 6
+): Promise<import("./items").PublicItemCard[]> {
+  const token = getToken();
+  const headers: HeadersInit = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(
+    `${API_URL}/api/v1/users/${encodeURIComponent(displayName)}/listings?limit=${limit}`,
+    { headers }
+  );
+
+  if (!res.ok) return [];
   return res.json();
 }

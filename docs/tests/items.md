@@ -131,3 +131,80 @@
 - [ ] When some tips dismissed: clicking toggle restores all tips
 - [ ] No console errors for missing i18n keys
 - [ ] All tip text translates correctly in LV
+
+## Bidding / Offers Popup
+
+### Place Bid
+- [ ] Open offers popup from item card → bottom sheet (mobile) / centered modal (desktop)
+- [ ] Background page scroll is locked while popup is open
+- [ ] Bid amount input pre-filled with minimum next bid
+- [ ] +/- buttons increment/decrement by offer step
+- [ ] − button disabled when at minimum bid
+- [ ] Cannot type amount below minimum
+- [ ] First tap on "Piedāvāt" → button turns amber "Apstiprināt €X.XX?"
+- [ ] Second tap → bid submitted
+- [ ] Confirm resets after 3 seconds if no second tap
+- [ ] Changing amount (type or +/−) resets confirm state
+- [ ] Anonymous toggle persists to localStorage (survives popup reopen)
+- [ ] Update-in-place: placing bid with same anonymity mode updates existing bid (not new row)
+- [ ] Max 1 anonymous + 1 non-anonymous active bid per user per item
+- [ ] Cannot bid on own item (message shown)
+- [ ] Cannot bid when bidding paused/closed/ended (message shown)
+- [ ] Error messages display clearly above input (red text)
+- [ ] Success message shows after bid placed (green text, fades after 3s)
+
+### Bid List
+- [ ] Bids sorted highest first with reverse numbering (#17 = newest)
+- [ ] Top bid highlighted with green left border
+- [ ] Own bids show "You" pill
+- [ ] Anonymous bids show EyeOff icon + "Anonīms" label
+- [ ] Denied bids: struck-through amount, muted opacity
+- [ ] New bids slide in with animation
+- [ ] "Show all" button loads full bid list
+- [ ] Bidder count shown in header subtitle
+
+### Seller Actions
+- [ ] Accept button on Active bids → confirmation dialog → bid becomes Accepted, bidding pauses
+- [ ] Deny button on Active bids → bid becomes Denied (struck-through)
+- [ ] Complete Deal button on Accepted bid → bid becomes Completed, item shown as "Sold"
+- [ ] Deal Failed button on Accepted bid → bid becomes Failed, bidding reopens
+- [ ] Contact info (emails) revealed to both parties after acceptance
+
+### Real-time Features
+- [ ] Bid list auto-refreshes every 10 seconds
+- [ ] After poll failure, retries every 3 seconds
+- [ ] Stale data warning appears after 20+ seconds without update
+- [ ] Tab focus triggers immediate refresh
+- [ ] Manual refresh button spins during refresh
+- [ ] Sound notification (coin drop) plays on new external bid
+- [ ] Sound toggle (speaker icon) saves to localStorage in popup mode
+- [ ] Sound toggle does NOT save to localStorage in tab page mode (session only)
+- [ ] Tab page always starts with sound OFF
+
+### Full Offers Page (/items/[id]/offers)
+- [ ] Opens in new tab from popup external link button
+- [ ] Tab title blinks when new bid arrives while tab is in background
+- [ ] Tab title stops blinking when tab becomes visible
+- [ ] All shared components work same as popup (bid list, form, actions)
+
+### Image Gallery
+- [ ] Click item thumbnail → fullscreen gallery opens
+- [ ] Arrow buttons navigate between images
+- [ ] Keyboard arrows + Escape work
+- [ ] Image counter "1 / 3" shown
+- [ ] Click backdrop or X closes gallery
+
+### Anti-snipe
+- [ ] Bid placed in last 10 minutes of timed auction extends EndDate by 10 minutes
+- [ ] Countdown updates to reflect extended time
+
+### Backend Validation
+- [ ] Amount must be > highest active bid (BID_TOO_LOW)
+- [ ] Amount must be >= minOfferPrice (BID_BELOW_STARTING)
+- [ ] Amount must respect offerStep above highest (BID_STEP_TOO_SMALL) — skip when raising own highest
+- [ ] Cannot bid when Accepted bid exists (BIDDING_PAUSED)
+- [ ] Cannot bid when Completed bid exists (BIDDING_CLOSED)
+- [ ] Cannot bid on own item (CANNOT_BID_OWN_ITEM)
+- [ ] Accept: only Active bids, only one at a time
+- [ ] Complete/Fail: only from Accepted status
+- [ ] Deny: only Active bids

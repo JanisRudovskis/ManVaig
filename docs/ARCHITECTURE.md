@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-07 (help system: inline hints, help popovers, dismissible tips banners)
+> Last updated: 2026-05-08 (profile polish: phone rate limiting, button alignment, WhatsApp sub-toggle, inline Telegram input, mobile audit, private profile visibility fix)
 
 ---
 
@@ -22,6 +22,8 @@
 
 DI registration order: EF Core → Identity → JWT → CORS → Resend → Cloudinary/ImageService → Controllers
 
+Middleware pipeline includes `LastSeenMiddleware` — updates `LastSeenAt` on authenticated requests (throttled to once per 5 minutes to avoid DB writes on every request).
+
 - `AppDbContext` — Npgsql, connection string from `ConnectionStrings:DefaultConnection`
 - Identity config: `RequireDigit=true, RequiredLength=8, RequireNonAlphanumeric=false, RequireUniqueEmail=true`
 - JWT: reads `Jwt:Secret`, `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpirationDays` from config
@@ -40,7 +42,7 @@ DI registration order: EF Core → Identity → JWT → CORS → Resend → Clou
 
 Extends `IdentityUser<Guid>` — inherits `Id`, `Email`, `UserName`, `EmailConfirmed`, `PasswordHash`, etc.
 
-Custom fields: `DisplayName` (unique username, 3-30 chars, `[a-zA-Z0-9_-]`), `AvatarUrl`, `Bio`, `Location`, `Phone`, `IsProfilePublic` (default true), `EnabledChannels` (flags enum: WhatsApp=1, Telegram=2), `IsActive` (bool), `CreatedAt`, `LastEmailSentAt` (nullable, for rate limiting)
+Custom fields: `DisplayName` (unique username, 3-30 chars, `[a-zA-Z0-9_-]`), `AvatarUrl`, `Bio`, `Location`, `Phone`, `TelegramUsername`, `IsProfilePublic` (default true), `EnabledChannels` (flags enum: WhatsApp=1, Telegram=2, ShowEmail=4, ShowPhone=8), `IsActive` (bool), `CreatedAt`, `LastEmailSentAt` (nullable, for rate limiting), `LastSeenAt` (nullable, updated by middleware), `LastPhoneChangedAt` (nullable, for phone change rate limiting)
 
 Navigation properties: `UserBadges`, `DisplayedBadges`
 
@@ -81,6 +83,7 @@ All routes under `/api/v1/auth/`:
 | `POST forgot-password` | Public | Always returns 200 (no email enumeration). In-memory rate limit per email (2 min). Sends bilingual reset email |
 | `POST reset-password` | Public | Validates token, resets password |
 | `POST change-email` | Bearer | Requires password verification. Validates email not taken. Rate-limited. Updates email, marks unconfirmed, sends confirmation, returns new JWT |
+| `POST change-phone` | Bearer | Requires password verification. Rate-limited: verified phones can only be changed once per 30 days (tracked via `LastPhoneChangedAt`). Returns 400 `PHONE_CHANGE_TOO_SOON` with `nextChangeAt` if cooldown active. |
 
 ### Rate Limiting
 
@@ -101,7 +104,8 @@ All routes under `/api/v1/`:
 | `GET profile` | Bearer | Returns full profile (email, phone visible) |
 | `PUT profile` | Bearer | Partial update (null fields skipped). Validates badge ownership. |
 | `POST profile/avatar` | Bearer | Multipart upload, 2MB limit, resizes to 256x256 WebP, uploads to Cloudinary |
-| `GET users/{displayName}` | Public | Public profile (email/phone hidden). 404 if private/inactive/not found. Case-insensitive lookup. |
+| `GET users/{displayName}` | AllowAnonymous | Public profile. Anonymous + private → limited response (avatar, name only). Authenticated + private → full profile. 404 only if user doesn't exist or inactive. |
+| `GET users/{displayName}/listings` | AllowAnonymous | User's public listings (limit 1-20). Anonymous + private → empty array. Authenticated + private → normal listings. |
 
 ### Stalls System
 
@@ -128,7 +132,28 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 
 **Item Ordering**: `SortOrder` field on Item. `PUT /api/v1/items/reorder` endpoint (same pattern as stalls). Custom sort orders items by SortOrder then CreatedAt.
 
-**Bid Summary on Items**: `ItemResponse` includes `BidCount` and `HighestBid` (computed from Bids navigation property, active bids only).
+**Bid Summary on Items**: `ItemResponse` includes `BidCount`, `HighestBid`, `BiddingPaused`, `BiddingClosed` (computed from Bids navigation property, active bids only).
+
+### Bidding System
+
+**Model: `Models/Bid.cs`** — ItemId, UserId, Amount, IsAnonymous, Status (BidStatus enum), AcceptedAt, CreatedAt.
+
+**BidStatus Enum**: Active(0), Accepted(1), Completed(2), Denied(3), Failed(4), Expired(5).
+
+**Controller: `Controllers/V1/BidsController.cs`**:
+
+| Endpoint | Auth | What it does |
+|----------|------|-------------|
+| `GET /api/v1/items/{itemId}/bids` | Public | Public bid list with viewer-aware response (isOwnBid, contact reveal after acceptance). Supports `?limit=` param. |
+| `POST /api/v1/items/{itemId}/bids` | Bearer | Place bid. Update-in-place (max 1 anon + 1 non-anon per user). Validates amount > highest active, respects offerStep/minOfferPrice. Anti-snipe extends EndDate by 10 min. |
+| `POST .../bids/{bidId}/accept` | Bearer (owner) | Set bid to Accepted, pause bidding. Only one accepted bid at a time. Reveals contact info. |
+| `POST .../bids/{bidId}/complete` | Bearer (owner) | Set bid to Completed (from Accepted only). Item effectively sold. |
+| `POST .../bids/{bidId}/fail` | Bearer (owner) | Set bid to Failed (from Accepted only). Reopens bidding. |
+| `POST .../bids/{bidId}/deny` | Bearer (owner) | Set bid to Denied (Active bids only). Bid shown struck-through. |
+
+**Bid lifecycle**: Active → Accepted (pauses bidding) → Completed (sold) or Failed (reopens). Denied is independent (Active → Denied).
+
+**Offer lock**: Items with Accepted or Completed bids are locked (cannot edit). Non-timed offer items are NOT locked until acceptance.
 
 ### Image Service: `Services/CloudinaryImageService.cs`
 
@@ -196,8 +221,13 @@ html (lang={locale} from cookie)
 - `getMyProfile()` → `UserProfile` (authorized)
 - `updateProfile(data)` → `UserProfile` (authorized, partial update)
 - `uploadAvatar(file)` → `{ avatarUrl }` (authorized, FormData)
-- `getPublicProfile(displayName)` → `UserProfile` (anonymous)
+- `getPublicProfile(displayName)` → `UserProfile` (sends auth token if available — authenticated users see full private profiles)
+- `getUserListings(displayName, limit)` → `PublicItemCard[]` (sends auth token if available)
 - `authFetch(url, options)` → `Response` (auto-attaches Bearer, auto-logout on 401)
+
+**`lib/profile-utils.ts`** — shared helpers used by ProfileCard and ProfilePopup:
+- `getLastSeenStatus(lastSeenAt, t)` → `{ text, isOnline }` — human-readable last-seen string with i18n
+- `formatMemberDate(memberSince, locale)` → `string` — locale-aware "Month Year" formatting
 
 **`lib/auth-context.tsx`** — React context:
 - On mount: reads token from localStorage, parses JWT via `atob(token.split(".")[1])`
@@ -254,12 +284,16 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | LoginDialog | `components/login-dialog.tsx` | Modal wrapper around LoginFormContent |
 | RegisterFormContent | `components/register-form.tsx` | Register form with UsernameChecklist + PasswordChecklist |
 | EmailConfirmationPrompt | `components/email-confirmation-prompt.tsx` | "Check email" screen with rate-limited resend + cooldown timer |
-| EmailManagement | `components/email-management.tsx` | Profile email section: display, change (with password), resend, cooldown |
+| EmailManagement | `components/email-management.tsx` | Profile email section: display, verified/notVerified state, resend (in edit mode). Change-email is delegated to ChangeEmailDialog. Cooldown timer lives here so it persists across dialog open/close. |
+| ChangeEmailDialog | `components/change-email-dialog.tsx` | Modal form for changing email — new email + current password, rate-limit aware. Built on shadcn Dialog (focus trap, aria-modal, Escape). |
+| PhoneManagement | `components/phone-management.tsx` | Profile phone section: display, verified/notVerified state. Change-phone is delegated to ChangePhoneDialog. |
+| ChangePhoneDialog | `components/change-phone-dialog.tsx` | Modal form for adding/changing phone — new phone + current password. Built on shadcn Dialog. |
 | PasswordChecklist | `components/password-checklist.tsx` | Live validation: length >= 8, uppercase, digit |
 | UsernameChecklist | `components/username-checklist.tsx` | Live validation: format + debounced API availability check |
 | LocationSearch | `components/location-search.tsx` | Nominatim city autocomplete with debounced search (used in profile + item form) |
 | ThemeProvider | `components/theme-provider.tsx` | next-themes wrapper |
-| ProfileCard | `components/profile-card.tsx` | ID card layout with inline edit mode + EmailManagement |
+| ProfileCard | `components/profile-card.tsx` | Shared profile card for own/edit/public views. Inline edit mode with sticky Save/Cancel footer, hoisted profile-visibility master switch. WhatsApp is a sub-toggle of Show Phone (indented, auto-cleared when phone toggled off). Telegram input inline with toggle. Contact channels always editable (private profiles still visible to logged-in users). Uses helpers from `lib/profile-utils.ts`. |
+| ProfilePopup | `components/profile-popup.tsx` | Profile preview overlay — bottom sheet (mobile) / centered modal (desktop). Built on shadcn Dialog (focus trap, aria-modal, Escape, scroll lock all from Radix/base-ui). |
 | UserAvatar | `components/user-avatar.tsx` | Avatar with letter fallback + deterministic color (xs/sm/md/lg sizes) |
 | AvatarUpload | `components/avatar-upload.tsx` | File picker + Cloudinary upload (updates auth context) |
 | BadgeDisplay | `components/badge-display.tsx` | Renders up to 3 badge chips |
@@ -270,7 +304,9 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | ConfirmDialog | `components/confirm-dialog.tsx` | Generic confirmation dialog (title, message, confirm/cancel). |
 | ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, EndDateCountdown, timeAgo, isEnded. Field-based indicators (no TypeTag). |
 | ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
-| BidsModal | `components/bids-modal.tsx` | Offer/bid history popup with winner assignment. |
+| OffersPopup | `components/offers-popup.tsx` | Public bid list popup — bottom sheet (mobile) / centered modal (desktop). Exports shared sub-components: StatusBanner, BidRow, BidListBody, PlaceBidForm, ConfirmDialog, BidsSummaryBar, FreshnessIndicator, ImageGallery, LiveCountdown. |
+| OffersPage | `app/items/[id]/offers/page.tsx` | Full-page offers view, openable in new tab. Tab title blink on background bids. Reuses shared components from offers-popup. |
+| useOffersBids | `hooks/use-offers-bids.ts` | Core bidding hook: polling (10s/3s retry), Web Audio API sound, slide-in animations, reliability tracking (stale/connection lost), manual refresh, sound toggle with localStorage (popup) or session-only (tab). |
 | DateTimePicker | `components/datetime-picker.tsx` | Combined date + time picker for end dates. Uses shadcn Calendar + time inputs. |
 | HelpPopover | `components/help-popover.tsx` | Reusable `(?)` icon → click-triggered Popover with title, description, optional good/bad examples. Uses `help` i18n namespace. |
 | TipsBanner | `components/tips-banner.tsx` | Dismissible amber-tinted tips card with Lightbulb icon + bullet list. Per-tab content from `tips` i18n namespace. |
@@ -434,7 +470,7 @@ Composable pricing rules:
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
 - **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
-- **Phase 5** (Bidding): Bidding system implemented (Bid model, endpoints, bid history UI). Updated to use composable pricing fields.
+- **Phase 5** (Bidding): Complete redesign — public offers popup (bottom sheet/modal), accept/deny/complete/fail workflow, anonymous bidding, update-in-place, real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators.
 - **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page done. Remaining: browse page, category/tag filters
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
 - **Phase 6**: Not started
@@ -443,8 +479,8 @@ Composable pricing rules:
 
 1. Complete Railway deployment configuration (env vars)
 2. Phase 3: Public stall page, contact details
-3. Phase 5: Offer system (non-auction offers)
-4. Phase 6: Notifications
+3. Phase 6: Notifications (outbid alerts, bid accepted alerts, new bid alerts for seller)
+4. Phase 5 extras: "My Bids" page, bid cancellation (2-min grace period)
 5. Phase 7: Browse page with filters
 
 ## Known Issues
@@ -454,4 +490,4 @@ Composable pricing rules:
 - Resend sender is `onboarding@resend.dev` (dev domain) — need custom domain for production (`noreply@manvaig.com`)
 - Cloudinary credentials empty in `appsettings.json` — avatar upload won't work until configured in `appsettings.Development.json`
 - Phone verification is stubbed (always shows "unverified") — needs implementation later
-- Communication channels (WhatsApp/Telegram) hidden from public profiles until phone is verified
+- Communication channels: ShowEmail/ShowPhone flags control visibility independently of verification status

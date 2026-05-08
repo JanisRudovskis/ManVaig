@@ -276,7 +276,7 @@
 <div class="header">
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
-    <p>// click any task to toggle status · last updated 2026-05-07</p>
+    <p>// click any task to toggle status · last updated 2026-05-08</p>
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
     <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
@@ -291,6 +291,9 @@
     <!-- Session: 2026-05-06 — Item ordering (SortOrder + sort param + reorder endpoint). Activity badges (bid counts, highest bid, ended/ending soon). 3-step add item wizard (/my-stalls/[id]/items/new). Shared ImageManager component (arrow-based reorder, no dnd-kit). Reusable ImageLightbox. ConfirmDialog, ImageCropDialog. -->
     <!-- Session: 2026-05-07 — Composable pricing system (replaced PricingType enum with AcceptOffers + Price + MinOfferPrice + OfferStep + EndDate). 5-condition enum (New/LikeNew/Good/Fair/Poor, replaced New/Used/Worn). Unified item form (3-tab add+edit, replaced separate modal+wizard). 2-step add wizard (down from 3). Countdown delete confirmation dialog (3s/5s). Field-based card indicators (removed TypeTag). DateTimePicker component. Updated all controllers, DTOs, public projections, i18n (EN+LV). Two migrations: AddComposablePricing + UpdateConditionEnum. -->
     <!-- Session: 2026-05-07b — 3-layer in-form help system: inline hints (title, description, images, price), HelpPopover (?) component (condition, tags, offers, end date, visibility, min offer), dismissible TipsBanner per tab with cookie persistence (manvaig_tips_dismissed). Re-enable toggle in sidebar More menu. EN+LV translations. -->
+    <!-- Session: 2026-05-07c/08 — Phase 5 Bidding redesign: BidStatus enum (Active/Accepted/Completed/Denied/Failed/Expired), IsAnonymous + AcceptedAt fields, BidsController rewrite (public GET, place bid with update-in-place, accept/complete/fail/deny endpoints), public offers popup (bottom sheet mobile / centered modal desktop), full /items/[id]/offers page with tab blink, useOffersBids hook (polling 10s/3s retry, Web Audio API sound, slide-in animations, reliability indicators), anonymous bidding toggle, two-tap bid confirm, custom +/- step buttons, reverse numbering, image gallery lightbox, body scroll lock, speaker icon (replacing bell for future notifications). 60+ i18n keys EN+LV. Deleted bids-modal.tsx. -->
+    <!-- Session: 2026-05-08b — Profile pages a11y + UX polish: ProfilePopup migrated to shadcn Dialog (focus trap, aria-modal, Escape, scroll lock all from base-ui Radix). ProfileCard edit-mode: sticky Save/Cancel footer, hoisted profile-visibility master switch above email/phone, label association via htmlFor, aria-disabled + native disabled on channels block when private (replaces opacity-only). Removed maxLength on bio textarea (counter goes red over 1000, validate() shows i18n error). Owner now sees same chip-style contact display as public visitors. Email/phone change forms lifted into ChangeEmailDialog + ChangePhoneDialog (replaces nested edit-within-edit; cooldown timer lifted to EmailManagement so it persists across dialog open/close). Color contrast: emerald/blue/green/amber chip text bumped to 700 light / 300 dark to pass WCAG AA. Smartphone→Phone icon consistency across card. Extracted lib/profile-utils.ts (getLastSeenStatus + formatMemberDate, was duplicated). View-all-listings link added to public profile (stub route). 4 new i18n keys EN+LV (close, viewAllListings, changeEmailDescription, changePhoneDescription, addPhoneDescription). -->
+    <!-- Session: 2026-05-08c — Profile polish (5 tasks): phone change rate limiting (30-day cooldown for verified phones, LastPhoneChangedAt migration), email/phone button alignment (justify-between), WhatsApp as sub-toggle of Show Phone (indented, auto-clear), inline Telegram username input, mobile UI audit (responsive buttons, error layout, separators). Private profile visibility fix: removed IsProfilePublic filter from GetPublicProfile/GetUserListings — private profiles now return limited response (avatar+name) for anonymous visitors, full profile for authenticated users. Frontend sends auth token in public profile fetches. Contact channels always editable regardless of profile visibility. Updated i18n (profilePrivate, profilePrivateLoginHint, profilePrivateDescription). 3 migrations: AddLastSeenAt, AddTelegramUsername, AddLastPhoneChangedAt. -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -637,75 +640,55 @@
     <span class="phase-count" id="ph5-count"></span>
   </div>
   <div class="tasks" id="ph5">
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Offer model + migration (with Currency field, default EUR)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Bid model + BidStatus enum (Active/Accepted/Completed/Denied/Failed/Expired) + EF migration</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Make offer API endpoint (price + optional message)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">BidsController rewrite — public GET, place bid, accept/complete/fail/deny endpoints</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Anonymous offer — popup collects phone / email / messenger (min 1)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Anonymous bidding — toggle per bid, update-in-place (max 1 anon + 1 non-anon per user)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">API guard — reject anonymous offer if item has AllowAnonymousOffers = false</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Accept/deny workflow — two-phase acceptance (Accepted → Completed or Failed)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Enforce minimum offer price if set by seller</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Contact info reveal after acceptance (bidder email ↔ seller email)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Block seller from making offer on own item (API guard)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Anti-snipe — bids in last 10 min extend EndDate by 10 min</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">New offer from same buyer replaces previous (old auto-declined)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + seller actions + place bid form</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Accept / decline / counter offer API endpoints</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Full offers page (/items/[id]/offers) — tab title blink, sound notifications, image gallery</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Counter offer → buyer can accept or decline (CounterPending status)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Real-time UX — polling (10s/3s retry), Web Audio API sound, slide-in animations, reliability indicators</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">On accept → all other pending offers silently declined</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">On item deletion → all pending offers cancelled</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Post-acceptance: buyer sees seller contact details + item ID</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Offer history view for item owner</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
-    <div class="task" data-status="planned" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Make offer UI (item detail page)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Two-tap bid confirm, custom +/- step buttons, reverse numbering, body scroll lock</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
@@ -730,6 +713,16 @@
     <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
       <div class="task-text">Fake offer / abuse detection + rate limiting</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Auto-bidding (proxy bids) — premium users set max limit, system auto-bids up to it</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Auction audit log — track all bid events, seller actions, timestamps for dispute resolution</div>
       <div class="task-badge badge-future">future</div>
     </div>
   </div>
@@ -898,6 +891,11 @@
     <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Domain setup + Vercel + Railway deploy</div>
+      <div class="task-badge badge-planned">planned</div>
+    </div>
+    <div class="task" data-status="planned" data-phase="8" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Unsaved changes guard — detect form dirty state, confirm before navigating away or closing modal</div>
       <div class="task-badge badge-planned">planned</div>
     </div>
   </div>

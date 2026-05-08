@@ -14,7 +14,10 @@ public class ApplicationUser : IdentityUser<Guid>
     public int MaxItems { get; set; } = 10;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? TelegramUsername { get; set; }
     public DateTime? LastEmailSentAt { get; set; }
+    public DateTime? LastPhoneChangedAt { get; set; }
+    public DateTime? LastSeenAt { get; set; }
 
     public ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     public ICollection<UserDisplayedBadge> DisplayedBadges { get; set; } = new List<UserDisplayedBadge>();

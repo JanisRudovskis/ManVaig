@@ -1,5 +1,6 @@
 using System.Text;
 using ManVaig.Api.Data;
+using ManVaig.Api.Middleware;
 using ManVaig.Api.Models;
 using ManVaig.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -100,6 +101,7 @@ try
     app.UseCors();
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseMiddleware<LastSeenMiddleware>();
     app.MapControllers();
 
     app.Run();
