@@ -160,7 +160,7 @@ Build a `/people` page (people directory) where any visitor can search for users
     - Page heading: `<h1>` with `t("title")`, mobile-tight margins.
 - **Verify:** `cd frontend && npm run build` — 0 errors. Navigate to `/people`: empty-initial state renders. Type `ca` (1 char `c`, then `a`) — **no fetch on `c`, fetch fires once 300ms after `a` lands**. Press Enter mid-typing — fires immediately. Reload `/people?q=cak` — state restored, results render. Network tab shows `/api/v1/public/users?q=cak&page=1&pageSize=20` (or similar). Click a result card → lands on `/user/[displayName]` profile page.
 - **Parallel:** false (depends on Tasks 3, 4, 5)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 7: Frontend — add "Find people" entry to sidebar More menu
 - **Files:** `frontend/src/components/sidebar-more-menu.tsx`, `frontend/messages/en.json`, `frontend/messages/lv.json`
