@@ -26,7 +26,8 @@ public class PublicItemsController : ControllerBase
     public async Task<IActionResult> Browse(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
-        [FromQuery] int? categoryId = null)
+        [FromQuery] int? categoryId = null,
+        [FromQuery] string? q = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 50);
@@ -36,6 +37,17 @@ public class PublicItemsController : ControllerBase
 
         if (categoryId.HasValue)
             query = query.Where(i => i.CategoryId == categoryId.Value);
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var trimmed = q.Trim();
+            if (trimmed.Length > 100) trimmed = trimmed.Substring(0, 100);
+            var pattern = $"%{trimmed}%";
+            query = query.Where(i =>
+                EF.Functions.ILike(EF.Functions.Unaccent(i.Title), EF.Functions.Unaccent(pattern)) ||
+                (i.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(i.Description), EF.Functions.Unaccent(pattern))) ||
+                i.ItemTags.Any(it => EF.Functions.ILike(EF.Functions.Unaccent(it.Tag.Name), EF.Functions.Unaccent(pattern))));
+        }
 
         var totalCount = await query.CountAsync();
 
