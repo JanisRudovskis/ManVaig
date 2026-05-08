@@ -203,7 +203,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   - `contactEmail` — "Email available" / "Pieejams e-pasts"
 - **Verify:** `cd frontend && npm run build`. Every `t("people.*")` lookup in Tasks 4, 5, 6 resolves in BOTH locales. Switch locale via sidebar More → all `/people` strings localize.
 - **Parallel:** true (does not block Task 6 functionally — TS won't fail on missing i18n keys, only runtime would; do this before Task 6's verify)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 9: Polish + design audit
 - **Files:** any of the above as needed.

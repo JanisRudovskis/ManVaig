@@ -753,5 +753,26 @@
     "retry": "Try again",
     "liveCountItems": "{count, plural, one {# item matches} other {# items match}}",
     "liveCountStalls": "{count, plural, one {# stall matches} other {# stalls match}}"
+  },
+  "people": {
+    "title": "People",
+    "placeholder": "Search people…",
+    "clearSearch": "Clear search",
+    "loading": "Searching…",
+    "loadMore": "Load more",
+    "emptyInitial": "Find people",
+    "emptyInitialDescription": "Type a username to find someone",
+    "noResults": "No people match {q}",
+    "noResultsDescription": "Try a different username",
+    "errorLoadFailed": "Couldn't load people",
+    "retry": "Try again",
+    "liveCount": "{count, plural, one {# person matches} other {# people match}}",
+    "memberSinceShort": "Member since {year}",
+    "activeNever": "Never seen",
+    "activeAgo": "Active {time}",
+    "contactWhatsApp": "WhatsApp available",
+    "contactTelegram": "Telegram available",
+    "contactPhone": "Phone available",
+    "contactEmail": "Email available"
   }
 }
