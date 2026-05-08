@@ -439,17 +439,25 @@ export async function denyBid(itemId: string, bidId: string): Promise<void> {
 
 // === Public Browse API (no auth required) ===
 
+export interface FetchPublicItemsOptions {
+  page?: number;
+  pageSize?: number;
+  categoryId?: number | null;
+  q?: string;
+  signal?: AbortSignal;
+}
+
 export async function fetchPublicItems(
-  page = 1,
-  pageSize = 20,
-  categoryId?: number | null,
-  signal?: AbortSignal
+  options: FetchPublicItemsOptions = {}
 ): Promise<PublicItemListResponse> {
+  const { page = 1, pageSize = 20, categoryId, q, signal } = options;
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
   if (categoryId) params.set("categoryId", String(categoryId));
+  const trimmedQ = q?.trim();
+  if (trimmedQ) params.set("q", trimmedQ);
 
   const res = await fetch(`${API_URL}/api/v1/public/items?${params}`, { signal });
   if (!res.ok) throw new Error("browse_fetch_failed");

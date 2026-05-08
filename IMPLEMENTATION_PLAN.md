@@ -66,7 +66,7 @@ Build a unified /search page with a Stalls | Items tab toggle. Reuse the existin
   2. In `lib/stalls.ts` add interface `PublicStallListResponse` and exported `fetchPublicStalls({ page, pageSize, q, signal })` hitting `/api/v1/public/stalls`. No auth header required (use plain `fetch`, not `authFetch`).
 - **Verify:** `cd frontend && npx tsc --noEmit`. Homepage `/` still loads and paginates.
 - **Parallel:** false (Tasks 6/7 depend on these types)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 6: Frontend — PublicStallCard component
 - **Files:** `frontend/src/components/public-stall-card.tsx` (new)
