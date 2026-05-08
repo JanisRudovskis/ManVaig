@@ -325,7 +325,9 @@ export function SearchClient() {
           : error
             ? error
             : queryReady && totalCount > 0
-              ? String(totalCount)
+              ? t(tab === "items" ? "liveCountItems" : "liveCountStalls", {
+                  count: totalCount,
+                })
               : ""}
       </div>
 

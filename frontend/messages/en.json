@@ -750,6 +750,8 @@
     "noResultsStalls": "No stalls match {q}",
     "noResultsDescription": "Try different keywords",
     "errorLoadFailed": "Could not load results. Please try again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "liveCountItems": "{count, plural, one {# item matches} other {# items match}}",
+    "liveCountStalls": "{count, plural, one {# stall matches} other {# stalls match}}"
   }
 }
