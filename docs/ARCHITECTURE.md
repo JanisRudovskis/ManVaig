@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-08 (profile polish: phone rate limiting, button alignment, WhatsApp sub-toggle, inline Telegram input, mobile audit, private profile visibility fix)
+> Last updated: 2026-05-08 (search page: unified /search with Items|Stalls tabs, ?q= text search, Postgres unaccent diacritic folding, debounced + paginated, Lighthouse a11y 100)
 
 ---
 
@@ -134,6 +134,22 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 
 **Bid Summary on Items**: `ItemResponse` includes `BidCount`, `HighestBid`, `BiddingPaused`, `BiddingClosed` (computed from Bids navigation property, active bids only).
 
+### Public Browse / Search
+
+**Controllers** (anonymous, no `[Authorize]`):
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/public/items` (`PublicItemsController.Browse`) | Browse public items. Params: `page` (≥1), `pageSize` (1-50), `categoryId?`, `q?` (text search). Returns `PublicItemListResponse` with item cards (title, price, location, images, seller summary, bid summary). Filters to `Visibility == Public`. |
+| `GET /api/v1/public/stalls` (`PublicStallsController.Browse`) | Browse public stalls. Params: `page`, `pageSize`, `q?`. Returns `PublicStallListResponse`. Only stalls with ≥1 public item. Each stall projects up to 4 preview image URLs from public items. Ordered by ItemCount desc, CreatedAt desc. |
+
+**Search behavior** (`q` param, both endpoints):
+- Trimmed, capped at 100 chars server-side before pattern construction (DoS guard).
+- Pattern: `$"%{q}%"` applied via `EF.Functions.ILike(EF.Functions.Unaccent(field), EF.Functions.Unaccent(pattern))` on BOTH sides — folds Latvian diacritics so `riga` matches `Rīga`. Required Postgres extension: `unaccent` (added by `AddUnaccentExtension` migration: `CREATE EXTENSION IF NOT EXISTS unaccent;`).
+- Items match against: `Title`, `Description`, `ItemTags.Tag.Name`.
+- Stalls match against: `Stall.Name`, `Stall.Description`, `Stall.User.DisplayName`.
+- No relevance ranking in v1 — `OrderByDescending(CreatedAt)` for items; `OrderBy(ItemCount desc, CreatedAt desc)` for stalls. Future: switch to `pg_trgm` or full-text (`tsvector`) once volume/index pressure warrants — current implementation bypasses indexes due to `unaccent()` on indexed columns.
+
 ### Bidding System
 
 **Model: `Models/Bid.cs`** — ItemId, UserId, Amount, IsAnonymous, Status (BidStatus enum), AcceptedAt, CreatedAt.
@@ -202,7 +218,8 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `common`, `help`, `tips`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `search`, `common`, `help`, `tips`
+- Plural-aware messages use ICU `{count, plural, one {…} other {…}}` (see `search.liveCountItems`, `search.liveCountStalls`)
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
 ### Auth System
@@ -272,6 +289,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/my-stalls/[id]` | `StallItemsPage` | Stall items grid, activity badges, filters, reorder, edit stall |
 | `/my-stalls/[id]/items/new` | `AddItemPage` | 2-step wizard: step 1 = describe (category, images, details), step 2 = pricing + terms (uses ItemForm) |
 | `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
+| `/search` | `app/search/page.tsx` (server, exports `metadata` with `robots: { index: false }`) + `app/search/search-client.tsx` ("use client" inside `<Suspense>`) | Unified search: Items|Stalls segmented tabs, ?q= debounced 300ms, min 2 chars, Enter skips debounce, hint chips, Load more pagination, plural-aware live region |
 
 ### Component Map
 
@@ -311,6 +329,9 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | HelpPopover | `components/help-popover.tsx` | Reusable `(?)` icon → click-triggered Popover with title, description, optional good/bad examples. Uses `help` i18n namespace. |
 | TipsBanner | `components/tips-banner.tsx` | Dismissible amber-tinted tips card with Lightbulb icon + bullet list. Per-tab content from `tips` i18n namespace. |
 | useTipsDismissed | `lib/use-tips-dismissed.ts` | Cookie-based hook for tip banner dismissal. Cookie `manvaig_tips_dismissed`, 365-day expiry. |
+| PublicItemCard | `components/public-item-card.tsx` | Public marketplace item card — image carousel, price/end-date pills, location, time-ago, bid count. Used by homepage feed and /search results. |
+| PublicStallCard | `components/public-stall-card.tsx` | Public stall card — header strip (header image OR accent gradient with `bg-black/30` scrim for contrast), avatar/thumbnail circle, name (truncate), owner row with avatar + display name + location, item-count badge, preview thumbnails strip (cap 3 on `< sm:`, 4 from `sm:` upward). Click links to `/user/{displayName}`. Exports `PublicStallCardSkeleton` sibling. Shares visual primitives with PublicItemCard (rounded-xl, border, shadow). |
+| useDebouncedValue | `lib/use-debounced-value.ts` | Generic `useDebouncedValue<T>(value, delayMs)` hook. setTimeout/clearTimeout in `useEffect`. Used by /search input. |
 
 ### shadcn/ui Components Installed
 
@@ -471,7 +492,7 @@ Composable pricing rules:
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
 - **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
 - **Phase 5** (Bidding): Complete redesign — public offers popup (bottom sheet/modal), accept/deny/complete/fail workflow, anonymous bidding, update-in-place, real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators.
-- **Phase 7** (Browse): Homepage feed with category chips, infinite scroll, public item detail page done. Remaining: browse page, category/tag filters
+- **Phase 7** (Browse): Homepage feed with category chips + infinite scroll, public item detail page, **unified `/search` page** with Items|Stalls tabs and `?q=` text search (server-side ILIKE on title + description + tag name + stall name + owner display name, Postgres `unaccent` extension for diacritic folding so `riga` matches `Rīga`), debounced 300ms input with min 2 chars, hint chips, Load more pagination. Lighthouse mobile a11y/best-practices/agentic 100/100/100. Remaining: standalone browse-all-items page, category/tag filters as facets, public stall detail page (`/search` stall card currently links to `/user/{displayName}` profile)
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
 - **Phase 6**: Not started
 
@@ -481,7 +502,7 @@ Composable pricing rules:
 2. Phase 3: Public stall page, contact details
 3. Phase 6: Notifications (outbid alerts, bid accepted alerts, new bid alerts for seller)
 4. Phase 5 extras: "My Bids" page, bid cancellation (2-min grace period)
-5. Phase 7: Browse page with filters
+5. Phase 7: Standalone browse-all-items page (no query required), category/tag filter facets on `/search`, public stall detail page (currently `/search` stall card links to `/user/{displayName}`)
 
 ## Known Issues
 

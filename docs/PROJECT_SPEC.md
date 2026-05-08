@@ -1,7 +1,7 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-05-07 (rev 13 — composable pricing, 5-condition enum, unified item form)
+> **Last updated:** 2026-05-08 (rev 14 — unified /search page with Items|Stalls tabs, ?q= server-side text search, Postgres unaccent diacritic folding, debounced + paginated)
 > **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done
 
 ---
@@ -99,12 +99,13 @@
 - 💡 Contact blacklist — block specific values per shop
 
 ### Discovery
-- 🕐 Homepage with latest items
-- 🕐 Browse all items (paginated — offset, page + size)
-- 🕐 Filter by main category
-- 🕐 Filter / search by tags
-- 💡 Full-text search
-- 💡 Advanced filters (price range, condition, location)
+- ✅ Homepage with latest items
+- ✅ Unified `/search` page — Items|Stalls segmented tabs, ?q= text search (debounced 300ms, min 2 chars, Enter skips debounce), hint chips, Load more pagination, plural-aware live region. Server: `GET /api/v1/public/items?q=`, `GET /api/v1/public/stalls?q=` — Postgres `unaccent` extension folds Latvian diacritics (`riga` matches `Rīga`)
+- ✅ Filter / search by tags (server-side ILIKE on title + description + tag name + stall name + owner)
+- 🕐 Browse all items page (no query required, paginated — offset, page + size)
+- 🕐 Filter by main category facet on /search
+- 💡 Full-text search (`tsvector`/`pg_trgm` indexed) — promote when current `unaccent`-bypasses-index approach hits volume pressure
+- 💡 Advanced filters on /search (price range, condition, location)
 - 💡 Trending items algorithm
 
 ### Notifications
