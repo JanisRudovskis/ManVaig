@@ -93,7 +93,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   - `StallResponse`: + `Visibility`, + `DefaultCategoryId`, + `DefaultCategoryName` (string?, joined from `Category` navigation), + `DefaultLocation`, + `DefaultCanShip`, + `DefaultTags` (`List<string>` deserialized from JSON; empty list when JSON null), + `DefaultCondition`, + `DefaultAcceptOffers`.
 - **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
 - **Parallel:** true (independent; can run alongside Task 2 once Task 1 lands)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 4: Backend — `StallsController` accept new fields + validate constraints
 - **Files:** `backend/ManVaig.Api/Controllers/V1/StallsController.cs`
