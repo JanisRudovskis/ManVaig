@@ -126,7 +126,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   3. Mark a test stall Private via `PUT /api/v1/stalls/{id}`; restart not required if same backend instance. `curl /api/v1/public/stalls` no longer lists it. Items inside don't appear in `curl /api/v1/public/items`.
   4. Toggle stall back to Public → reappears.
 - **Parallel:** false (depends on Tasks 1, 2, 4)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 6: Backend — Detail stall-gate + `ProfileController` cascades
 - **Files:** `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`, `backend/ManVaig.Api/Controllers/V1/ProfileController.cs`

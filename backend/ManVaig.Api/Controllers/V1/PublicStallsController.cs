@@ -31,6 +31,7 @@ public class PublicStallsController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 50);
 
         var query = _db.Stalls
+            .Where(s => s.Visibility == StallVisibility.Public)
             .Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public));
 
         if (!string.IsNullOrWhiteSpace(q))

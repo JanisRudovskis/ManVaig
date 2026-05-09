@@ -33,7 +33,8 @@ public class PublicItemsController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 50);
 
         var query = _db.Items
-            .Where(i => i.Visibility == ItemVisibility.Public);
+            .Where(i => i.Visibility == ItemVisibility.Public)
+            .Where(i => i.Stall.Visibility == StallVisibility.Public);
 
         if (categoryId.HasValue)
             query = query.Where(i => i.CategoryId == categoryId.Value);
