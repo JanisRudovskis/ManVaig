@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   Check,
   AlertTriangle,
+  Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import type { FormImage } from "@/components/image-manager";
 import { LocationSearch } from "@/components/location-search";
 import { HelpPopover } from "@/components/help-popover";
 import { TipsBanner } from "@/components/tips-banner";
+import { VisibilityRadioCards } from "@/components/visibility-radio-cards";
 import { useTipsDismissed } from "@/lib/use-tips-dismissed";
 import { getMyProfile } from "@/lib/auth";
 import {
@@ -45,6 +47,7 @@ import type {
   CreateItemData,
   UpdateItemData,
 } from "@/lib/items";
+import type { StallDefaults } from "@/lib/stalls";
 
 // === Constants ===
 
@@ -58,13 +61,6 @@ const conditionOptions = [
   { value: Condition.Poor, key: "condPoor" },
 ];
 
-const visibilityOptions = [
-  { value: ItemVisibility.Public, key: "visPublic" },
-  { value: ItemVisibility.RegisteredOnly, key: "visRegistered" },
-  { value: ItemVisibility.LinkOnly, key: "visLinkOnly" },
-  { value: ItemVisibility.Private, key: "visPrivate" },
-];
-
 // === Types ===
 
 interface ItemFormProps {
@@ -72,6 +68,7 @@ interface ItemFormProps {
   item?: ItemResponse;
   stallId?: string;
   userLocation?: string | null;
+  stallDefaults?: StallDefaults;
   onClose?: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
@@ -84,10 +81,12 @@ export function ItemForm({
   item,
   stallId,
   userLocation,
+  stallDefaults,
   onClose,
   onSaved,
   onDeleted,
 }: ItemFormProps) {
+  const defaultsActive = mode === "add" && !!stallDefaults;
   const t = useTranslations("itemForm");
   const tc = useTranslations("categories");
   const locale = useLocale();
@@ -99,15 +98,23 @@ export function ItemForm({
   const [tabsUnlocked, setTabsUnlocked] = useState(mode === "edit");
 
   // Form state — Tab 1 (Basic Info)
-  const [categoryId, setCategoryId] = useState(item?.categoryId ?? 0);
+  const [categoryId, setCategoryId] = useState(
+    item?.categoryId ?? (defaultsActive ? stallDefaults?.categoryId ?? 0 : 0)
+  );
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [title, setTitle] = useState(item?.title ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
   const [condition, setCondition] = useState<number>(
-    item?.condition ?? Condition.Good
+    item?.condition ??
+      (defaultsActive
+        ? stallDefaults?.condition ?? Condition.Good
+        : Condition.Good)
   );
   const [location, setLocation] = useState(
-    item?.location ?? userLocation ?? ""
+    item?.location ??
+      (defaultsActive
+        ? stallDefaults?.location ?? userLocation ?? ""
+        : userLocation ?? "")
   );
   const [images, setImages] = useState<FormImage[]>(() => {
     if (mode === "edit" && item?.images?.length) {
@@ -123,7 +130,8 @@ export function ItemForm({
   // Form state — Tab 2 (Price)
   const [price, setPrice] = useState(item?.price?.toString() ?? "");
   const [acceptOffers, setAcceptOffers] = useState(
-    item?.acceptOffers ?? false
+    item?.acceptOffers ??
+      (defaultsActive ? stallDefaults?.acceptOffers ?? false : false)
   );
   const [minOfferPrice, setMinOfferPrice] = useState(
     item?.minOfferPrice?.toString() ?? ""
@@ -143,13 +151,20 @@ export function ItemForm({
 
   // Form state — Tab 3 (Options)
   const [visibility, setVisibility] = useState<number>(
-    item?.visibility ?? ItemVisibility.Public
+    item?.visibility ??
+      (defaultsActive
+        ? stallDefaults?.visibility ?? ItemVisibility.Public
+        : ItemVisibility.Public)
   );
-  const [canShip, setCanShip] = useState(item?.canShip ?? false);
+  const [canShip, setCanShip] = useState(
+    item?.canShip ?? (defaultsActive ? stallDefaults?.canShip ?? false : false)
+  );
   const [allowGuestOffers, setAllowGuestOffers] = useState(
     item?.allowGuestOffers ?? false
   );
-  const [tags, setTags] = useState<string[]>(item?.tags ?? []);
+  const [tags, setTags] = useState<string[]>(
+    item?.tags ?? (defaultsActive ? stallDefaults?.tags ?? [] : [])
+  );
   const [tagInput, setTagInput] = useState("");
   const tagInputRef = useRef<HTMLInputElement>(null);
 
@@ -174,16 +189,16 @@ export function ItemForm({
     fetchCategories().then(setCategories).catch(() => {});
   }, []);
 
-  // Pre-fill location from profile (add mode)
+  // Pre-fill location from profile (add mode) — only when no stall default
   useEffect(() => {
-    if (mode === "add") {
+    if (mode === "add" && !stallDefaults?.location) {
       getMyProfile()
         .then((profile) => {
           if (profile.location) setLocation(profile.location);
         })
         .catch(() => {});
     }
-  }, [mode]);
+  }, [mode, stallDefaults?.location]);
 
   // === Scroll helper ===
 
@@ -1067,24 +1082,24 @@ export function ItemForm({
 
       {/* Visibility & Options */}
       <div className="mb-7">
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div
+          id="item-form-visibility-heading"
+          className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+        >
           {t("sectionVisibility")}
         </div>
 
         <div className="mb-4">
-          <Label className="mb-1.5">{t("fieldVisibility")} <HelpPopover helpKey="visibility" /></Label>
-          <select
+          <Label className="mb-1.5">
+            {t("fieldVisibility")} <HelpPopover helpKey="visibility" />
+          </Label>
+          <VisibilityRadioCards
+            mode="item"
             value={visibility}
-            onChange={(e) => setVisibility(parseInt(e.target.value))}
-            className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 [&>option]:bg-background [&>option]:text-foreground"
-          >
-            {visibilityOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {t(opt.key)}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-muted-foreground">
+            onChange={setVisibility}
+            labelledBy="item-form-visibility-heading"
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
             {t("visibilityHint")}
           </p>
         </div>
@@ -1166,6 +1181,31 @@ export function ItemForm({
         ? tab2Content
         : tab3Content;
 
+  // ==================== Stall-defaults applied banner ====================
+
+  const hasAnyDefault =
+    !!stallDefaults &&
+    (stallDefaults.categoryId !== null ||
+      (stallDefaults.location?.length ?? 0) > 0 ||
+      stallDefaults.canShip ||
+      stallDefaults.condition !== null ||
+      stallDefaults.acceptOffers ||
+      stallDefaults.tags.length > 0 ||
+      stallDefaults.visibility !== ItemVisibility.Public);
+
+  const stallDefaultsBanner =
+    defaultsActive && hasAnyDefault ? (
+      <div
+        className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4"
+        role="status"
+      >
+        <Lightbulb className="mt-0.5 size-4 shrink-0 text-amber-300" />
+        <p className="text-xs text-muted-foreground">
+          {t("stallDefaultsApplied")}
+        </p>
+      </div>
+    ) : null;
+
   // ==================== RENDER: ADD MODE (full page) ====================
 
   if (mode === "add") {
@@ -1201,6 +1241,8 @@ export function ItemForm({
             />
           ))}
         </div>
+
+        {stallDefaultsBanner}
 
         {/* Tab content */}
         {activeTabContent}

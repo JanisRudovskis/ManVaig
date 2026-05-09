@@ -457,6 +457,7 @@
     "visLinkOnly": "Link Only",
     "visPrivate": "Private",
     "visibilityHint": "Controls who can see this item",
+    "stallDefaultsApplied": "Defaults applied from this stall — change any field to override.",
     "guestOffers": "Allow guest offers",
     "guestOffersHint": "Users without an account can submit offers (name + contact required)",
     "canShip": "Can ship",

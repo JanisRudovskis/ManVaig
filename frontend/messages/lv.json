@@ -457,6 +457,7 @@
     "visLinkOnly": "Tikai ar saiti",
     "visPrivate": "Privāts",
     "visibilityHint": "Nosaka, kas var redzēt šo sludinājumu",
+    "stallDefaultsApplied": "Pielietoti šī stenda noklusētie iestatījumi — mainot lauku, vērtība tiks pārrakstīta.",
     "guestOffers": "Atļaut viesu piedāvājumus",
     "guestOffersHint": "Lietotāji bez konta var iesniegt piedāvājumus (vārds + kontaktinformācija nepieciešama)",
     "canShip": "Iespējama piegāde",

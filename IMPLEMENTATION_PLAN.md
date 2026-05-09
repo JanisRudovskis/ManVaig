@@ -152,7 +152,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
      - **Replace the existing visibility Select entirely** with `<VisibilityRadioCards mode="item" value={visibility} onChange={setVisibility} />`. Match the existing form-field layout (label + control). The OLD Select-based visibility UI must be entirely removed; no fallback rendering.
 - **Verify:** `cd frontend && npm run build`. Open `/my-stalls/[id]/items/new` for a stall with defaults set → ItemForm pre-fills all the relevant fields + "Defaults applied from this stall" banner visible. Override category in the form, save → item saved with override (defaults are pre-fills, not constraints). Item-form visibility shows the same 4-card vertical layout as stall dialog. Open `/my-items/[id]/edit` (existing item edit) — visibility radio cards work there too without breaking the edit flow.
 - **Parallel:** false (depends on Tasks 1, 2)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 7: Frontend — i18n keys + final audit
 - **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`, any of the components from Tasks 2-6 as needed.
