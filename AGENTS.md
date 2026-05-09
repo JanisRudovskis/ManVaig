@@ -1,73 +1,62 @@
 # AGENTS.md — Ralph Operational Guide
 
-Read this every iteration. It overrides any default assumptions Ralph might make
-from the codebase scan.
+Read this every iteration. It overrides any default assumptions Ralph might make from the codebase scan.
 
-## Build / Run / Lint
+## Build / Run
 
 | What | Command |
 |---|---|
-| Frontend dev | `cd frontend && npm run dev` (port 3000) |
-| Frontend build | `cd frontend && npm run build` |
-| Frontend lint | `cd frontend && npm run lint` |
-| Frontend type-check | `cd frontend && npx tsc --noEmit` |
 | Backend run | `cd backend && dotnet run --project ManVaig.Api` (port 5100) |
 | Backend build | `cd backend && dotnet build ManVaig.sln` |
+| Generate migration | `cd backend && dotnet ef migrations add NAME --project ManVaig.Api` |
+| List migrations | `cd backend && dotnet ef migrations list --project ManVaig.Api` |
 
-There is NO unit test framework. Do NOT install Vitest/Jest. This branch does not require new tests.
+This cycle is **BACKEND-ONLY**. Do NOT touch `frontend/**`. Frontend changes are a separate cycle.
+
+There is NO unit test framework. Do NOT install xunit/nunit. This branch does not require new tests.
 
 ## Stack
 
-- Frontend: Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui (`@base-ui/react`), `next-intl`, `next-themes`, `lucide-react`
 - Backend: ASP.NET 9, EF Core, PostgreSQL, JWT auth
 - API routes: ALWAYS `/api/v1/...`
 
 ## Non-negotiable conventions
 
-- **Mobile-first.** Default Tailwind classes target mobile; use `sm:`, `md:`, `lg:` only to upscale.
-- **i18n.** Every user-facing string must come from `next-intl` (`useTranslations(...)`). Add keys to BOTH `frontend/messages/en.json` AND `frontend/messages/lv.json`. Never hardcode strings.
-- **No browser-native validation.** Never use `required`, `minLength`, `type="email"` — write custom i18n-aware validation.
-- **shadcn/ui only** for primitives. Do not introduce new UI libraries.
+- **Mirror existing patterns.** Other public controllers (`PublicStallsController`, `PublicItemsController`) and DTO files (`PublicItemDtos.cs`, `StallDtos.cs`) are the templates.
+- **Migration backfill MUST preserve current behavior.** Existing stalls get `Visibility=Public`, defaults null/false. No silent behavior change for existing data.
 - **No tests** unless explicitly asked. **No doc updates** unless explicitly asked (don't touch ROADMAP.html, ARCHITECTURE.md, etc).
 
-## Reuse — these already exist, do not rebuild
+## Reuse — these patterns already exist
 
 | Need | Use |
 |---|---|
-| **Search page shell pattern** (debounce, URL state, pagination, AbortController, ICU plural live region, empty/loading/error states) | `frontend/src/app/search/search-client.tsx` — copy the structure, trim to one tab |
-| **Public list-endpoint pattern** (anonymous, paginated, `?q=`, ILIKE search, returns `{ Items|Stalls, TotalCount, Page, PageSize }`) | `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs` |
-| **Card component pattern** (mobile-first, rounded-xl, skeleton variant exported alongside) | `frontend/src/components/public-stall-card.tsx` |
-| **Public list client lib** (plain fetch, no auth, URLSearchParams, typed response) | `frontend/src/lib/stalls.ts` (`fetchPublicStalls`) |
-| **Debounce hook** | `frontend/src/lib/use-debounced-value.ts` (already exists, do not duplicate) |
-| **Avatar with initials fallback** | `frontend/src/components/user-avatar.tsx` |
-| **Skeleton primitive** | `@/components/ui/skeleton` |
-| **Sidebar More menu** (where the new entry goes) | `frontend/src/components/sidebar-more-menu.tsx` |
+| Visibility enum pattern | `Models/Enums/ItemVisibility.cs` (4 states, Public=0, RegisteredOnly=1, LinkOnly=2, Private=3 — match `StallVisibility` integers exactly) |
+| Item.Visibility detail switch | `PublicItemsController` Detail action — keep existing switch intact, ADD stall-gate BEFORE it |
+| Browse query filter pattern | `PublicStallsController.Browse` and `PublicItemsController.Browse` |
+| User-listings cascade | `ProfileController.GetUserListings` — extend existing `i.Visibility == Public` filter with `&& i.Stall.Visibility == Public` |
+| Validation error response shape | Existing controllers return `BadRequest(new { error = "ERROR_CODE" })` |
+| JSON column for tags | `System.Text.Json.JsonSerializer.Serialize(list)` to store, `Deserialize<List<string>>` on read. Stored as `string?` column type. |
+| Composable defaults pattern | `Item` already has `Category/Location/CanShip/Tags/Condition/AcceptOffers` — same field types/shapes; stall defaults are NULLABLE counterparts that pre-fill new items (frontend-side wiring is a separate cycle) |
+| Composite-index slug uniqueness | `Stall` already uses `(UserId, Slug)` composite index — keep it as-is |
 
-## Privacy contract for `/api/v1/public/users`
+## Composition rules (the load-bearing part)
 
-- Anonymous viewer → `IsActive AND IsProfilePublic` only.
-- Authenticated viewer → `IsActive` only (sees public + private).
-- If a user is in the result set at all, ALL fields render — no partial cards.
-- DisplayName regex `[a-zA-Z0-9_-]{3,30}` → no diacritics → `EF.Functions.ILike` is enough; **do NOT add `EF.Functions.Unaccent`** for this controller.
-
-## Backend — what's already there
-
-- `LastSeenMiddleware` updates `ApplicationUser.LastSeenAt` on auth requests (5-min throttle). The data is free — just project it through.
-- `EnabledChannels` is a flags enum: `WhatsApp=1, Telegram=2, ShowEmail=4, ShowPhone=8`. Compute `Has*` booleans on the server (see plan Task 2).
-- Existing `PublicStallsController` and `PublicItemsController` are the controller-shape templates. Mirror them; add only what the privacy contract requires.
+- **Browse** (`/api/v1/public/stalls` and `/api/v1/public/items`) lists ONLY `stall.Visibility == Public AND item.Visibility == Public`. Other states are direct-link-only — including for authed users.
+- **Detail** (`GET /api/v1/public/items/{id}`): stall-gate FIRST (Private → 404 non-owner; RegisteredOnly → 401 anon; LinkOnly/Public → fall through), THEN existing item-visibility switch (unchanged).
+- **Owner always sees own content** regardless of any visibility level.
+- **`IsDefault==true` requires `Visibility==Public`** — API rejects with `IS_DEFAULT_REQUIRES_PUBLIC`.
 
 ## Branch & commits
 
-- Working branch: `ralph/people-search` (do not push to or merge into master)
+- Working branch: `ralph/stall-redesign-backend` (do not push to or merge into master)
 - Commit style: conventional, lowercase verb (`feat:`, `fix:`, `refactor:`)
 - One commit per task
-- **Note:** the project's `.claude/settings.local.json` denies `git commit *` and `git push *` for the agent. Stage changes; the human will commit in chunks. If commits are blocked, do not stall the loop — surface the blocker in the iteration output.
+- Note: project's deny list MAY block `git commit *`. Last cycle (people-search) committed cleanly though. If commits are blocked, surface in iteration output and stage changes; the human will commit in chunks.
 
-## Out of scope for this branch
+## Out of scope for this cycle
 
-- Online presence (heartbeat / websocket) — `LastSeenAt` only
-- Filters or sort UI on `/people`
-- New sidebar nav item — entry stays in More menu
-- In-app messaging
-- DB unique index on DisplayName
-- Doc updates (ROADMAP, ARCHITECTURE)
+- **Frontend changes** (`frontend/**`) — completely off-limits
+- Public stall detail page endpoint — separate cycle
+- Toast/warning UX when a stall change hides items
+- Bulk-apply stall defaults to existing items
+- Doc updates

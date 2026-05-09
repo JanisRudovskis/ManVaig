@@ -1,238 +1,177 @@
 # Implementation Plan
 
 ## Goal
-Build a `/people` page (people directory) where any visitor can search for users by display name, click a result card, and land on the existing `/user/[displayName]` profile. MVP: text search by displayName only, mobile-first, EN+LV i18n, debounced input (300ms), min 2 chars, empty-initial state with hint, "Active N ago" label sourced from existing `LastSeenAt` field. No new sidebar item — entry point is at the top of the existing sidebar More menu. No filters.
 
-## Privacy contract (load-bearing — read carefully)
+Add 4-state Visibility (Public / RegisteredOnly / LinkOnly / Private) to Stall, mirroring `ItemVisibility`, plus stall-level defaults for new items (`DefaultCategoryId`, `DefaultLocation`, `DefaultCanShip`, `DefaultTagsJson`, `DefaultCondition`, `DefaultAcceptOffers`). Cascade visibility filtering through `PublicStallsController`, `PublicItemsController`, and `ProfileController` so non-Public stalls hide their items from public browse and direct-link semantics work correctly. **Backend-only cycle** — frontend changes are a separate cycle.
 
-- `ApplicationUser.IsProfilePublic` defaults `true`. Recent commit added private-profile visibility.
-- **Anonymous viewer:** only `IsActive == true AND IsProfilePublic == true` users appear in `/api/v1/public/users` results. Private users are completely invisible to anonymous searchers.
-- **Authenticated viewer:** sees all `IsActive == true` users (public + private), full card.
-- Rule of thumb: **if a user is visible at all in the result set, ALL fields on the card are shown** (avatar, displayName, memberSince, last-seen, contact-method icons). Don't invent partial cards.
+## Privacy/visibility contract (load-bearing)
+
+- **Stall visibility states** (mirror `ItemVisibility` integer assignments): `Public=0, RegisteredOnly=1, LinkOnly=2, Private=3`.
+- **Composition** — most-restrictive wins, orthogonal axes. If EITHER `stall.Visibility` OR `item.Visibility` imposes a constraint, that constraint applies to the item.
+- **Browse** (`/api/v1/public/stalls` and `/api/v1/public/items`) lists ONLY rows where `stall.Visibility == Public` AND `item.Visibility == Public`. All other states are direct-link-only — including for authed users. Matches existing item-side behavior.
+- **Detail** (`GET /api/v1/public/items/{id}`):
+  1. Stall gate FIRST: `Private` → 404 to non-owner; `RegisteredOnly` → 401 to anon; `LinkOnly`/`Public` → fall through
+  2. Item gate (existing logic, unchanged): `Private` → 404 to non-owner; `RegisteredOnly` → 401 to anon; `LinkOnly`/`Public` → 200
+- **Owner always sees own content** regardless of visibility.
+- **`IsDefault==true` requires `Visibility==Public`** — API rejects otherwise (prevents the "default stall is Private → all items invisible" footgun). Error code `IS_DEFAULT_REQUIRES_PUBLIC`.
+
+## Composition matrix (verification reference)
+
+| Stall \ Item | Public | RegisteredOnly | LinkOnly | Private |
+|---|:-:|:-:|:-:|:-:|
+| **Public** | Browse + link | Login wall (detail) | Direct link only | Owner only |
+| **RegisteredOnly** | Login wall | Login wall | Login wall + direct link | Owner only |
+| **LinkOnly** | Direct link only | Login wall + direct link | Direct link only | Owner only |
+| **Private** | Owner only | Owner only | Owner only | Owner only |
+
+Public×Public is the ONLY cell that surfaces in browse listings.
 
 ## Context (from codebase exploration)
 
-- **`ApplicationUser`** (`backend/ManVaig.Api/Models/ApplicationUser.cs`) has: `DisplayName` (3–30 chars, regex `^[a-zA-Z0-9_-]{3,30}$` — **no diacritics, no spaces**, so no `unaccent` needed for this search), `AvatarUrl`, `Bio`, `Location`, `Phone`, `TelegramUsername`, `IsProfilePublic` (bool, default true), `EnabledChannels` (flags: WhatsApp=1, Telegram=2, ShowEmail=4, ShowPhone=8), `IsActive` (bool), `CreatedAt`, `LastSeenAt` (nullable, populated by `LastSeenMiddleware` with 5-minute throttle), `EmailConfirmed` (Identity-managed).
-- **DisplayName uniqueness** is enforced at registration via case-insensitive `AnyAsync` check in `AuthController.Register`. There is no DB unique index, but in practice every register check enforces it. Safe to use `displayName` as a key in URLs.
-- **Existing public controllers** to mirror: `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs` and `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs`. Both are anonymous, paginated (`page`, `pageSize`), accept `?q=`, return `{ Items|Stalls, TotalCount, Page, PageSize }`. Stalls controller filters out private content (only stalls with at least one public item) — same shape applies to user privacy here.
-- **DTO file convention:** `backend/ManVaig.Api/Models/Dto/PublicItemDtos.cs` exists. Add `PublicUserDtos.cs` alongside (do NOT cram into `ProfileDtos.cs` — different concern).
-- **Frontend search shell to mirror:** `frontend/src/app/search/search-client.tsx` is the canonical pattern. It has: debounced input (300ms via `lib/use-debounced-value.ts`), URL state via `useSearchParams` + `replace` + `scroll: false`, min query length 2, `Enter` skips debounce, generation counter + `AbortController` for race safety, pagination ("Load more" appends), `role="status"` + `aria-live="polite"` live region with ICU plurals, empty-initial state with hint chip(s), error/retry, skeletons. Copy the structure directly — do not reinvent.
-- **`fetchPublicStalls`** in `frontend/src/lib/stalls.ts` is the call-pattern. Plain `fetch` (not `authFetch`), URLSearchParams append, returns typed list response.
-- **`PublicStallCard`** (`frontend/src/components/public-stall-card.tsx`) is the card pattern: same `rounded-xl`, same border, mobile-first, skeleton variant exported alongside.
-- **`UserAvatar`** (`frontend/src/components/user-avatar.tsx`) handles avatar + initials fallback. Reuse it on the card.
-- **Sidebar More menu** lives at `frontend/src/components/sidebar-more-menu.tsx`. Current order: Theme / Language / Listing tips / (sep) / Logout. Add "Find people" at the very top (above Theme), with `Users` lucide icon. Click → close popover + `router.push("/people")`.
-- **i18n:** namespaces under `frontend/messages/{en,lv}.json`. Add a new top-level `people.*` namespace, plus one new key `nav.findPeople` for the More menu entry. Latvian terminology is "stendi" for stalls already established — keep "cilvēki" (people) consistent with that natural-language style.
-- **Last-active label format:** use `next-intl`'s `useFormatter().relativeTime(date, now)` — handles all unit bucketing (minutes / hours / days / weeks / months) and i18n automatically. Wrap in a tiny `useRelativeTime()` hook in `frontend/src/lib/use-relative-time.ts` that returns `t("activeAgo", { time })` or `t("activeNever")` if `LastSeenAt` is null.
-- **Routing:** `/user/[displayName]` already exists (handled by `ProfileController.GetPublicProfile`). Card click links there directly.
+- **`Models/Enums/ItemVisibility.cs`** has `Public=0, RegisteredOnly=1, LinkOnly=2, Private=3`. New `StallVisibility` MUST use the same integer assignments.
+- **`Models/Stall.cs`** currently has: `Id, UserId, Name, Slug, Description, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, AccentColor, SortOrder, IsDefault, CreatedAt, UpdatedAt`. Slug is unique-per-user via composite index `(UserId, Slug)`.
+- **`Models/Item.cs`** — `StallId` is REQUIRED (not nullable). `CategoryId` is `int` (NOT Guid) — important for the FK type on `DefaultCategoryId`. Has `Tags` via `ItemTags` join table. Has `Visibility` (`ItemVisibility`), `Location` (`string?`), `CanShip` (`bool`), `Condition` (`Condition` enum), `AcceptOffers` (`bool`).
+- **`PublicStallsController.Browse`** filter currently: `Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public))`. Needs `&& s.Visibility == StallVisibility.Public` added.
+- **`PublicItemsController.Browse`** filter currently: `Where(i => i.Visibility == ItemVisibility.Public)`. Needs `&& i.Stall.Visibility == StallVisibility.Public` added.
+- **`PublicItemsController.Detail`** has a switch on `item.Visibility` (Public, RegisteredOnly, LinkOnly, Private) at lines ~126-140. Keep that switch intact and add a stall-visibility gate BEFORE it.
+- **`ProfileController.GetUserListings`** filters items by `i.Visibility == ItemVisibility.Public`. Add `&& i.Stall.Visibility == StallVisibility.Public`.
+- **`ProfileController.MapToResponse.ActiveListingCount`** counts `i.Visibility == Public`. Same cascade.
+- **`Models/Dto/StallDtos.cs`** has `CreateStallRequest` (Name/Description/AccentColor), `UpdateStallRequest` (Name/Slug/Description/AccentColor), `StallResponse` (full set), `PublicStallResponse`. **DO NOT expose Visibility on `PublicStallResponse`** — non-Public stalls won't surface in public endpoints anyway, no need to leak.
+- **`StallsController`** is at `Controllers/V1/StallsController.cs`. Map new fields in Create/Update/Map. Validate the new constraints there.
+- **Existing item-tag char regex** lives in item validation logic; reuse pattern for stall default-tags.
 
 ## Tasks
 
-### Task 1: Backend — add `PublicUserCardDto` + `PublicUserListResponse` DTOs
-- **Files:** `backend/ManVaig.Api/Models/Dto/PublicUserDtos.cs` (new)
-- **Action:** Create new file with two classes:
+### Task 1: Backend — add `StallVisibility` enum
+- **Files:** `backend/ManVaig.Api/Models/Enums/StallVisibility.cs` (new)
+- **Action:** Create new file:
   ```csharp
-  public class PublicUserCardDto
-  {
-      public string DisplayName { get; set; } = "";
-      public string? AvatarUrl { get; set; }
-      public DateTime MemberSince { get; set; }
-      public DateTime? LastSeenAt { get; set; }
-      public bool HasWhatsApp { get; set; }
-      public bool HasTelegram { get; set; }
-      public bool HasPhone { get; set; }
-      public bool HasEmail { get; set; }
-  }
+  namespace ManVaig.Api.Models.Enums;
 
-  public class PublicUserListResponse
+  public enum StallVisibility
   {
-      public List<PublicUserCardDto> Users { get; set; } = new();
-      public int TotalCount { get; set; }
-      public int Page { get; set; }
-      public int PageSize { get; set; }
+      Public = 0,
+      RegisteredOnly = 1,
+      LinkOnly = 2,
+      Private = 3
   }
   ```
-  Namespace `ManVaig.Api.Models.Dto`. Mirror naming convention of `PublicStallListResponse` in `StallDtos.cs`.
+  Mirror `ItemVisibility` integer assignments exactly.
 - **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
-- **Parallel:** true (independent of all others)
-- **Status:** [x] Complete
+- **Parallel:** true (foundation for Tasks 2–6)
+- **Status:** [ ] Pending
 
-### Task 2: Backend — create `PublicUsersController` with browse + search + privacy filter
-- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicUsersController.cs` (new)
-- **Action:** New controller `[Route("api/v1/public/users")] [ApiController]`, action `[HttpGet] Browse([FromQuery] int page = 1, int pageSize = 20, string? q = null)`. Mirror the shape of `PublicStallsController.Browse`. Logic:
-  - `page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 50);`
-  - Base query: `_db.Users.Where(u => u.IsActive)`.
-  - **Privacy filter:** if `User.Identity?.IsAuthenticated != true`, also `Where(u => u.IsProfilePublic)`. Anonymous viewers never see private users.
-  - When `q` is non-null/non-whitespace: trim, cap at 100 chars, `var pattern = $"%{trimmed}%"`. Apply `.Where(u => u.DisplayName != null && EF.Functions.ILike(u.DisplayName, pattern))`. **No `EF.Functions.Unaccent` needed** — DisplayName regex already excludes diacritics.
-  - Sort: `OrderByDescending(u => u.LastSeenAt.HasValue).ThenByDescending(u => u.LastSeenAt).ThenByDescending(u => u.CreatedAt)` — most recently active first, never-seen users at the bottom.
-  - Project to `PublicUserCardDto`. Compute `Has*` flags inline:
-    - `HasEmail = (u.EnabledChannels & CommunicationChannels.ShowEmail) != 0 && u.EmailConfirmed`
-    - `HasPhone = (u.EnabledChannels & CommunicationChannels.ShowPhone) != 0 && u.Phone != null && u.Phone != ""`
-    - `HasWhatsApp = (u.EnabledChannels & CommunicationChannels.ShowPhone) != 0 && (u.EnabledChannels & CommunicationChannels.WhatsApp) != 0 && u.Phone != null && u.Phone != ""`
-    - `HasTelegram = (u.EnabledChannels & CommunicationChannels.Telegram) != 0 && u.TelegramUsername != null && u.TelegramUsername != ""`
-  - Return `Ok(new PublicUserListResponse { Users = users, TotalCount = totalCount, Page = page, PageSize = pageSize })`.
-- **Verify:** `cd backend && dotnet build ManVaig.sln`. After API restart: `curl "http://localhost:5100/api/v1/public/users?q=cak&pageSize=5"` returns 200 JSON; should include the seed user "Čaks" (display name `Caks` — verify exact casing). `curl "http://localhost:5100/api/v1/public/users?q=ABC123XYZ"` returns 200 with `users: []`, `totalCount: 0`.
-- **Parallel:** false (depends on Task 1)
-- **Status:** [x] Complete
-
-### Task 3: Frontend — `lib/users.ts` with `fetchPublicUsers`
-- **Files:** `frontend/src/lib/users.ts` (new)
-- **Action:** Mirror `lib/stalls.ts` `fetchPublicStalls`. Export:
-  ```typescript
-  export interface PublicUserCard {
-    displayName: string;
-    avatarUrl: string | null;
-    memberSince: string;       // ISO date
-    lastSeenAt: string | null; // ISO date
-    hasWhatsApp: boolean;
-    hasTelegram: boolean;
-    hasPhone: boolean;
-    hasEmail: boolean;
-  }
-  export interface PublicUserListResponse {
-    users: PublicUserCard[];
-    totalCount: number;
-    page: number;
-    pageSize: number;
-  }
-  export async function fetchPublicUsers(opts: {
-    page?: number; pageSize?: number; q?: string; signal?: AbortSignal;
-  }): Promise<PublicUserListResponse> { ... }
-  ```
-  Use plain `fetch` (no `authFetch`). Build URLSearchParams; only append `q` when truthy and trimmed. API base URL same as other lib files (`process.env.NEXT_PUBLIC_API_URL`).
-- **Verify:** `cd frontend && npx tsc --noEmit` — 0 errors.
-- **Parallel:** true (independent)
-- **Status:** [x] Complete
-
-### Task 4: Frontend — `useRelativeTime` hook for "Active N ago" labels
-- **Files:** `frontend/src/lib/use-relative-time.ts` (new)
-- **Action:** Tiny hook combining `next-intl`'s formatter with i18n strings:
-  ```typescript
-  "use client";
-  import { useFormatter, useTranslations } from "next-intl";
-  export function useRelativeTime() {
-    const format = useFormatter();
-    const t = useTranslations("people");
-    return (date: Date | string | null | undefined): string => {
-      if (!date) return t("activeNever");
-      const d = typeof date === "string" ? new Date(date) : date;
-      return t("activeAgo", { time: format.relativeTime(d, new Date()) });
-    };
-  }
-  ```
-  `format.relativeTime` returns localized strings like "5 minutes ago" / "pirms 5 minūtēm" — i18n is free.
-- **Verify:** `cd frontend && npx tsc --noEmit`.
-- **Parallel:** true (independent)
-- **Status:** [x] Complete
-
-### Task 5: Frontend — `PublicUserCard` component + skeleton variant
-- **Files:** `frontend/src/components/public-user-card.tsx` (new)
-- **Action:** Mobile-first card. Visual primitives MUST match `PublicStallCard` (`rounded-xl`, `border`, comparable shadow + height) so the design system stays coherent. Layout:
-  - `next/link` to `/user/{displayName}` wraps the whole card (block-level link). `aria-label` describes the destination.
-  - Top row: `UserAvatar` (size `md`, reuse `frontend/src/components/user-avatar.tsx`) + displayName (`font-semibold`, truncate).
-  - Second row (small, muted): `t("memberSinceShort", { year })` where `year = new Date(memberSince).getFullYear()`.
-  - Third row (small, muted): `useRelativeTime()` formatter applied to `lastSeenAt`.
-  - Fourth row: contact-method icon strip — show small lucide icons (`MessageCircle` for WhatsApp, `Send` for Telegram, `Phone`, `Mail`) ONLY for the channels where the corresponding `has*` boolean is true. Each icon needs an `aria-label` from i18n. If all four are false, hide the row entirely (no empty placeholder).
-  - Hover/focus state matches stall card (subtle bg shift).
-- Export `PublicUserCardSkeleton` alongside (avatar circle + 3 text lines). Match height of the real card.
-- **Verify:** `cd frontend && npx tsc --noEmit`. Renders on `/people` in Task 6.
-- **Parallel:** true (does not block Tasks 1–4)
-- **Status:** [x] Complete
-
-### Task 6: Frontend — `/people` page (server wrapper + client)
-- **Files:** `frontend/src/app/people/page.tsx` (new server-page wrapper), `frontend/src/app/people/people-client.tsx` (new client component)
+### Task 2: Backend — migration `AddStallVisibilityAndDefaults` + Stall model fields
+- **Files:** `backend/ManVaig.Api/Models/Stall.cs`, `backend/ManVaig.Api/Migrations/{timestamp}_AddStallVisibilityAndDefaults.cs` (new), `backend/ManVaig.Api/Migrations/AppDbContextModelSnapshot.cs` (auto-updated)
 - **Action:**
-  - **Server page** (`page.tsx`): export `metadata` with `robots: { index: false }` and `title` from `t("people.title")` (use `getTranslations` for server-side i18n on metadata). Body: `<Suspense fallback={null}><PeopleClient /></Suspense>`. Suspense is required because `PeopleClient` calls `useSearchParams`.
-  - **Client** (`people-client.tsx`, `"use client"`): copy the structure of `frontend/src/app/search/search-client.tsx` and trim to a single tab (no Items/Stalls toggle). Specifically:
-    - URL state via `useSearchParams` + `useRouter` (`replace`, `scroll: false`): `q` only.
-    - Local input state, debounced 300ms via `useDebouncedValue`.
-    - **Min query length 2.** Below that, do not fire the API; show empty-initial state.
-    - **Enter skips debounce.** `onKeyDown`: if `e.key === "Enter"` and trimmed length ≥ 2, fire fetch immediately.
-    - Search input: shadcn `Input` with `Search` lucide icon prefix + clear `X` button when value present. Placeholder = `t("placeholder")`. Clear button has `aria-label={t("clearSearch")}` and tap target ≥ 44px (use `p-2`). **No browser-native validation** (no `required`/`minLength`).
-    - `genRef` (incrementing number) + `AbortController` per fetch — drop stale responses by comparing `gen === currentGen.current` after `await`.
-    - Pagination: 20/page; show "Load more" button when `data.totalCount > rendered.length`. Click bumps `page`, appends results. Reset page to 1 whenever `q` changes.
-    - **Live region:** `<div role="status" aria-live="polite" className="sr-only">{...}</div>` announcing the count via ICU plural — use `t("liveCount", { count: totalCount })` — only when `queryReady && totalCount >= 0` and not loading/erroring. On zero results, the empty state heading already announces; do NOT also push a zero-count live announcement (matches `search-client` style).
-    - **Empty-initial state** (`q.trim().length < 2`): centered column, large muted `Users` lucide icon (~48px), heading `t("emptyInitial")`, subtitle `t("emptyInitialDescription")`. No hint chips on this page (different intent than `/search` — users come here with a name in mind).
-    - **Loading state:** 6 `PublicUserCardSkeleton` in a single column.
-    - **Loaded with results:** list of `PublicUserCard` (single column, `gap-3`).
-    - **Loaded with 0 results:** centered, `Users` icon, `t("noResults", { q })`, `t("noResultsDescription")`.
-    - **Error state:** `t("errorLoadFailed")` + retry button (`t("retry")`).
-    - Layout container: `<main className="mx-auto max-w-[600px] px-4 py-6 md:px-6 md:py-8">` — matches `/search`.
-    - Page heading: `<h1>` with `t("title")`, mobile-tight margins.
-- **Verify:** `cd frontend && npm run build` — 0 errors. Navigate to `/people`: empty-initial state renders. Type `ca` (1 char `c`, then `a`) — **no fetch on `c`, fetch fires once 300ms after `a` lands**. Press Enter mid-typing — fires immediately. Reload `/people?q=cak` — state restored, results render. Network tab shows `/api/v1/public/users?q=cak&page=1&pageSize=20` (or similar). Click a result card → lands on `/user/[displayName]` profile page.
-- **Parallel:** false (depends on Tasks 3, 4, 5)
-- **Status:** [x] Complete
+  1. In `Stall.cs` add the 7 new fields:
+     ```csharp
+     public StallVisibility Visibility { get; set; } = StallVisibility.Public;
+     public int? DefaultCategoryId { get; set; }
+     public Category? DefaultCategory { get; set; }   // navigation, nullable
+     public string? DefaultLocation { get; set; }
+     public bool DefaultCanShip { get; set; } = false;
+     public string? DefaultTagsJson { get; set; }    // JSON-encoded list of tag-name strings
+     public Condition? DefaultCondition { get; set; } // nullable enum
+     public bool DefaultAcceptOffers { get; set; } = false;
+     ```
+     Add `using ManVaig.Api.Models.Enums;` if not already.
+  2. Generate migration: `cd backend && dotnet ef migrations add AddStallVisibilityAndDefaults --project ManVaig.Api`. Verify the generated migration includes explicit `defaultValue: 0` for `Visibility` and `defaultValue: false` for the bools so existing rows backfill cleanly.
+  3. The `Migrate()` call at startup (`Program.cs`) applies it on next API boot.
+- **Verify:**
+  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
+  2. `dotnet ef migrations list --project ManVaig.Api` lists the new migration.
+  3. After API restart, existing stalls show `Visibility=0` (Public) and all defaults null/false — no behavior change.
+- **Parallel:** false (depends on Task 1)
+- **Status:** [ ] Pending
 
-### Task 7: Frontend — add "Find people" entry to sidebar More menu
-- **Files:** `frontend/src/components/sidebar-more-menu.tsx`, `frontend/messages/en.json`, `frontend/messages/lv.json`
-- **Action:** In `sidebar-more-menu.tsx`, in the `view === "main"` block, add a new button as the FIRST entry (above the theme toggle):
-  ```tsx
-  <button
-    onClick={() => { setOpen(false); router.push("/people"); }}
-    className={btnClass}
-  >
-    <Users className="size-4 shrink-0" />
-    <span className="flex-1 text-left">{t("findPeople")}</span>
-  </button>
-  ```
-  Import `Users` from `lucide-react` (already imports other lucide icons in this file). The `t` for `nav` is already in scope. Add `nav.findPeople` to BOTH `en.json` ("Find people") and `lv.json` ("Atrast cilvēkus").
-- **Verify:** Open sidebar → click hamburger ("More") → popover opens → "Find people" is the first entry, with the Users icon. Click → popover closes, navigates to `/people`. Switch language to LV → entry shows "Atrast cilvēkus".
-- **Parallel:** false (depends on Task 6 page existing for the click target to resolve)
-- **Status:** [x] Complete
+### Task 3: Backend — extend StallDtos
+- **Files:** `backend/ManVaig.Api/Models/Dto/StallDtos.cs`
+- **Action:** Extend three DTOs (DO NOT touch `PublicStallResponse` — non-Public stalls don't surface in public endpoints):
+  - `CreateStallRequest`: + `Visibility` (`StallVisibility`, default `Public`), + `DefaultCategoryId` (`int?`), + `DefaultLocation` (`string?`), + `DefaultCanShip` (`bool` default false), + `DefaultTags` (`List<string>?`, max 10 — server serializes to JSON for storage), + `DefaultCondition` (`Condition?`), + `DefaultAcceptOffers` (`bool` default false).
+  - `UpdateStallRequest`: same additions, but make bool fields `bool?` to allow partial updates (existing fields like `Name` are nullable strings — same pattern). Server only writes a field if non-null in the request.
+  - `StallResponse`: + `Visibility`, + `DefaultCategoryId`, + `DefaultCategoryName` (string?, joined from `Category` navigation), + `DefaultLocation`, + `DefaultCanShip`, + `DefaultTags` (`List<string>` deserialized from JSON; empty list when JSON null), + `DefaultCondition`, + `DefaultAcceptOffers`.
+- **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
+- **Parallel:** true (independent; can run alongside Task 2 once Task 1 lands)
+- **Status:** [ ] Pending
 
-### Task 8: Frontend — add `people.*` i18n strings (EN + LV)
-- **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`
-- **Action:** Add a top-level `people` namespace to BOTH locale files. Required keys (and their EN values; LV must mirror with natural Latvian, using "cilvēki" for "people"):
-  - `title` — "People" / "Cilvēki"
-  - `placeholder` — "Search people…" / "Meklēt cilvēkus…"
-  - `clearSearch` — "Clear search" / "Notīrīt meklēšanu"
-  - `loading` — "Searching…" / "Meklē…"
-  - `loadMore` — "Load more" / "Ielādēt vairāk"
-  - `emptyInitial` — "Find people" / "Atrast cilvēkus"
-  - `emptyInitialDescription` — "Type a username to find someone" / "Ieraksti lietotājvārdu, lai kādu atrastu"
-  - `noResults` — "No people match {q}" / "Nav atrasts neviens cilvēks ar {q}"
-  - `noResultsDescription` — "Try a different username" / "Mēģini citu lietotājvārdu"
-  - `errorLoadFailed` — "Couldn't load people" / "Neizdevās ielādēt cilvēkus"
-  - `retry` — "Try again" / "Mēģināt vēlreiz"
-  - `liveCount` — ICU plural: `{count, plural, one {# person matches} other {# people match}}` / `{count, plural, one {# cilvēks atbilst} other {# cilvēki atbilst}}`
-  - `memberSinceShort` — "Member since {year}" / "Reģistrējies {year}"
-  - `activeNever` — "Never seen" / "Nav redzēts"
-  - `activeAgo` — "Active {time}" / "Aktīvs {time}"
-  - `contactWhatsApp` — "WhatsApp available" / "Pieejams WhatsApp"
-  - `contactTelegram` — "Telegram available" / "Pieejams Telegram"
-  - `contactPhone` — "Phone available" / "Pieejams tālrunis"
-  - `contactEmail` — "Email available" / "Pieejams e-pasts"
-- **Verify:** `cd frontend && npm run build`. Every `t("people.*")` lookup in Tasks 4, 5, 6 resolves in BOTH locales. Switch locale via sidebar More → all `/people` strings localize.
-- **Parallel:** true (does not block Task 6 functionally — TS won't fail on missing i18n keys, only runtime would; do this before Task 6's verify)
-- **Status:** [x] Complete
+### Task 4: Backend — `StallsController` accept new fields + validate constraints
+- **Files:** `backend/ManVaig.Api/Controllers/V1/StallsController.cs`
+- **Action:**
+  1. In `Create` and `Update` actions:
+     - Map new fields from request to entity. For tags: `entity.DefaultTagsJson = request.DefaultTags == null ? null : JsonSerializer.Serialize(request.DefaultTags);`
+     - **Validate** `request.DefaultTags?.Count <= 10`; each tag length ≤ 30 chars; each tag matches the existing item-tag regex (find it in item validation — same pattern).
+     - **Validate** if `DefaultCategoryId.HasValue`: `await _db.Categories.AnyAsync(c => c.Id == DefaultCategoryId.Value)` — 400 with `INVALID_CATEGORY` if not.
+     - **Validate** `IsDefault → Public`: when `request.IsDefault == true && request.Visibility != StallVisibility.Public`, return 400 with `IS_DEFAULT_REQUIRES_PUBLIC`. Apply on both Create AND Update.
+     - **Validate** `DefaultLocation?.Length <= 200`.
+  2. In response mapping (Map / `MapToResponse`), populate the new response fields. Deserialize `DefaultTagsJson` back to `List<string>` (empty list if null). Look up `DefaultCategory.Name` via `.Include(s => s.DefaultCategory)` on the EF query so it's available for the response.
+  3. Make sure `Get` (single) and `List` endpoints' EF queries include the navigation: `.Include(s => s.DefaultCategory)` so response can populate `DefaultCategoryName`.
+- **Verify:**
+  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
+  2. After API restart with valid auth: `curl -X POST -H "Authorization: Bearer {token}" -H "Content-Type: application/json" -d '{"name":"TestStall","visibility":1,"defaultCategoryId":1,"defaultCanShip":true,"defaultTags":["vintage","leather"]}' http://localhost:5100/api/v1/stalls` → 201 with new fields populated in response.
+  3. POST with `"isDefault":true,"visibility":2` → 400 with `IS_DEFAULT_REQUIRES_PUBLIC`.
+  4. POST with 11 tags → 400.
+- **Parallel:** false (depends on Task 3)
+- **Status:** [ ] Pending
 
-### Task 9: Polish + design audit
-- **Files:** any of the above as needed.
-- **Action:** Invoke `design:design-critique` skill via Skill tool on the `/people` page implementation (pass `app/people/page.tsx`, `app/people/people-client.tsx`, `components/public-user-card.tsx`, `lib/use-relative-time.ts`, the new i18n keys, and the More menu change). Categorize findings:
-  - **BLOCKER:** mobile responsiveness break, missing aria/semantic HTML, hardcoded strings, broken focus order, contact icons without aria-label, tap targets < 44px, missing live region, unguarded null on `lastSeenAt` causing render crash, contrast failure on muted text. Fix all.
-  - **NICE-TO-HAVE:** polish suggestions, animation, copy tweaks, follow-on cleanup. Append to `.ralph/learnings.md` under "Signs"; do NOT fix in this iteration.
-  Re-invoke skill after fixes; loop until no blockers (max 3 cycles per the prompt rules). If still blocking after 3 cycles, append to "Known Issues" and proceed.
-  Verify keyboard flow manually: Tab from sidebar → page heading → search input → clear button (when present) → result cards. Focus rings visible at every step.
-- **Verify:** `cd frontend && npm run build` succeeds. `cd backend && dotnet build ManVaig.sln` succeeds. Re-running design-critique returns zero blockers.
-- **Parallel:** false (final code task)
-- **Status:** [x] Complete
+### Task 5: Backend — Browse cascades (`PublicStallsController` + `PublicItemsController`)
+- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs`, `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`
+- **Action:**
+  1. In `PublicStallsController.Browse` query, add `Where(s => s.Visibility == StallVisibility.Public)` to the existing filter chain (alongside the existing `Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public))`). Both apply.
+  2. In `PublicItemsController.Browse` query, add `.Where(i => i.Stall.Visibility == StallVisibility.Public)` to the existing `i.Visibility == ItemVisibility.Public` filter. Both apply (Public×Public only).
+  3. Add `using ManVaig.Api.Models.Enums;` if not already present.
+- **Verify:**
+  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
+  2. `curl http://localhost:5100/api/v1/public/stalls` returns same set as before (all existing stalls backfilled to Public).
+  3. Mark a test stall Private via `PUT /api/v1/stalls/{id}`; restart not required if same backend instance. `curl /api/v1/public/stalls` no longer lists it. Items inside don't appear in `curl /api/v1/public/items`.
+  4. Toggle stall back to Public → reappears.
+- **Parallel:** false (depends on Tasks 1, 2, 4)
+- **Status:** [ ] Pending
 
-## Out of scope (explicit)
-- Online presence (heartbeat / websocket / 5-min "online now" dot) — `LastSeenAt` is sufficient. Real-time presence deferred to a future cycle.
-- Filters by location, has-stall, member-since range — keep search query-only.
-- Default browse feed when `q` is empty — empty state is intentional per design decision.
-- New sidebar nav item — kept in More menu by design.
-- In-app messaging — out of scope for ManVaig entirely; contact happens via existing WhatsApp/Telegram/Phone links on the profile page.
-- DB unique index on `DisplayName` — left as-is; soft-uniqueness via register-time check is sufficient for v1. Revisit if collision races become an issue.
-- Tag/category surfacing on user cards — not in scope; user search is name-only.
-- Pagination URL state for `page` — kept in-memory only (matches `/search`).
-- Public stall detail link from card — card always links to `/user/[displayName]`, never to a specific stall.
+### Task 6: Backend — Detail stall-gate + `ProfileController` cascades
+- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`, `backend/ManVaig.Api/Controllers/V1/ProfileController.cs`
+- **Action:**
+  1. In `PublicItemsController.Detail` (the `GET /api/v1/public/items/{id}` action), AFTER fetching the item with `.Include(i => i.Stall)` (verify the stall is already loaded — if not, ADD that include), BEFORE the existing `switch (item.Visibility)` block, add a stall-visibility gate:
+     ```csharp
+     bool isAuthenticated = User.Identity?.IsAuthenticated == true;
+     // Extract current user id from claims like the rest of the controller does
+     // (use the same helper / pattern that the existing item-visibility switch uses for owner check)
+     bool isOwner = isAuthenticated && currentUserId == item.Stall.UserId;
+
+     if (item.Stall.Visibility == StallVisibility.Private && !isOwner)
+         return NotFound(new { error = "Item not found." });
+     if (item.Stall.Visibility == StallVisibility.RegisteredOnly && !isAuthenticated)
+         return Unauthorized(new { error = "Authentication required." });
+     // LinkOnly stall and Public stall → fall through to existing item.Visibility switch
+     ```
+     Then the existing `switch (item.Visibility) { ... }` runs unchanged.
+  2. In `ProfileController.GetUserListings`, change the items query filter from `Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)` to `Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public && i.Stall.Visibility == StallVisibility.Public)`.
+  3. In `ProfileController.MapToResponse`, the `ActiveListingCount = await _db.Items.CountAsync(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)` becomes `... && i.Stall.Visibility == StallVisibility.Public` for honesty (count matches what's actually surfaced).
+- **Verify:**
+  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
+  2. Item in a Private stall: `curl http://localhost:5100/api/v1/public/items/{id}` (anon) → 404; with valid owner JWT → 200.
+  3. Item in a RegisteredOnly stall: `curl /api/v1/public/items/{id}` (anon) → 401; with any valid auth JWT → 200.
+  4. `curl /api/v1/users/{displayName}/listings` reflects the cascade — items in non-Public stalls hidden.
+  5. The user profile's `activeListingCount` matches the new filter.
+- **Parallel:** false (depends on Tasks 1, 2, 5)
+- **Status:** [ ] Pending
+
+## Out of scope (this cycle)
+
+- **Frontend changes** (`frontend/**`) — completely off-limits. `StallFormDialog`, `VisibilityRadioCards`, `lib/stalls.ts`, ItemForm wiring, i18n — all separate cycle.
+- Public stall detail page (`/stalls/[slug]`) — separate cycle
+- Toast/warning UX when a stall change hides items
+- Bulk-apply stall defaults to existing items
+- Doc updates (ROADMAP.html, ARCHITECTURE.md, etc.)
 
 ## Completion Promise
 
-**NPM RUN BUILD SUCCEEDS AND DOTNET BUILD SUCCEEDS AND PEOPLE PAGE RENDERS RESULTS AND DESIGN CRITIQUE RETURNS NO BLOCKERS**
+**DOTNET BUILD SUCCEEDS AND MIGRATION APPLIES AND BROWSE FILTERS CASCADE STALL VISIBILITY AND DETAIL GATES STALL VISIBILITY FIRST**
 
 Verify at end of build phase:
-1. `cd frontend && npm run build` — exits 0.
-2. `cd backend && dotnet build ManVaig.sln` — exits 0, 0 errors.
-3. Open `/people`, type a known displayName (≥2 chars, e.g. `cak`), confirm result cards render with avatar, displayName, memberSince, last-active, contact icons (where applicable). Click a card → lands on `/user/[displayName]` profile.
-4. Run `design:design-critique` skill on `/people` page; report contains zero blocker-severity findings.
+1. `cd backend && dotnet build ManVaig.sln` — exits 0, 0 errors
+2. `dotnet ef migrations list --project ManVaig.Api` shows `AddStallVisibilityAndDefaults`
+3. After API restart, `curl /api/v1/public/stalls` and `curl /api/v1/public/items` return same content as before backfill (all existing rows are Public — no public-consumer-visible behavior change)
+4. Mark a stall Private → it disappears from `/api/v1/public/stalls`; its items disappear from `/api/v1/public/items`; direct GET on its items → 404 to anon, 200 to owner
+5. Mark a stall RegisteredOnly → browse-hidden; direct item GET → 401 to anon, 200 to authed
+6. POST creating a stall with `IsDefault=true, Visibility=Private` → 400 with `IS_DEFAULT_REQUIRES_PUBLIC`
