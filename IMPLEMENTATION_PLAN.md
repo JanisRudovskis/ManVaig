@@ -83,7 +83,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   2. `dotnet ef migrations list --project ManVaig.Api` lists the new migration.
   3. After API restart, existing stalls show `Visibility=0` (Public) and all defaults null/false — no behavior change.
 - **Parallel:** false (depends on Task 1)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 3: Backend — extend StallDtos
 - **Files:** `backend/ManVaig.Api/Models/Dto/StallDtos.cs`
