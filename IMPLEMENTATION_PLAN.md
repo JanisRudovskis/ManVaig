@@ -111,7 +111,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   - Escape closes (shadcn default). First focus on Name input (shadcn default).
 - **Verify:** `cd frontend && npx tsc --noEmit`; `cd frontend && npm run build`. Renders in Tasks 4 + 5.
 - **Parallel:** false (depends on Tasks 1, 2)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 4: Frontend — wire `/my-stalls/page.tsx` add flow to dialog
 - **Files:** `frontend/src/app/my-stalls/page.tsx`

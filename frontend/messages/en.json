@@ -286,7 +286,58 @@
     "sold": "Sold",
     "dealInProgress": "Deal in progress",
     "showMore": "Show more",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "saving": "Saving…",
+    "dialogAddTitle": "Create a stall",
+    "dialogAddSubtitle": "Group items together so buyers can browse a coherent collection.",
+    "dialogEditTitle": "Edit stall",
+    "dialogEditSubtitle": "Update visibility, defaults, and identity for this stall.",
+    "identitySection": "Identity",
+    "visibilitySection": "Visibility",
+    "defaultsSection": "Item defaults",
+    "defaultsBadge": "{count, plural, one {# default set} other {# defaults set}}",
+    "defaultsContent": "Content",
+    "defaultsCommerce": "Commerce",
+    "defaultCategory": "Default category",
+    "defaultCategoryNone": "No default",
+    "defaultLocation": "Default location",
+    "defaultLocationPlaceholder": "Search city…",
+    "defaultTags": "Default tags",
+    "defaultTagsPlaceholder": "Add tag and press Enter",
+    "defaultCondition": "Default condition",
+    "defaultConditionNone": "Reset to no default",
+    "defaultCanShip": "Items ship by default",
+    "defaultAcceptOffers": "Accept offers by default",
+    "stallUrlLabel": "Stall URL",
+    "errorDescriptionLength": "Description must be 500 characters or less",
+    "errors": {
+      "nameTaken": "You already have a stall with this name.",
+      "isDefaultRequiresPublic": "The default stall must stay Public so anyone can browse your items.",
+      "tagsLimit": "Up to 10 tags, each 30 characters or less.",
+      "invalidCategory": "Selected category is not available."
+    }
+  },
+  "visibility": {
+    "public": {
+      "label": "Public",
+      "helperStall": "Anyone can find and view this stall.",
+      "helperItem": "Anyone can find and view this item."
+    },
+    "registeredOnly": {
+      "label": "Registered only",
+      "helperStall": "Only logged-in users can view this stall.",
+      "helperItem": "Only logged-in users can view this item."
+    },
+    "linkOnly": {
+      "label": "Link only",
+      "helperStall": "Only people with the direct link — won't appear in browse.",
+      "helperItem": "Only people with the direct link — won't appear in browse."
+    },
+    "private": {
+      "label": "Private",
+      "helperStall": "Only you can see this stall.",
+      "helperItem": "Only you can see this item."
+    }
   },
   "items": {
     "title": "My Items",
