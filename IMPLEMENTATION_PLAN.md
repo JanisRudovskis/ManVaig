@@ -59,7 +59,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   Mirror `ItemVisibility` integer assignments exactly.
 - **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
 - **Parallel:** true (foundation for Tasks 2–6)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 2: Backend — migration `AddStallVisibilityAndDefaults` + Stall model fields
 - **Files:** `backend/ManVaig.Api/Models/Stall.cs`, `backend/ManVaig.Api/Migrations/{timestamp}_AddStallVisibilityAndDefaults.cs` (new), `backend/ManVaig.Api/Migrations/AppDbContextModelSnapshot.cs` (auto-updated)
