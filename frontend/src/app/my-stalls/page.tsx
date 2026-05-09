@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/lib/auth-context";
 import {
   fetchMyStalls,
-  createStall,
   uploadStallThumbnail,
   deleteStallThumbnail,
   type StallResponse,
@@ -16,9 +15,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { ItemGallery } from "@/components/item-gallery";
 import { ItemDetailModal } from "@/components/item-detail-modal";
+import { StallFormDialog } from "@/components/stall-form-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Store,
   Plus,
@@ -40,12 +38,7 @@ export default function MyStallsPage() {
   const [data, setData] = useState<StallListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // Create stall form
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [stallDialogOpen, setStallDialogOpen] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -74,28 +67,6 @@ export default function MyStallsPage() {
       setError(t("errorLoadFailed"));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleCreate() {
-    const name = newName.trim();
-    if (name.length < 3) {
-      setCreateError(t("errorNameLength"));
-      return;
-    }
-
-    setCreating(true);
-    setCreateError("");
-    try {
-      await createStall({ name });
-      setNewName("");
-      setShowCreate(false);
-      await loadStalls();
-    } catch (err: unknown) {
-      const e = err as Error;
-      setCreateError(e.message === "NAME_LENGTH" ? t("errorNameLength") : t("errorCreateFailed"));
-    } finally {
-      setCreating(false);
     }
   }
 
@@ -132,54 +103,24 @@ export default function MyStallsPage() {
           {t("totalItems", { count: totalItems, max: maxItems })}
         </span>
         <div className="flex-1" />
-        <Button onClick={() => setShowCreate(true)} size="sm">
+        <Button onClick={() => setStallDialogOpen(true)} size="sm">
           <Plus className="size-4 mr-1" />
           {t("createStall")}
         </Button>
       </div>
 
-      {/* Create stall inline form */}
-      {showCreate && (
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div>
-                <Label className="text-sm font-medium">{t("name")}</Label>
-                <Input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder={t("namePlaceholder")}
-                  className="mt-1"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !creating) handleCreate();
-                    if (e.key === "Escape") setShowCreate(false);
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button onClick={handleCreate} disabled={creating} size="sm">
-                  {creating && <Loader2 className="size-4 mr-1 animate-spin" />}
-                  {t("create")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setShowCreate(false); setCreateError(""); }}
-                >
-                  {t("cancel")}
-                </Button>
-              </div>
-            </div>
-            {createError && (
-              <p className="text-destructive text-sm mt-2">{createError}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <StallFormDialog
+        mode="add"
+        open={stallDialogOpen}
+        onOpenChange={setStallDialogOpen}
+        onSaved={() => {
+          setStallDialogOpen(false);
+          loadStalls();
+        }}
+      />
 
       {/* Empty state */}
-      {stalls.length === 0 && !showCreate && (
+      {stalls.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-muted mb-4">
             <Store className="size-8 text-muted-foreground" />
@@ -188,7 +129,7 @@ export default function MyStallsPage() {
           <p className="text-muted-foreground mb-6 max-w-md">
             {t("emptyDescription")}
           </p>
-          <Button onClick={() => setShowCreate(true)}>
+          <Button onClick={() => setStallDialogOpen(true)}>
             <Plus className="size-4 mr-1" />
             {t("createFirst")}
           </Button>

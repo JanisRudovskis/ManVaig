@@ -286,7 +286,68 @@
     "sold": "Pārdots",
     "dealInProgress": "Darījums procesā",
     "showMore": "Rādīt vairāk",
-    "showLess": "Rādīt mazāk"
+    "showLess": "Rādīt mazāk",
+    "saving": "Saglabā…",
+    "dialogAddTitle": "Izveidot stendu",
+    "dialogAddSubtitle": "Sagrupē preces, lai pircēji var pārlūkot saskaņotu kolekciju.",
+    "dialogEditTitle": "Rediģēt stendu",
+    "dialogEditSubtitle": "Atjaunini stenda redzamību, noklusējumus un identitāti.",
+    "identitySection": "Identitāte",
+    "visibilitySection": "Redzamība",
+    "defaultsSection": "Preču noklusējumi",
+    "defaultsBadge": "{count, plural, one {iestatīts # noklusējums} other {iestatīti # noklusējumi}}",
+    "defaultsContent": "Saturs",
+    "defaultsCommerce": "Tirdzniecība",
+    "defaultCategory": "Noklusētā kategorija",
+    "defaultCategoryNone": "Bez noklusējuma",
+    "defaultLocation": "Noklusētā atrašanās vieta",
+    "defaultLocationPlaceholder": "Meklēt pilsētu…",
+    "defaultTags": "Noklusētie birkas",
+    "defaultTagsPlaceholder": "Pievieno birku un nospied Enter",
+    "defaultCondition": "Noklusētais stāvoklis",
+    "defaultConditionNone": "Atiestatīt uz bez noklusējuma",
+    "defaultCanShip": "Preces pēc noklusējuma sūta",
+    "defaultAcceptOffers": "Pēc noklusējuma pieņemt piedāvājumus",
+    "stallUrlLabel": "Stenda URL",
+    "errorDescriptionLength": "Aprakstam jābūt 500 rakstzīmes vai mazāk",
+    "appearance": {
+      "title": "Izskats",
+      "thumbnailHint": "Kvadrāta vāka attēls, redzams stendu sarakstos.",
+      "headerHint": "Plats baneris publiskajā stenda lapā.",
+      "backgroundHint": "Smalks fons aiz preču režģa.",
+      "accentHint": "Tiek izmantota kā tonis, ja attēla nav.",
+      "uploadCta": "Augšupielādēt",
+      "removeCta": "Noņemt",
+      "noImage": "Nav attēla"
+    },
+    "errors": {
+      "nameTaken": "Jums jau ir stends ar šādu nosaukumu.",
+      "isDefaultRequiresPublic": "Noklusētajam stendam jāpaliek publiskam, lai ikviens varētu pārlūkot jūsu preces.",
+      "tagsLimit": "Līdz 10 birkām, katra 30 rakstzīmes vai mazāk.",
+      "invalidCategory": "Izvēlētā kategorija nav pieejama."
+    }
+  },
+  "visibility": {
+    "public": {
+      "label": "Publisks",
+      "helperStall": "Ikviens var atrast un apskatīt šo stendu.",
+      "helperItem": "Ikviens var atrast un apskatīt šo preci."
+    },
+    "registeredOnly": {
+      "label": "Tikai reģistrētie",
+      "helperStall": "Tikai pieteikušies lietotāji var redzēt šo stendu.",
+      "helperItem": "Tikai pieteikušies lietotāji var redzēt šo preci."
+    },
+    "linkOnly": {
+      "label": "Tikai ar saiti",
+      "helperStall": "Tikai cilvēki ar tiešu saiti — neparādīsies pārlūkā.",
+      "helperItem": "Tikai cilvēki ar tiešu saiti — neparādīsies pārlūkā."
+    },
+    "private": {
+      "label": "Privāts",
+      "helperStall": "Tikai jūs varat redzēt šo stendu.",
+      "helperItem": "Tikai jūs varat redzēt šo preci."
+    }
   },
   "items": {
     "title": "Mani sludinājumi",
@@ -396,6 +457,7 @@
     "visLinkOnly": "Tikai ar saiti",
     "visPrivate": "Privāts",
     "visibilityHint": "Nosaka, kas var redzēt šo sludinājumu",
+    "stallDefaultsApplied": "Pielietoti šī stenda noklusētie iestatījumi — mainot lauku, vērtība tiks pārrakstīta.",
     "guestOffers": "Atļaut viesu piedāvājumus",
     "guestOffersHint": "Lietotāji bez konta var iesniegt piedāvājumus (vārds + kontaktinformācija nepieciešama)",
     "canShip": "Iespējama piegāde",

@@ -2,176 +2,225 @@
 
 ## Goal
 
-Add 4-state Visibility (Public / RegisteredOnly / LinkOnly / Private) to Stall, mirroring `ItemVisibility`, plus stall-level defaults for new items (`DefaultCategoryId`, `DefaultLocation`, `DefaultCanShip`, `DefaultTagsJson`, `DefaultCondition`, `DefaultAcceptOffers`). Cascade visibility filtering through `PublicStallsController`, `PublicItemsController`, and `ProfileController` so non-Public stalls hide their items from public browse and direct-link semantics work correctly. **Backend-only cycle** — frontend changes are a separate cycle.
+Frontend Cycle B for the stall + item visibility redesign. Build the popup `StallFormDialog` (replaces inline add/edit), the shared `VisibilityRadioCards` component used by BOTH stall dialog and ItemForm, and an "Appearance" panel on `/my-stalls/[id]` consolidating accent + image management. Wire stall defaults into ItemForm so adding items to a stall pre-fills relevant fields. Cycle A (backend) is merged on master; this cycle consumes the new fields/endpoints.
 
-## Privacy/visibility contract (load-bearing)
+## Critique-driven UI choices (locked from `design:design-critique` at planning stage)
 
-- **Stall visibility states** (mirror `ItemVisibility` integer assignments): `Public=0, RegisteredOnly=1, LinkOnly=2, Private=3`.
-- **Composition** — most-restrictive wins, orthogonal axes. If EITHER `stall.Visibility` OR `item.Visibility` imposes a constraint, that constraint applies to the item.
-- **Browse** (`/api/v1/public/stalls` and `/api/v1/public/items`) lists ONLY rows where `stall.Visibility == Public` AND `item.Visibility == Public`. All other states are direct-link-only — including for authed users. Matches existing item-side behavior.
-- **Detail** (`GET /api/v1/public/items/{id}`):
-  1. Stall gate FIRST: `Private` → 404 to non-owner; `RegisteredOnly` → 401 to anon; `LinkOnly`/`Public` → fall through
-  2. Item gate (existing logic, unchanged): `Private` → 404 to non-owner; `RegisteredOnly` → 401 to anon; `LinkOnly`/`Public` → 200
-- **Owner always sees own content** regardless of visibility.
-- **`IsDefault==true` requires `Visibility==Public`** — API rejects otherwise (prevents the "default stall is Private → all items invisible" footgun). Error code `IS_DEFAULT_REQUIRES_PUBLIC`.
+- **Vertical 4-state radio cards** for visibility (NOT horizontal segmented) — fits LV labels at 375px. Apply identically to ItemForm.
+- **Defaults section: always collapsed**; show `{N} defaults set` ICU-plural badge in the header when any are set.
+- **Slug = plain text** in dialog (no link affordance) until public stall detail page exists.
+- **Accent color + image management OUT of dialog** → consolidated "Appearance" panel on the detail page.
+- **List-card thumbnail upload stays exactly as-is** — existing `StallCard` inline upload+crop+delete on `/my-stalls` is good WYSIWYG UX, do NOT touch it.
+- **a11y baked**: form-level errors `aria-live="polite"`, inline field errors via `aria-describedby`, collapsible section `aria-expanded` + `aria-controls`, radio cards `role="radiogroup"` + `role="radio"` + `aria-checked`.
+- **Defaults grouped into Content** (category, location, tags) **+ Commerce** (condition, ships, accept-offers) with subtle gap.
+- **Validate on blur**, not keystroke.
+- **Stall-name-taken** → inline error on Name field, not form-level banner.
 
-## Composition matrix (verification reference)
+## Context (from codebase exploration + Cycle A merge)
 
-| Stall \ Item | Public | RegisteredOnly | LinkOnly | Private |
-|---|:-:|:-:|:-:|:-:|
-| **Public** | Browse + link | Login wall (detail) | Direct link only | Owner only |
-| **RegisteredOnly** | Login wall | Login wall | Login wall + direct link | Owner only |
-| **LinkOnly** | Direct link only | Login wall + direct link | Direct link only | Owner only |
-| **Private** | Owner only | Owner only | Owner only | Owner only |
-
-Public×Public is the ONLY cell that surfaces in browse listings.
-
-## Context (from codebase exploration)
-
-- **`Models/Enums/ItemVisibility.cs`** has `Public=0, RegisteredOnly=1, LinkOnly=2, Private=3`. New `StallVisibility` MUST use the same integer assignments.
-- **`Models/Stall.cs`** currently has: `Id, UserId, Name, Slug, Description, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, AccentColor, SortOrder, IsDefault, CreatedAt, UpdatedAt`. Slug is unique-per-user via composite index `(UserId, Slug)`.
-- **`Models/Item.cs`** — `StallId` is REQUIRED (not nullable). `CategoryId` is `int` (NOT Guid) — important for the FK type on `DefaultCategoryId`. Has `Tags` via `ItemTags` join table. Has `Visibility` (`ItemVisibility`), `Location` (`string?`), `CanShip` (`bool`), `Condition` (`Condition` enum), `AcceptOffers` (`bool`).
-- **`PublicStallsController.Browse`** filter currently: `Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public))`. Needs `&& s.Visibility == StallVisibility.Public` added.
-- **`PublicItemsController.Browse`** filter currently: `Where(i => i.Visibility == ItemVisibility.Public)`. Needs `&& i.Stall.Visibility == StallVisibility.Public` added.
-- **`PublicItemsController.Detail`** has a switch on `item.Visibility` (Public, RegisteredOnly, LinkOnly, Private) at lines ~126-140. Keep that switch intact and add a stall-visibility gate BEFORE it.
-- **`ProfileController.GetUserListings`** filters items by `i.Visibility == ItemVisibility.Public`. Add `&& i.Stall.Visibility == StallVisibility.Public`.
-- **`ProfileController.MapToResponse.ActiveListingCount`** counts `i.Visibility == Public`. Same cascade.
-- **`Models/Dto/StallDtos.cs`** has `CreateStallRequest` (Name/Description/AccentColor), `UpdateStallRequest` (Name/Slug/Description/AccentColor), `StallResponse` (full set), `PublicStallResponse`. **DO NOT expose Visibility on `PublicStallResponse`** — non-Public stalls won't surface in public endpoints anyway, no need to leak.
-- **`StallsController`** is at `Controllers/V1/StallsController.cs`. Map new fields in Create/Update/Map. Validate the new constraints there.
-- **Existing item-tag char regex** lives in item validation logic; reuse pattern for stall default-tags.
+- **Backend Cycle A is merged on master.** `Stall` now has `Visibility`, `DefaultCategoryId`, `DefaultLocation`, `DefaultCanShip`, `DefaultTagsJson`, `DefaultCondition`, `DefaultAcceptOffers`. `StallVisibility` enum at `Models/Enums/StallVisibility.cs`. `CreateStallRequest`/`UpdateStallRequest`/`StallResponse` all include the new fields. Controllers cascade visibility filtering correctly (smoke-tested end-to-end pre-merge).
+- **ItemVisibility states** (already in frontend): Public=0, RegisteredOnly=1, LinkOnly=2, Private=3. **`StallVisibility` uses identical integers.** Single source of i18n copy.
+- **Existing inline forms to replace**:
+  - Add: `frontend/src/app/my-stalls/page.tsx` lines ~142-178 (Name only today)
+  - Edit: `frontend/src/app/my-stalls/[id]/page.tsx` lines ~548-606 (Name + Description today)
+- **`StallCard`** in `app/my-stalls/page.tsx` has inline thumbnail upload+crop+delete (`handleFileSelect`, `handleCroppedUpload`, `handleUploadClick`, `handleDeleteThumbnail`). **DO NOT TOUCH.** It's a separate WYSIWYG shortcut and stays.
+- **`lib/stalls.ts`** — needs new fields on `StallResponse`, `CreateStallData`, `UpdateStallData`. Add `StallVisibility` enum (object-literal pattern matching whatever items uses) and `StallDefaults` interface (subset for passing to ItemForm). `fetchStall(id)` already exists.
+- **`item-form.tsx`** — currently uses a Select dropdown for visibility (4 ItemVisibility states). Replace entirely with the shared `VisibilityRadioCards`. Add `stallDefaults?: StallDefaults` prop; consume defaults for category/location/canShip/condition/acceptOffers/tags/visibility on the "add" path; show "Defaults applied from this stall" hint banner when provided.
+- **Reusable**:
+  - shadcn `Dialog` from `@base-ui/react`: see `change-email-dialog.tsx`, `change-phone-dialog.tsx`, `confirm-dialog.tsx`
+  - `LocationSearch`: `frontend/src/components/location-search.tsx`
+  - 5-state Condition segmented + Tag input + Category dropdown — extract or reuse from `item-form.tsx`
+  - `confirm-dialog.tsx` countdown for delete (existing pattern)
+  - TipsBanner-style info banner: `components/tips-banner.tsx`
+- **i18n**:
+  - **NEW shared `visibility.*` namespace** for the 4 states (used by stall dialog AND item form). Each state: `.label`, `.helperStall`, `.helperItem` (slightly different copy per mode).
+  - Extend `stalls.*` namespace with dialog title/subtitle, section headings, defaults badge ICU plural, sub-group labels (Content/Commerce), default-* field labels, error keys, Appearance panel title.
+  - Add `itemForm.stallDefaultsApplied`.
+  - Latvian must use natural translation; "stends" not "Bode" (existing convention).
 
 ## Tasks
 
-### Task 1: Backend — add `StallVisibility` enum
-- **Files:** `backend/ManVaig.Api/Models/Enums/StallVisibility.cs` (new)
-- **Action:** Create new file:
-  ```csharp
-  namespace ManVaig.Api.Models.Enums;
+### Task 1: Frontend — `lib/stalls.ts` types + `StallVisibility` enum + `StallDefaults` interface
+- **Files:** `frontend/src/lib/stalls.ts`
+- **Action:**
+  - Match the existing pattern used by `ItemVisibility` in `frontend/src/lib/items.ts` (read it first — likely a TypeScript object-literal `as const` or a TypeScript enum). Mirror that pattern for `StallVisibility = { Public: 0, RegisteredOnly: 1, LinkOnly: 2, Private: 3 }`.
+  - Extend the existing `StallResponse` interface: `visibility: number; defaultCategoryId: number | null; defaultCategoryName: string | null; defaultLocation: string | null; defaultCanShip: boolean; defaultTags: string[]; defaultCondition: number | null; defaultAcceptOffers: boolean;`
+  - Extend `CreateStallData` (all optional): `visibility?: number; defaultCategoryId?: number | null; defaultLocation?: string; defaultCanShip?: boolean; defaultTags?: string[]; defaultCondition?: number | null; defaultAcceptOffers?: boolean;`
+  - Extend `UpdateStallData` (all optional): same as Create.
+  - Add new exported `StallDefaults` interface — the subset wizard derives from a fetched stall and passes to ItemForm: `{ categoryId: number | null; location: string | null; canShip: boolean; condition: number | null; acceptOffers: boolean; tags: string[]; visibility: number; }`.
+  - `fetchStall(id)` — verify it already exists; if missing, add it (`GET /api/v1/stalls/{id}`, returns `StallResponse`).
+- **Verify:** `cd frontend && npx tsc --noEmit` — 0 errors.
+- **Parallel:** true (foundation for all subsequent tasks)
+- **Status:** [x] Complete
 
-  public enum StallVisibility
-  {
-      Public = 0,
-      RegisteredOnly = 1,
-      LinkOnly = 2,
-      Private = 3
+### Task 2: Frontend — new `VisibilityRadioCards` shared component
+- **Files:** `frontend/src/components/visibility-radio-cards.tsx` (new)
+- **Action:** 4-state vertical radio card component shared between stall dialog and item form.
+  ```typescript
+  interface VisibilityRadioCardsProps {
+    value: number;                        // 0..3 matching StallVisibility/ItemVisibility
+    onChange: (value: number) => void;
+    mode: "stall" | "item";              // selects helper text variant
+    name?: string;                        // for form association
+    disabled?: boolean;
   }
   ```
-  Mirror `ItemVisibility` integer assignments exactly.
-- **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
-- **Parallel:** true (foundation for Tasks 2–6)
+  Layout: 4 stacked cards (Public, RegisteredOnly, LinkOnly, Private). Each card:
+  - Whole card is the tap target (≥44px tall). Use `<label>` wrapping `<input type="radio">` for native a11y, OR `role="radio"` + `aria-checked` if styled as buttons (whichever matches the existing item-form Condition segmented pattern — read first).
+  - Card content: lucide icon (`Globe` for Public, `Users` for RegisteredOnly, `Link` for LinkOnly, `Lock` for Private) + bold label + helper text below.
+  - Active state: `border-primary` + `bg-primary/5` (or whatever the existing segmented active style uses — match for consistency).
+  - i18n keys: `visibility.public.label`, `visibility.public.helperStall` / `visibility.public.helperItem` (pick by `mode` prop). Same shape for `registeredOnly`, `linkOnly`, `private`.
+  - Container: `role="radiogroup"`, `aria-labelledby` referencing a section heading ID passed by parent.
+- **Verify:** `cd frontend && npx tsc --noEmit`. Used by Tasks 3 + 6.
+- **Parallel:** true (after Task 1's types land)
 - **Status:** [x] Complete
 
-### Task 2: Backend — migration `AddStallVisibilityAndDefaults` + Stall model fields
-- **Files:** `backend/ManVaig.Api/Models/Stall.cs`, `backend/ManVaig.Api/Migrations/{timestamp}_AddStallVisibilityAndDefaults.cs` (new), `backend/ManVaig.Api/Migrations/AppDbContextModelSnapshot.cs` (auto-updated)
+### Task 3: Frontend — `StallFormDialog` component
+- **Files:** `frontend/src/components/stall-form-dialog.tsx` (new)
+- **Action:** shadcn `Dialog` with `mode: "add" | "edit"`.
+  ```typescript
+  interface StallFormDialogProps {
+    mode: "add" | "edit";
+    stall?: StallResponse;          // required for "edit"
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSaved: (stall: StallResponse) => void;
+  }
+  ```
+  Sections (top → bottom):
+  1. **Header**: `<DialogTitle>` + `<DialogDescription>` (subtitle).
+  2. **Identity**: Name (Input, required, 3-50, validate on blur, inline error including server `nameTaken`). Description (Textarea, ≤500, char counter). Edit mode adds read-only "Stall URL: yoursite/stalls/{slug}" as plain text — NO link.
+  3. **Visibility**: `<VisibilityRadioCards mode="stall" value={visibility} onChange={setVisibility} />`.
+  4. **Defaults** (collapsible):
+     - Header: "Item defaults" + chevron + ICU plural badge `{count, plural, one {# default set} other {# defaults set}}` when any non-default value exists.
+     - **Always collapsed initially** (both add and edit modes); chevron toggles `aria-expanded` + `aria-controls="defaults-panel"`.
+     - When expanded: two sub-groups separated by small gap.
+       - **Content**: Default category (Select, all categories + "No default" first option), Default location (`LocationSearch`), Default tags (TagInput, max 10, max 30 chars each).
+       - **Commerce**: Default condition (5-state segmented + "No default" reset link below), Items ship by default (Switch), Accept offers by default (Switch).
+  5. **Footer (sticky)**: Cancel (ghost, left). Save (primary, right; submitting → spinner + "Saving…" + `aria-busy="true"`). Edit mode adds Delete button (destructive, far left, opens existing `confirm-dialog` with countdown).
+  
+  **Validation**:
+  - Validate on blur per field. Form-level errors → `<div role="alert" aria-live="polite">` above footer.
+  - Server `IS_DEFAULT_REQUIRES_PUBLIC` → form-level banner with i18n message `stalls.errors.isDefaultRequiresPublic`.
+  - Server `nameTaken` → inline error on Name field.
+  - Tags: client-side validate count ≤ 10, each ≤ 30 chars before submit; inline error if exceeded.
+  
+  **Wiring**:
+  - On Save: call `createStall(data)` (add) or `updateStall(stall.id, data)` (edit). On success: `onSaved(updatedStall)` then close.
+  - Cancel: close (no unsaved-changes confirm — trust the user).
+  - Escape closes (shadcn default). First focus on Name input (shadcn default).
+- **Verify:** `cd frontend && npx tsc --noEmit`; `cd frontend && npm run build`. Renders in Tasks 4 + 5.
+- **Parallel:** false (depends on Tasks 1, 2)
+- **Status:** [x] Complete
+
+### Task 4: Frontend — wire `/my-stalls/page.tsx` add flow to dialog
+- **Files:** `frontend/src/app/my-stalls/page.tsx`
 - **Action:**
-  1. In `Stall.cs` add the 7 new fields:
-     ```csharp
-     public StallVisibility Visibility { get; set; } = StallVisibility.Public;
-     public int? DefaultCategoryId { get; set; }
-     public Category? DefaultCategory { get; set; }   // navigation, nullable
-     public string? DefaultLocation { get; set; }
-     public bool DefaultCanShip { get; set; } = false;
-     public string? DefaultTagsJson { get; set; }    // JSON-encoded list of tag-name strings
-     public Condition? DefaultCondition { get; set; } // nullable enum
-     public bool DefaultAcceptOffers { get; set; } = false;
-     ```
-     Add `using ManVaig.Api.Models.Enums;` if not already.
-  2. Generate migration: `cd backend && dotnet ef migrations add AddStallVisibilityAndDefaults --project ManVaig.Api`. Verify the generated migration includes explicit `defaultValue: 0` for `Visibility` and `defaultValue: false` for the bools so existing rows backfill cleanly.
-  3. The `Migrate()` call at startup (`Program.cs`) applies it on next API boot.
-- **Verify:**
-  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
-  2. `dotnet ef migrations list --project ManVaig.Api` lists the new migration.
-  3. After API restart, existing stalls show `Visibility=0` (Public) and all defaults null/false — no behavior change.
-- **Parallel:** false (depends on Task 1)
-- **Status:** [x] Complete
-
-### Task 3: Backend — extend StallDtos
-- **Files:** `backend/ManVaig.Api/Models/Dto/StallDtos.cs`
-- **Action:** Extend three DTOs (DO NOT touch `PublicStallResponse` — non-Public stalls don't surface in public endpoints):
-  - `CreateStallRequest`: + `Visibility` (`StallVisibility`, default `Public`), + `DefaultCategoryId` (`int?`), + `DefaultLocation` (`string?`), + `DefaultCanShip` (`bool` default false), + `DefaultTags` (`List<string>?`, max 10 — server serializes to JSON for storage), + `DefaultCondition` (`Condition?`), + `DefaultAcceptOffers` (`bool` default false).
-  - `UpdateStallRequest`: same additions, but make bool fields `bool?` to allow partial updates (existing fields like `Name` are nullable strings — same pattern). Server only writes a field if non-null in the request.
-  - `StallResponse`: + `Visibility`, + `DefaultCategoryId`, + `DefaultCategoryName` (string?, joined from `Category` navigation), + `DefaultLocation`, + `DefaultCanShip`, + `DefaultTags` (`List<string>` deserialized from JSON; empty list when JSON null), + `DefaultCondition`, + `DefaultAcceptOffers`.
-- **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
-- **Parallel:** true (independent; can run alongside Task 2 once Task 1 lands)
-- **Status:** [x] Complete
-
-### Task 4: Backend — `StallsController` accept new fields + validate constraints
-- **Files:** `backend/ManVaig.Api/Controllers/V1/StallsController.cs`
-- **Action:**
-  1. In `Create` and `Update` actions:
-     - Map new fields from request to entity. For tags: `entity.DefaultTagsJson = request.DefaultTags == null ? null : JsonSerializer.Serialize(request.DefaultTags);`
-     - **Validate** `request.DefaultTags?.Count <= 10`; each tag length ≤ 30 chars; each tag matches the existing item-tag regex (find it in item validation — same pattern).
-     - **Validate** if `DefaultCategoryId.HasValue`: `await _db.Categories.AnyAsync(c => c.Id == DefaultCategoryId.Value)` — 400 with `INVALID_CATEGORY` if not.
-     - **Validate** `IsDefault → Public`: when `request.IsDefault == true && request.Visibility != StallVisibility.Public`, return 400 with `IS_DEFAULT_REQUIRES_PUBLIC`. Apply on both Create AND Update.
-     - **Validate** `DefaultLocation?.Length <= 200`.
-  2. In response mapping (Map / `MapToResponse`), populate the new response fields. Deserialize `DefaultTagsJson` back to `List<string>` (empty list if null). Look up `DefaultCategory.Name` via `.Include(s => s.DefaultCategory)` on the EF query so it's available for the response.
-  3. Make sure `Get` (single) and `List` endpoints' EF queries include the navigation: `.Include(s => s.DefaultCategory)` so response can populate `DefaultCategoryName`.
-- **Verify:**
-  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
-  2. After API restart with valid auth: `curl -X POST -H "Authorization: Bearer {token}" -H "Content-Type: application/json" -d '{"name":"TestStall","visibility":1,"defaultCategoryId":1,"defaultCanShip":true,"defaultTags":["vintage","leather"]}' http://localhost:5100/api/v1/stalls` → 201 with new fields populated in response.
-  3. POST with `"isDefault":true,"visibility":2` → 400 with `IS_DEFAULT_REQUIRES_PUBLIC`.
-  4. POST with 11 tags → 400.
+  - REMOVE the inline create form (lines ~142-178). Replace "Create stall" button's `onClick` with `setStallDialogOpen(true)`.
+  - Add `<StallFormDialog mode="add" open={stallDialogOpen} onOpenChange={setStallDialogOpen} onSaved={() => { setStallDialogOpen(false); loadStalls(); }} />`.
+  - Remove unused state/functions: `showCreate`, `newName`, `creating`, `createError`, `handleCreate`.
+  - **DO NOT TOUCH `StallCard`'s inline thumbnail upload+crop+delete affordance** — it stays exactly as-is.
+- **Verify:** `cd frontend && npm run build`. Navigate to `/my-stalls`, click "Create stall" → dialog opens; create with various visibility states → stall appears with correct values; thumbnail upload on cards still works (visual smoke).
 - **Parallel:** false (depends on Task 3)
 - **Status:** [x] Complete
 
-### Task 5: Backend — Browse cascades (`PublicStallsController` + `PublicItemsController`)
-- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs`, `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`
+### Task 5: Frontend — wire `/my-stalls/[id]/page.tsx` edit flow + extract Appearance panel
+- **Files:** `frontend/src/app/my-stalls/[id]/page.tsx`
 - **Action:**
-  1. In `PublicStallsController.Browse` query, add `Where(s => s.Visibility == StallVisibility.Public)` to the existing filter chain (alongside the existing `Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public))`). Both apply.
-  2. In `PublicItemsController.Browse` query, add `.Where(i => i.Stall.Visibility == StallVisibility.Public)` to the existing `i.Visibility == ItemVisibility.Public` filter. Both apply (Public×Public only).
-  3. Add `using ManVaig.Api.Models.Enums;` if not already present.
-- **Verify:**
-  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
-  2. `curl http://localhost:5100/api/v1/public/stalls` returns same set as before (all existing stalls backfilled to Public).
-  3. Mark a test stall Private via `PUT /api/v1/stalls/{id}`; restart not required if same backend instance. `curl /api/v1/public/stalls` no longer lists it. Items inside don't appear in `curl /api/v1/public/items`.
-  4. Toggle stall back to Public → reappears.
-- **Parallel:** false (depends on Tasks 1, 2, 4)
+  - REMOVE the inline edit drawer (lines ~548-606). Replace "Edit stall" button's `onClick` with `setEditDialogOpen(true)`. Render `<StallFormDialog mode="edit" stall={stall} open={editDialogOpen} onOpenChange={setEditDialogOpen} onSaved={(updated) => { setEditDialogOpen(false); setStall(updated); }} />`.
+  - **Extract an "Appearance" panel** that visually groups the existing image controls (thumbnail uploader, header uploader, background uploader) PLUS the accent color picker into one coherent visual section. Title: "Appearance" (i18n: `stalls.appearance.title`). Place immediately after the stall header, before the items grid. Keep the actual upload/crop/delete logic byte-for-byte unchanged — this is purely a visual regrouping.
+  - Remove unused inline-edit state/functions: `editName`, `editDescription`, `editing`, `editError`, `handleSaveEdit`, `handleCancelEdit`.
+- **Verify:** `cd frontend && npm run build`. Navigate to `/my-stalls/[id]`, click "Edit stall" → dialog opens with values pre-filled; defaults section starts collapsed but shows "{N} defaults set" badge if any are set; Save persists; Appearance panel shows thumbnail+header+background+accent in one coherent group; image uploads still work end-to-end.
+- **Parallel:** false (depends on Task 3)
 - **Status:** [x] Complete
 
-### Task 6: Backend — Detail stall-gate + `ProfileController` cascades
-- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`, `backend/ManVaig.Api/Controllers/V1/ProfileController.cs`
+### Task 6: Frontend — wizard + ItemForm wiring (defaults + visibility parity)
+- **Files:** `frontend/src/app/my-stalls/[id]/items/new/page.tsx`, `frontend/src/components/item-form.tsx`
 - **Action:**
-  1. In `PublicItemsController.Detail` (the `GET /api/v1/public/items/{id}` action), AFTER fetching the item with `.Include(i => i.Stall)` (verify the stall is already loaded — if not, ADD that include), BEFORE the existing `switch (item.Visibility)` block, add a stall-visibility gate:
-     ```csharp
-     bool isAuthenticated = User.Identity?.IsAuthenticated == true;
-     // Extract current user id from claims like the rest of the controller does
-     // (use the same helper / pattern that the existing item-visibility switch uses for owner check)
-     bool isOwner = isAuthenticated && currentUserId == item.Stall.UserId;
-
-     if (item.Stall.Visibility == StallVisibility.Private && !isOwner)
-         return NotFound(new { error = "Item not found." });
-     if (item.Stall.Visibility == StallVisibility.RegisteredOnly && !isAuthenticated)
-         return Unauthorized(new { error = "Authentication required." });
-     // LinkOnly stall and Public stall → fall through to existing item.Visibility switch
-     ```
-     Then the existing `switch (item.Visibility) { ... }` runs unchanged.
-  2. In `ProfileController.GetUserListings`, change the items query filter from `Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)` to `Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public && i.Stall.Visibility == StallVisibility.Public)`.
-  3. In `ProfileController.MapToResponse`, the `ActiveListingCount = await _db.Items.CountAsync(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)` becomes `... && i.Stall.Visibility == StallVisibility.Public` for honesty (count matches what's actually surfaced).
-- **Verify:**
-  1. `cd backend && dotnet build ManVaig.sln` — 0 errors.
-  2. Item in a Private stall: `curl http://localhost:5100/api/v1/public/items/{id}` (anon) → 404; with valid owner JWT → 200.
-  3. Item in a RegisteredOnly stall: `curl /api/v1/public/items/{id}` (anon) → 401; with any valid auth JWT → 200.
-  4. `curl /api/v1/users/{displayName}/listings` reflects the cascade — items in non-Public stalls hidden.
-  5. The user profile's `activeListingCount` matches the new filter.
-- **Parallel:** false (depends on Tasks 1, 2, 5)
+  1. **Wizard** (`/my-stalls/[id]/items/new/page.tsx`): fetch the full stall via `fetchStall(id)`. Derive `stallDefaults: StallDefaults` from response: `{ categoryId: stall.defaultCategoryId, location: stall.defaultLocation, canShip: stall.defaultCanShip, condition: stall.defaultCondition, acceptOffers: stall.defaultAcceptOffers, tags: stall.defaultTags, visibility: stall.visibility }`. Pass as `<ItemForm mode="add" stallId={stallId} stallDefaults={stallDefaults} ... />`.
+  2. **ItemForm** (`components/item-form.tsx`):
+     - Accept new prop `stallDefaults?: StallDefaults`.
+     - Use defaults as initial state on the "add" path (only when `stallDefaults` provided AND mode === "add"):
+       - `categoryId` ← `stallDefaults?.categoryId ?? 0`
+       - `location` ← `stallDefaults?.location ?? userLocation ?? ""` (existing `userLocation` from profile fetch logic stays as fallback)
+       - `canShip` ← `stallDefaults?.canShip ?? false`
+       - `condition` ← `stallDefaults?.condition ?? Condition.Good`
+       - `acceptOffers` ← `stallDefaults?.acceptOffers ?? false`
+       - `tags` ← `stallDefaults?.tags ?? []`
+       - `visibility` ← `stallDefaults?.visibility ?? ItemVisibility.Public`
+     - Show **"Defaults applied from this stall" hint banner** above the form fields when `stallDefaults` is provided AND any default is non-null/non-zero. Style: subtle info banner, match existing TipsBanner pattern (Lightbulb icon, amber tint), but NOT dismissible (it's contextual, goes away when user navigates). i18n key: `itemForm.stallDefaultsApplied`.
+     - **Replace the existing visibility Select entirely** with `<VisibilityRadioCards mode="item" value={visibility} onChange={setVisibility} />`. Match the existing form-field layout (label + control). The OLD Select-based visibility UI must be entirely removed; no fallback rendering.
+- **Verify:** `cd frontend && npm run build`. Open `/my-stalls/[id]/items/new` for a stall with defaults set → ItemForm pre-fills all the relevant fields + "Defaults applied from this stall" banner visible. Override category in the form, save → item saved with override (defaults are pre-fills, not constraints). Item-form visibility shows the same 4-card vertical layout as stall dialog. Open `/my-items/[id]/edit` (existing item edit) — visibility radio cards work there too without breaking the edit flow.
+- **Parallel:** false (depends on Tasks 1, 2)
 - **Status:** [x] Complete
+
+### Task 7: Frontend — i18n keys + final audit
+- **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`, any of the components from Tasks 2-6 as needed.
+- **Action:**
+  1. **Add i18n keys** (EN + LV; LV uses natural translations, "stends" not "Bode"):
+     
+     **NEW shared `visibility.*` namespace** (used by stall dialog AND item form):
+     - `visibility.public.label`, `.helperStall`, `.helperItem`
+     - `visibility.registeredOnly.label`, `.helperStall`, `.helperItem`
+     - `visibility.linkOnly.label`, `.helperStall`, `.helperItem`
+     - `visibility.private.label`, `.helperStall`, `.helperItem`
+     
+     **`stalls.*` extensions:**
+     - `stalls.dialogAddTitle`, `stalls.dialogAddSubtitle`
+     - `stalls.dialogEditTitle`, `stalls.dialogEditSubtitle`
+     - `stalls.identitySection`, `stalls.visibilitySection`, `stalls.defaultsSection`
+     - `stalls.defaultsBadge` — ICU plural: `{count, plural, one {# default set} other {# defaults set}}`
+     - `stalls.defaultsContent`, `stalls.defaultsCommerce`
+     - `stalls.defaultCategory`, `stalls.defaultCategoryNone`
+     - `stalls.defaultLocation`, `stalls.defaultLocationPlaceholder`
+     - `stalls.defaultTags`, `stalls.defaultTagsPlaceholder`
+     - `stalls.defaultCondition`, `stalls.defaultConditionNone`
+     - `stalls.defaultCanShip`, `stalls.defaultAcceptOffers`
+     - `stalls.appearance.title`
+     - `stalls.stallUrlLabel`
+     - `stalls.errors.isDefaultRequiresPublic`, `stalls.errors.nameTaken`, `stalls.errors.tagsLimit`, `stalls.errors.invalidCategory`
+     
+     **`itemForm.*` extension:**
+     - `itemForm.stallDefaultsApplied` ("Defaults applied from this stall" / Latvian equivalent)
+  
+  2. **Audit `StallFormDialog` via `design:design-critique` skill:**
+     - Invoke skill with the implemented dialog source files + describe state.
+     - Categorize: BLOCKER (fix this iteration) vs NICE-TO-HAVE (append to `.ralph/learnings.md` under "Signs", do NOT fix).
+     - Loop until 0 BLOCKERs (max 3 cycles per AGENTS.md rules).
+  
+  3. **Lighthouse a11y** on `/my-stalls` via chrome-devtools-mcp — score ≥ 95. Fix blockers.
+  
+  4. **Keyboard nav check** on dialog: Tab through Name → Description → radio group → defaults toggle → Save. Escape closes. Enter on Save submits.
+- **Verify:** `cd frontend && npm run build` succeeds. design-critique returns 0 blockers. Lighthouse a11y ≥ 95 on `/my-stalls`. Keyboard nav works.
+- **Parallel:** false (final task)
+- **Status:** [x] Complete
+
+### Known Issues
+- Lighthouse a11y verification on `/my-stalls` was skipped — `RALPH_PLAYWRIGHT="false"` and the loop's policy disallows starting/stopping the dev server. Compensating controls: the `web-design-guidelines` audit covered the dialog's a11y surface (radiogroup, focus-visible, aria-expanded/controls, aria-live, aria-describedby, label htmlFor where applicable, tap targets ≥44px on the visibility cards) — 0 BLOCKERs. Run lighthouse manually on `/my-stalls` once the dev server is up.
+- Keyboard nav verification on the dialog was static-checked (Tab order: autoFocus on Name → Description → radio group with roving tabindex + arrow-key nav → defaults toggle button → Save; Escape closes via shadcn Dialog; Enter on Save submits via form onSubmit). Browser-confirmed verification deferred for the same reason as lighthouse.
 
 ## Out of scope (this cycle)
 
-- **Frontend changes** (`frontend/**`) — completely off-limits. `StallFormDialog`, `VisibilityRadioCards`, `lib/stalls.ts`, ItemForm wiring, i18n — all separate cycle.
-- Public stall detail page (`/stalls/[slug]`) — separate cycle
-- Toast/warning UX when a stall change hides items
+- **Backend changes** (`backend/**`) — completely off-limits, Cycle A is merged
+- Public stall detail page (`/stalls/[slug]`) — separate cycle; slug shown as plain text only
+- **List-card thumbnail upload UI changes** — preserved exactly as-is on `StallCard`
+- iOS safe-area-inset on sticky footer (global polish pass, not this cycle)
+- Cancel-with-unsaved-changes confirm — skip, trust user
+- Optimistic UI on save — block during save instead, simpler
+- Toast/warning when stall change hides items
 - Bulk-apply stall defaults to existing items
-- Doc updates (ROADMAP.html, ARCHITECTURE.md, etc.)
+- Doc updates (ROADMAP.html, ARCHITECTURE.md, etc.) — separate ask
 
 ## Completion Promise
 
-**DOTNET BUILD SUCCEEDS AND MIGRATION APPLIES AND BROWSE FILTERS CASCADE STALL VISIBILITY AND DETAIL GATES STALL VISIBILITY FIRST**
+**NPM RUN BUILD SUCCEEDS AND STALL DIALOG REPLACES INLINE FORMS AND ITEM FORM USES SAME VISIBILITY CARDS AND DESIGN CRITIQUE RETURNS NO BLOCKERS**
 
 Verify at end of build phase:
-1. `cd backend && dotnet build ManVaig.sln` — exits 0, 0 errors
-2. `dotnet ef migrations list --project ManVaig.Api` shows `AddStallVisibilityAndDefaults`
-3. After API restart, `curl /api/v1/public/stalls` and `curl /api/v1/public/items` return same content as before backfill (all existing rows are Public — no public-consumer-visible behavior change)
-4. Mark a stall Private → it disappears from `/api/v1/public/stalls`; its items disappear from `/api/v1/public/items`; direct GET on its items → 404 to anon, 200 to owner
-5. Mark a stall RegisteredOnly → browse-hidden; direct item GET → 401 to anon, 200 to authed
-6. POST creating a stall with `IsDefault=true, Visibility=Private` → 400 with `IS_DEFAULT_REQUIRES_PUBLIC`
+1. `cd frontend && npm run build` — exits 0
+2. `/my-stalls` "Create stall" opens the new Dialog (NOT the inline form)
+3. `/my-stalls/[id]` "Edit stall" opens the same Dialog (with values pre-filled)
+4. Detail page has an "Appearance" panel grouping thumbnail + header + background + accent
+5. List-card inline thumbnail upload still works (existing UX preserved)
+6. Wizard `/my-stalls/[id]/items/new` for a stall with defaults: ItemForm pre-fills + shows "Defaults applied from this stall" banner
+7. ItemForm's visibility uses identical 4-card vertical layout as stall dialog
+8. `design:design-critique` skill on `StallFormDialog` post-implementation: 0 blockers
