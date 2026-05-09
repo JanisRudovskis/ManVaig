@@ -37,8 +37,12 @@ export function AppSidebar() {
   const pathname = usePathname();
   const t = useTranslations("nav");
   const { isLoggedIn, user } = useAuth();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
+
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   const visibleNavItems = navItems.filter(
     (item) => !item.auth || isLoggedIn
@@ -87,7 +91,7 @@ export function AppSidebar() {
                     className={navButtonClass}
                     isActive={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
                     tooltip={t(item.key)}
-                    render={<Link href={item.href} />}
+                    render={<Link href={item.href} onClick={closeMobile} />}
                   >
                     <item.icon
                       className="!size-6 shrink-0"
@@ -119,7 +123,7 @@ export function AppSidebar() {
                 className={navButtonClass}
                 isActive={pathname === "/profile"}
                 tooltip={user?.displayName ?? ""}
-                render={<Link href="/profile" />}
+                render={<Link href="/profile" onClick={closeMobile} />}
               >
                 <UserAvatar
                   displayName={user?.displayName ?? ""}
@@ -140,7 +144,7 @@ export function AppSidebar() {
                 size="lg"
                 className={navButtonClass}
                 tooltip={t("login")}
-                render={<Link href="/login" />}
+                render={<Link href="/login" onClick={closeMobile} />}
               >
                 <LogIn className="!size-6 shrink-0" strokeWidth={1.5} aria-hidden="true" />
                 <span>{t("login")}</span>

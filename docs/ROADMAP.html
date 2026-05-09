@@ -295,6 +295,8 @@
     <!-- Session: 2026-05-08b — Profile pages a11y + UX polish: ProfilePopup migrated to shadcn Dialog (focus trap, aria-modal, Escape, scroll lock all from base-ui Radix). ProfileCard edit-mode: sticky Save/Cancel footer, hoisted profile-visibility master switch above email/phone, label association via htmlFor, aria-disabled + native disabled on channels block when private (replaces opacity-only). Removed maxLength on bio textarea (counter goes red over 1000, validate() shows i18n error). Owner now sees same chip-style contact display as public visitors. Email/phone change forms lifted into ChangeEmailDialog + ChangePhoneDialog (replaces nested edit-within-edit; cooldown timer lifted to EmailManagement so it persists across dialog open/close). Color contrast: emerald/blue/green/amber chip text bumped to 700 light / 300 dark to pass WCAG AA. Smartphone→Phone icon consistency across card. Extracted lib/profile-utils.ts (getLastSeenStatus + formatMemberDate, was duplicated). View-all-listings link added to public profile (stub route). 4 new i18n keys EN+LV (close, viewAllListings, changeEmailDescription, changePhoneDescription, addPhoneDescription). -->
     <!-- Session: 2026-05-08c — Profile polish (5 tasks): phone change rate limiting (30-day cooldown for verified phones, LastPhoneChangedAt migration), email/phone button alignment (justify-between), WhatsApp as sub-toggle of Show Phone (indented, auto-clear), inline Telegram username input, mobile UI audit (responsive buttons, error layout, separators). Private profile visibility fix: removed IsProfilePublic filter from GetPublicProfile/GetUserListings — private profiles now return limited response (avatar+name) for anonymous visitors, full profile for authenticated users. Frontend sends auth token in public profile fetches. Contact channels always editable regardless of profile visibility. Updated i18n (profilePrivate, profilePrivateLoginHint, profilePrivateDescription). 3 migrations: AddLastSeenAt, AddTelegramUsername, AddLastPhoneChangedAt. -->
     <!-- Session: 2026-05-08d — Search page (/search): unified Items|Stalls segmented tab toggle, ?q= server-side text search across item title/description/tags + stall name/description/owner display name, Postgres unaccent extension migration for diacritic folding (riga matches Rīga), debounced (300ms) input with min 2 chars, Enter-key skips debounce, hint chips (bicycle/watch/drill/ring) with per-locale queries, Load more pagination (20/page), per-tab placeholders, plural-aware live region (i18n {count, plural} ICU), skeleton loading, empty/no-results/error states, robots: noindex metadata. New: PublicStallsController (/api/v1/public/stalls), ?q= on PublicItemsController, AddUnaccentExtension migration, PublicStallCard component (3-thumb-cap on <sm:, 4 from sm: up), useDebouncedValue hook, Search namespace in EN+LV i18n. Sidebar Browse retargeted /browse → /search. Implemented via ralph-loop autonomous build (8/10 tasks autonomously) + manual finish (sidebar + visual audit). Lighthouse mobile: a11y 100, best-practices 100, agentic-browsing 100. -->
+    <!-- Session: 2026-05-09a — People directory (/people): search users by displayName, accessed from sidebar More menu (no new top-level nav), mobile-first single-column card list with debounced (300ms) input + min 2 chars + Enter-skips-debounce. Each card shows avatar, displayName, "Member since {year}", "Active N ago" (next-intl relativeTime sourced from existing LastSeenAt), contact-method icons (WhatsApp/Telegram/Phone/Email driven by EnabledChannels). Anon viewers only see IsActive AND IsProfilePublic users; authenticated viewers see all active users. Card click → existing /user/[displayName] profile. New: PublicUsersController (/api/v1/public/users), PublicUserCardDto/PublicUserListResponse, lib/users.ts, useRelativeTime hook, PublicUserCard component, /people page (server wrapper + client with Suspense), people.* i18n namespace EN+LV with ICU plurals. Implemented via ralph-loop autonomous build (9/9 tasks, 6 commits, ~27 min, zero stalls). -->
+    <!-- Session: 2026-05-09b — Stall + item visibility redesign (2 ralph cycles, 13 tasks). BACKEND: 4-state StallVisibility enum (Public=0/RegisteredOnly=1/LinkOnly=2/Private=3) mirroring ItemVisibility integers. AddStallVisibilityAndDefaults migration adds Visibility + 6 default fields (DefaultCategoryId, DefaultLocation, DefaultCanShip, DefaultTagsJson, DefaultCondition, DefaultAcceptOffers) and backfills existing stalls to Public/null/false (no behavior change). Cascade filtering: PublicStallsController.Browse adds s.Visibility==Public; PublicItemsController.Browse adds i.Stall.Visibility==Public; PublicItemsController.Detail gates stall-visibility FIRST (Private→404 non-owner, RegisteredOnly→401 anon, LinkOnly/Public→fall through) then existing item-visibility switch; ProfileController.GetUserListings + ActiveListingCount cascade. IS_DEFAULT_REQUIRES_PUBLIC constraint blocks default stall going non-Public. FRONTEND: shared VisibilityRadioCards component (4-state vertical, used by both stall dialog AND ItemForm — single source of visibility UI, fits LV labels at 375px). New StallFormDialog popup replaces inline add/edit forms with sections (Identity / Visibility radio cards / Defaults collapsible with ICU-plural "{N} defaults set" badge, grouped Content + Commerce). Appearance panel on /my-stalls/[id] consolidates thumbnail + header + background + accent. Wizard fetches stall and passes stallDefaults to ItemForm — pre-fills category/location/canShip/condition/acceptOffers/tags + inherits visibility; "Defaults applied from this stall" hint banner. List-card inline thumbnail upload preserved as-is (WYSIWYG shortcut). visibility.* shared i18n namespace EN+LV with separate helperStall/helperItem copy per state. design:design-critique pre + post passes returned 0 blockers (vertical cards over segmented, defaults always collapsed, slug plain text, accent out of dialog). Backend smoke-tested end-to-end with curl (cascade through all 4 visibility states confirmed). -->
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-num" id="count-done" style="color:var(--done)">0</div><div class="stat-label">Done</div></div>
@@ -474,6 +476,26 @@
       <div class="task-text">Stall dashboard (owner view — items grid, activity badges, filters, reorder)</div>
       <div class="task-badge badge-done">done</div>
     </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Stall visibility — 4-state enum (Public / RegisteredOnly / LinkOnly / Private) with cascade filtering through public browse + detail endpoints; IS_DEFAULT_REQUIRES_PUBLIC constraint protects default stall</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Stall-level defaults for new items (category, location, can-ship, tags, condition, accept-offers) — pre-fill ItemForm via wizard with hint banner</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Add/edit stall popup dialog (StallFormDialog) — replaces inline forms with sections: Identity / Visibility (4-state radio cards) / Defaults (collapsible, ICU-plural badge, Content+Commerce sub-groups)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="3" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Appearance panel on stall detail (consolidates thumbnail + header + background + accent color); list-card inline thumbnail upload preserved as WYSIWYG shortcut</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
     <div class="task" data-status="planned" data-phase="3" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Shop contact details (WhatsApp / email / Facebook / other — min 1 required)</div>
@@ -620,14 +642,19 @@
       <div class="task-text">Countdown delete confirmation dialog (3s normal, 5s with active offers)</div>
       <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
-      <div class="task-check"></div>
-      <div class="task-text">Unlock RegisteredOnly / LinkOnly / Private in UI</div>
-      <div class="task-badge badge-future">future</div>
+    <div class="task" data-status="done" data-phase="4" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Item visibility UI — 4-state radio cards (shared VisibilityRadioCards component used by both stall dialog and ItemForm)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
       <div class="task-text">Advanced filters (condition, price range, location)</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="4" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">PNG-aware thumbnails — if first item image is PNG, use object-contain (fit whole item) instead of object-cover (crop) in list views</div>
       <div class="task-badge badge-future">future</div>
     </div>
   </div>

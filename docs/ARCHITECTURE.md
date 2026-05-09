@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-08 (search page: unified /search with Items|Stalls tabs, ?q= text search, Postgres unaccent diacritic folding, debounced + paginated, Lighthouse a11y 100)
+> Last updated: 2026-05-09 (stall + item visibility redesign: 4-state StallVisibility cascade through public endpoints, stall-level defaults for new items, StallFormDialog popup replacing inline add/edit, shared VisibilityRadioCards used by both stall dialog and ItemForm, Appearance panel on detail page; also: /people directory in sidebar More menu)
 
 ---
 
@@ -109,7 +109,15 @@ All routes under `/api/v1/`:
 
 ### Stalls System
 
-**Model: `Models/Stall.cs`** — Name, Description, ThumbnailUrl, BackgroundImageUrl, SortOrder, UserId. Multiple stalls per user.
+**Model: `Models/Stall.cs`** — Name, Slug (unique-per-user), Description, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, AccentColor, SortOrder, IsDefault, UserId. Plus 4-state `Visibility` (`StallVisibility` enum at `Models/Enums/StallVisibility.cs`: `Public=0, RegisteredOnly=1, LinkOnly=2, Private=3` — same integers as `ItemVisibility`). Plus 6 default-for-new-items fields: `DefaultCategoryId` (int? FK to Category), `DefaultLocation` (string?), `DefaultCanShip` (bool), `DefaultTagsJson` (string? — JSON-encoded list of tag names, max 10 × 30 chars), `DefaultCondition` (Condition?), `DefaultAcceptOffers` (bool). Multiple stalls per user. First-stall auto-default created by `ItemsController` when user creates an item without an explicit stall.
+
+**Stall visibility composition** (most-restrictive wins, orthogonal axes — applies in `PublicStallsController`, `PublicItemsController`, `ProfileController`):
+- `RegisteredOnly` → requires authenticated viewer
+- `LinkOnly` → never appears in browse listings (only via direct URL)
+- `Private` → only owner sees it
+- **Browse** lists ONLY `stall.Visibility == Public AND item.Visibility == Public`. Other states are direct-link-only — including for authed users.
+- **Item detail** (`GET /api/v1/public/items/{id}`) gates stall-visibility FIRST (Private → 404 non-owner; RegisteredOnly → 401 anon; LinkOnly/Public → fall through) then runs the existing item-visibility switch.
+- **Constraint**: `IsDefault==true` requires `Visibility==Public`. API rejects with `IS_DEFAULT_REQUIRES_PUBLIC` to prevent the "default stall set to non-Public hides all items via auto-default-targeting" footgun.
 
 **Controller: `Controllers/V1/StallsController.cs`**:
 - CRUD: create, update, delete, list my stalls, get single stall
@@ -290,6 +298,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/my-stalls/[id]/items/new` | `AddItemPage` | 2-step wizard: step 1 = describe (category, images, details), step 2 = pricing + terms (uses ItemForm) |
 | `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
 | `/search` | `app/search/page.tsx` (server, exports `metadata` with `robots: { index: false }`) + `app/search/search-client.tsx` ("use client" inside `<Suspense>`) | Unified search: Items|Stalls segmented tabs, ?q= debounced 300ms, min 2 chars, Enter skips debounce, hint chips, Load more pagination, plural-aware live region |
+| `/people` | `app/people/page.tsx` (server, `noindex`) + `app/people/people-client.tsx` ("use client" inside `<Suspense>`) | People directory — search users by displayName. Anon: only public users; authed: all active users. Cards show avatar + displayName + member-since + "Active N ago" + contact-method icons. Entry from sidebar More menu, no top-level nav. |
 
 ### Component Map
 
@@ -332,6 +341,10 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | PublicItemCard | `components/public-item-card.tsx` | Public marketplace item card — image carousel, price/end-date pills, location, time-ago, bid count. Used by homepage feed and /search results. |
 | PublicStallCard | `components/public-stall-card.tsx` | Public stall card — header strip (header image OR accent gradient with `bg-black/30` scrim for contrast), avatar/thumbnail circle, name (truncate), owner row with avatar + display name + location, item-count badge, preview thumbnails strip (cap 3 on `< sm:`, 4 from `sm:` upward). Click links to `/user/{displayName}`. Exports `PublicStallCardSkeleton` sibling. Shares visual primitives with PublicItemCard (rounded-xl, border, shadow). |
 | useDebouncedValue | `lib/use-debounced-value.ts` | Generic `useDebouncedValue<T>(value, delayMs)` hook. setTimeout/clearTimeout in `useEffect`. Used by /search input. |
+| VisibilityRadioCards | `components/visibility-radio-cards.tsx` | Shared 4-state vertical radio card control (Public / RegisteredOnly / LinkOnly / Private) used by BOTH `StallFormDialog` and `ItemForm`. Props: `value`, `onChange`, `mode: "stall" \| "item"` (selects helper-text variant), `name`, `disabled`. Vertical layout chosen over horizontal segmented to fit LV labels at 375px. `role="radiogroup"`, each card `role="radio"` + `aria-checked`, ≥44px tap target. Lucide icons: Globe / Users / Link / Lock. i18n source: shared `visibility.*` namespace with `.label`, `.helperStall`, `.helperItem` per state. |
+| StallFormDialog | `components/stall-form-dialog.tsx` | Popup Dialog (`@base-ui/react`) replacing the inline add/edit stall forms. `mode: "add" \| "edit"`. Sections: Identity (Name 3-50 / Description ≤500 / read-only Slug-as-plain-text on edit), Visibility (`<VisibilityRadioCards mode="stall" />`), Defaults (collapsible with ICU-plural "{N} defaults set" badge; sub-groups Content [category, location, tags] + Commerce [condition, ships, accept-offers]). Sticky footer: Cancel + Save (edit-only Delete with countdown-confirm). Validate-on-blur. Server `IS_DEFAULT_REQUIRES_PUBLIC` → form-level banner; `nameTaken` → inline. a11y baked: form errors `aria-live="polite"`, field errors `aria-describedby`, collapsible `aria-expanded`+`aria-controls`. Image management (thumbnail/header/background/accent) lives OUT of this dialog — separate Appearance panel on detail page. |
+| useRelativeTime | `lib/use-relative-time.ts` | Hook returning a formatter `(date) => string` that wraps `next-intl`'s `useFormatter().relativeTime(date, now)` and prefixes via `t("activeAgo", { time })`. Returns `t("activeNever")` for null/undefined. Used by `PublicUserCard` for the "Active N ago" label sourced from `LastSeenAt`. |
+| PublicUserCard | `components/public-user-card.tsx` | Public user directory card on `/people`. Avatar + displayName, "Member since {year}", "Active N ago" via `useRelativeTime`, contact-method icons (WhatsApp/Telegram/Phone/Email) driven by `Has*` booleans from `PublicUserCardDto`. Click → `/user/{displayName}`. Skeleton variant exported alongside. |
 
 ### shadcn/ui Components Installed
 

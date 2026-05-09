@@ -1,7 +1,7 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-05-08 (rev 14 — unified /search page with Items|Stalls tabs, ?q= server-side text search, Postgres unaccent diacritic folding, debounced + paginated)
+> **Last updated:** 2026-05-09 (rev 15 — stall + item visibility redesign: 4-state StallVisibility cascade through public endpoints, stall-level defaults for new items, StallFormDialog popup, shared VisibilityRadioCards used by both stall and item, Appearance panel; also: /people directory in sidebar More menu)
 > **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done
 
 ---
@@ -48,13 +48,14 @@
 - 💡 Forgot password (reset via email)
 
 ### Shop Management
-- 🕐 Create a shop (name, description, banner image) — 1 shop per user
-- 🕐 Edit shop details
-- 🕐 View own shop dashboard
-- 🕐 Public shop page (visible to all)
+- ✅ Create / edit / delete stalls (multiple per user) — popup `StallFormDialog` with Identity / Visibility / Defaults sections
+- ✅ View own stall dashboard (items grid, activity badges, filters, custom reorder)
+- ✅ Stall images: thumbnail + header + background, plus accent color — consolidated in "Appearance" panel on detail page; thumbnail also editable inline from `/my-stalls` list card (WYSIWYG shortcut)
+- ✅ 4-state stall visibility (Public / RegisteredOnly / LinkOnly / Private) mirroring `ItemVisibility` integers — cascade filtering through `PublicStallsController.Browse`, `PublicItemsController.Browse + Detail`, `ProfileController.GetUserListings`. Default stall locked to Public via `IS_DEFAULT_REQUIRES_PUBLIC`
+- ✅ Stall-level defaults for new items: category, location, can-ship, tags, condition, accept-offers — pre-fill ItemForm when adding via wizard with "Defaults applied from this stall" hint banner
+- 🕐 Public stall page (`/stalls/[slug]` — visible to all; slug currently rendered as plain text in dialog until this lands)
 - 💡 Shop ratings / reviews
 - 💡 Featured shops
-- 💡 Multiple shops per user (DB supports it, UI limited to 1 for now)
 
 ### Item Listings
 - ✅ Add item (2-step wizard: describe → pricing + terms)
@@ -65,7 +66,7 @@
 - ✅ Image upload (max 5 per item, compressed via Cloudinary)
 - ✅ Category system (12 flat categories + free-form tags)
 - ✅ Item location (Nominatim autocomplete, city+country) + can ship flag
-- ✅ Visibility: Public / RegisteredOnly / LinkOnly / Private
+- ✅ Visibility: Public / RegisteredOnly / LinkOnly / Private — UI uses shared `VisibilityRadioCards` component (same control as stall visibility)
 - ✅ Allow guest offers toggle per item (default off)
 - ✅ Item limit per user (MaxItems, default 10, manually adjustable in DB for v1)
 - ✅ Timed items with active offers become readonly (winner visible)
