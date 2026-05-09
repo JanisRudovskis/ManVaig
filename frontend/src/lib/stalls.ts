@@ -4,6 +4,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5100";
 
 // === Types ===
 
+export const StallVisibility = {
+  Public: 0,
+  RegisteredOnly: 1,
+  LinkOnly: 2,
+  Private: 3,
+} as const;
+
 export interface StallResponse {
   id: string;
   name: string;
@@ -15,6 +22,14 @@ export interface StallResponse {
   accentColor: string | null;
   sortOrder: number;
   isDefault: boolean;
+  visibility: number;
+  defaultCategoryId: number | null;
+  defaultCategoryName: string | null;
+  defaultLocation: string | null;
+  defaultCanShip: boolean;
+  defaultTags: string[];
+  defaultCondition: number | null;
+  defaultAcceptOffers: boolean;
   itemCount: number;
   previewImageUrls: string[];
   featuredItemIds: string[];
@@ -32,6 +47,13 @@ export interface CreateStallData {
   name: string;
   description?: string;
   accentColor?: string;
+  visibility?: number;
+  defaultCategoryId?: number | null;
+  defaultLocation?: string;
+  defaultCanShip?: boolean;
+  defaultTags?: string[];
+  defaultCondition?: number | null;
+  defaultAcceptOffers?: boolean;
 }
 
 export interface UpdateStallData {
@@ -39,6 +61,23 @@ export interface UpdateStallData {
   slug?: string;
   description?: string;
   accentColor?: string;
+  visibility?: number;
+  defaultCategoryId?: number | null;
+  defaultLocation?: string;
+  defaultCanShip?: boolean;
+  defaultTags?: string[];
+  defaultCondition?: number | null;
+  defaultAcceptOffers?: boolean;
+}
+
+export interface StallDefaults {
+  categoryId: number | null;
+  location: string | null;
+  canShip: boolean;
+  condition: number | null;
+  acceptOffers: boolean;
+  tags: string[];
+  visibility: number;
 }
 
 export interface PublicStallResponse {

@@ -51,7 +51,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   - `fetchStall(id)` — verify it already exists; if missing, add it (`GET /api/v1/stalls/{id}`, returns `StallResponse`).
 - **Verify:** `cd frontend && npx tsc --noEmit` — 0 errors.
 - **Parallel:** true (foundation for all subsequent tasks)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 2: Frontend — new `VisibilityRadioCards` shared component
 - **Files:** `frontend/src/components/visibility-radio-cards.tsx` (new)
