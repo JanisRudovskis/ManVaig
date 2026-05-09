@@ -112,7 +112,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   3. POST with `"isDefault":true,"visibility":2` → 400 with `IS_DEFAULT_REQUIRES_PUBLIC`.
   4. POST with 11 tags → 400.
 - **Parallel:** false (depends on Task 3)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 5: Backend — Browse cascades (`PublicStallsController` + `PublicItemsController`)
 - **Files:** `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs`, `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`
