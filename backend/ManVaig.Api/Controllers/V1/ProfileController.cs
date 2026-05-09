@@ -174,6 +174,7 @@ public class ProfileController : ControllerBase
 
         var items = await _db.Items
             .Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)
+            .Where(i => i.Stall.Visibility == StallVisibility.Public)
             .OrderByDescending(i => i.CreatedAt)
             .Take(limit)
             .Select(i => new PublicItemCardDto
@@ -241,7 +242,10 @@ public class ProfileController : ControllerBase
     {
         // Compute stats
         var stallCount = await _db.Stalls.CountAsync(s => s.UserId == user.Id);
-        var activeListingCount = await _db.Items.CountAsync(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public);
+        var activeListingCount = await _db.Items.CountAsync(i =>
+            i.UserId == user.Id
+            && i.Visibility == ItemVisibility.Public
+            && i.Stall.Visibility == StallVisibility.Public);
         var completedDealCount = await _db.Bids.CountAsync(b =>
             b.Status == BidStatus.Completed && b.Item.UserId == user.Id);
 

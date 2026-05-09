@@ -1,3 +1,5 @@
+using ManVaig.Api.Models.Enums;
+
 namespace ManVaig.Api.Models;
 
 public class Stall
@@ -18,6 +20,16 @@ public class Stall
 
     public int SortOrder { get; set; }
     public bool IsDefault { get; set; }
+
+    public StallVisibility Visibility { get; set; } = StallVisibility.Public;
+
+    public int? DefaultCategoryId { get; set; }
+    public Category? DefaultCategory { get; set; }
+    public string? DefaultLocation { get; set; }
+    public bool DefaultCanShip { get; set; }
+    public string? DefaultTagsJson { get; set; }
+    public Condition? DefaultCondition { get; set; }
+    public bool DefaultAcceptOffers { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

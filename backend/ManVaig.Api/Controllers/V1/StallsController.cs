@@ -1,9 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ManVaig.Api.Data;
 using ManVaig.Api.Models;
 using ManVaig.Api.Models.Dto;
+using ManVaig.Api.Models.Enums;
 using ManVaig.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,35 +39,52 @@ public class StallsController : ControllerBase
         var user = await _db.Users.FindAsync(userId.Value);
         if (user == null) return Unauthorized();
 
-        var stalls = await _db.Stalls
+        var raw = await _db.Stalls
             .Where(s => s.UserId == userId.Value)
             .OrderBy(s => s.SortOrder)
             .ThenBy(s => s.CreatedAt)
-            .Select(s => new StallResponse
+            .Select(s => new
             {
-                Id = s.Id,
-                Name = s.Name,
-                Slug = s.Slug,
-                Description = s.Description,
-                ThumbnailUrl = s.ThumbnailUrl,
-                HeaderImageUrl = s.HeaderImageUrl,
-                BackgroundImageUrl = s.BackgroundImageUrl,
-                AccentColor = s.AccentColor,
-                SortOrder = s.SortOrder,
-                IsDefault = s.IsDefault,
-                ItemCount = s.Items.Count,
-                PreviewImageUrls = s.Items
-                    .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
-                    .Take(4)
-                    .ToList(),
-                FeaturedItemIds = s.FeaturedItems
-                    .OrderBy(f => f.SortOrder)
-                    .Select(f => f.ItemId)
-                    .ToList(),
-                CreatedAt = s.CreatedAt,
-                UpdatedAt = s.UpdatedAt
+                Response = new StallResponse
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    Slug = s.Slug,
+                    Description = s.Description,
+                    ThumbnailUrl = s.ThumbnailUrl,
+                    HeaderImageUrl = s.HeaderImageUrl,
+                    BackgroundImageUrl = s.BackgroundImageUrl,
+                    AccentColor = s.AccentColor,
+                    SortOrder = s.SortOrder,
+                    IsDefault = s.IsDefault,
+                    Visibility = s.Visibility,
+                    DefaultCategoryId = s.DefaultCategoryId,
+                    DefaultCategoryName = s.DefaultCategory != null ? s.DefaultCategory.Name : null,
+                    DefaultLocation = s.DefaultLocation,
+                    DefaultCanShip = s.DefaultCanShip,
+                    DefaultCondition = s.DefaultCondition,
+                    DefaultAcceptOffers = s.DefaultAcceptOffers,
+                    ItemCount = s.Items.Count,
+                    PreviewImageUrls = s.Items
+                        .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
+                        .Take(4)
+                        .ToList(),
+                    FeaturedItemIds = s.FeaturedItems
+                        .OrderBy(f => f.SortOrder)
+                        .Select(f => f.ItemId)
+                        .ToList(),
+                    CreatedAt = s.CreatedAt,
+                    UpdatedAt = s.UpdatedAt
+                },
+                TagsJson = s.DefaultTagsJson
             })
             .ToListAsync();
+
+        var stalls = raw.Select(r =>
+        {
+            r.Response.DefaultTags = ParseDefaultTags(r.TagsJson);
+            return r.Response;
+        }).ToList();
 
         var totalItemCount = await _db.Items.CountAsync(i => i.UserId == userId.Value);
 
@@ -86,34 +105,7 @@ public class StallsController : ControllerBase
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var stall = await _db.Stalls
-            .Where(s => s.Id == id && s.UserId == userId.Value)
-            .Select(s => new StallResponse
-            {
-                Id = s.Id,
-                Name = s.Name,
-                Slug = s.Slug,
-                Description = s.Description,
-                ThumbnailUrl = s.ThumbnailUrl,
-                HeaderImageUrl = s.HeaderImageUrl,
-                BackgroundImageUrl = s.BackgroundImageUrl,
-                AccentColor = s.AccentColor,
-                SortOrder = s.SortOrder,
-                IsDefault = s.IsDefault,
-                ItemCount = s.Items.Count,
-                PreviewImageUrls = s.Items
-                    .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
-                    .Take(4)
-                    .ToList(),
-                FeaturedItemIds = s.FeaturedItems
-                    .OrderBy(f => f.SortOrder)
-                    .Select(f => f.ItemId)
-                    .ToList(),
-                CreatedAt = s.CreatedAt,
-                UpdatedAt = s.UpdatedAt
-            })
-            .FirstOrDefaultAsync();
-
+        var stall = await GetStallResponseOrNull(id, userId.Value);
         if (stall == null) return NotFound(new { error = "Stall not found." });
 
         return Ok(stall);
@@ -136,6 +128,20 @@ public class StallsController : ControllerBase
         if (request.AccentColor != null && !Regex.IsMatch(request.AccentColor, @"^#[0-9a-fA-F]{6}$"))
             return BadRequest(new { error = "INVALID_COLOR" });
 
+        // Validate default tags (mirror ItemsController.CreateItem pattern)
+        if (request.DefaultTags is { Count: > 10 })
+            return BadRequest(new { error = "TAGS_LIMIT" });
+        if (request.DefaultTags != null && request.DefaultTags.Any(t => t.Trim().Length > 30))
+            return BadRequest(new { error = "TAG_LENGTH" });
+
+        // Validate default category exists
+        if (request.DefaultCategoryId.HasValue)
+        {
+            var categoryExists = await _db.Categories.AnyAsync(c => c.Id == request.DefaultCategoryId.Value);
+            if (!categoryExists)
+                return BadRequest(new { error = "INVALID_CATEGORY" });
+        }
+
         var slug = GenerateSlug(name);
 
         // Ensure slug is unique per user
@@ -150,6 +156,13 @@ public class StallsController : ControllerBase
             Description = request.Description?.Trim(),
             AccentColor = request.AccentColor,
             SortOrder = await _db.Stalls.CountAsync(s => s.UserId == userId.Value),
+            Visibility = request.Visibility,
+            DefaultCategoryId = request.DefaultCategoryId,
+            DefaultLocation = string.IsNullOrWhiteSpace(request.DefaultLocation) ? null : request.DefaultLocation.Trim(),
+            DefaultCanShip = request.DefaultCanShip,
+            DefaultTagsJson = SerializeDefaultTags(request.DefaultTags),
+            DefaultCondition = request.DefaultCondition,
+            DefaultAcceptOffers = request.DefaultAcceptOffers,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -157,21 +170,8 @@ public class StallsController : ControllerBase
         _db.Stalls.Add(stall);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetStall), new { id = stall.Id }, new StallResponse
-        {
-            Id = stall.Id,
-            Name = stall.Name,
-            Slug = stall.Slug,
-            Description = stall.Description,
-            AccentColor = stall.AccentColor,
-            SortOrder = stall.SortOrder,
-            IsDefault = stall.IsDefault,
-            ItemCount = 0,
-            PreviewImageUrls = new(),
-            FeaturedItemIds = new(),
-            CreatedAt = stall.CreatedAt,
-            UpdatedAt = stall.UpdatedAt
-        });
+        var response = await GetStallResponseOrNull(stall.Id, userId.Value);
+        return CreatedAtAction(nameof(GetStall), new { id = stall.Id }, response);
     }
 
     /// <summary>
@@ -222,10 +222,47 @@ public class StallsController : ControllerBase
                 stall.AccentColor = request.AccentColor;
         }
 
+        if (request.Visibility.HasValue)
+        {
+            // A default stall must remain Public — otherwise its items disappear from browse
+            if (stall.IsDefault && request.Visibility.Value != StallVisibility.Public)
+                return BadRequest(new { error = "IS_DEFAULT_REQUIRES_PUBLIC" });
+            stall.Visibility = request.Visibility.Value;
+        }
+
+        if (request.DefaultCategoryId.HasValue)
+        {
+            var categoryExists = await _db.Categories.AnyAsync(c => c.Id == request.DefaultCategoryId.Value);
+            if (!categoryExists)
+                return BadRequest(new { error = "INVALID_CATEGORY" });
+            stall.DefaultCategoryId = request.DefaultCategoryId.Value;
+        }
+
+        if (request.DefaultLocation != null)
+            stall.DefaultLocation = string.IsNullOrWhiteSpace(request.DefaultLocation) ? null : request.DefaultLocation.Trim();
+
+        if (request.DefaultCanShip.HasValue)
+            stall.DefaultCanShip = request.DefaultCanShip.Value;
+
+        if (request.DefaultTags != null)
+        {
+            if (request.DefaultTags.Count > 10)
+                return BadRequest(new { error = "TAGS_LIMIT" });
+            if (request.DefaultTags.Any(t => t.Trim().Length > 30))
+                return BadRequest(new { error = "TAG_LENGTH" });
+            stall.DefaultTagsJson = SerializeDefaultTags(request.DefaultTags);
+        }
+
+        if (request.DefaultCondition.HasValue)
+            stall.DefaultCondition = request.DefaultCondition.Value;
+
+        if (request.DefaultAcceptOffers.HasValue)
+            stall.DefaultAcceptOffers = request.DefaultAcceptOffers.Value;
+
         stall.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        return Ok(await GetStallResponse(stall.Id, userId.Value));
+        return Ok(await GetStallResponseOrNull(stall.Id, userId.Value));
     }
 
     /// <summary>
@@ -502,34 +539,74 @@ public class StallsController : ControllerBase
         return slug;
     }
 
-    private async Task<StallResponse> GetStallResponse(Guid stallId, Guid userId)
+    private async Task<StallResponse?> GetStallResponseOrNull(Guid stallId, Guid userId)
     {
-        return await _db.Stalls
+        var raw = await _db.Stalls
             .Where(s => s.Id == stallId && s.UserId == userId)
-            .Select(s => new StallResponse
+            .Select(s => new
             {
-                Id = s.Id,
-                Name = s.Name,
-                Slug = s.Slug,
-                Description = s.Description,
-                ThumbnailUrl = s.ThumbnailUrl,
-                HeaderImageUrl = s.HeaderImageUrl,
-                BackgroundImageUrl = s.BackgroundImageUrl,
-                AccentColor = s.AccentColor,
-                SortOrder = s.SortOrder,
-                IsDefault = s.IsDefault,
-                ItemCount = s.Items.Count,
-                PreviewImageUrls = s.Items
-                    .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
-                    .Take(4)
-                    .ToList(),
-                FeaturedItemIds = s.FeaturedItems
-                    .OrderBy(f => f.SortOrder)
-                    .Select(f => f.ItemId)
-                    .ToList(),
-                CreatedAt = s.CreatedAt,
-                UpdatedAt = s.UpdatedAt
+                Response = new StallResponse
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    Slug = s.Slug,
+                    Description = s.Description,
+                    ThumbnailUrl = s.ThumbnailUrl,
+                    HeaderImageUrl = s.HeaderImageUrl,
+                    BackgroundImageUrl = s.BackgroundImageUrl,
+                    AccentColor = s.AccentColor,
+                    SortOrder = s.SortOrder,
+                    IsDefault = s.IsDefault,
+                    Visibility = s.Visibility,
+                    DefaultCategoryId = s.DefaultCategoryId,
+                    DefaultCategoryName = s.DefaultCategory != null ? s.DefaultCategory.Name : null,
+                    DefaultLocation = s.DefaultLocation,
+                    DefaultCanShip = s.DefaultCanShip,
+                    DefaultCondition = s.DefaultCondition,
+                    DefaultAcceptOffers = s.DefaultAcceptOffers,
+                    ItemCount = s.Items.Count,
+                    PreviewImageUrls = s.Items
+                        .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
+                        .Take(4)
+                        .ToList(),
+                    FeaturedItemIds = s.FeaturedItems
+                        .OrderBy(f => f.SortOrder)
+                        .Select(f => f.ItemId)
+                        .ToList(),
+                    CreatedAt = s.CreatedAt,
+                    UpdatedAt = s.UpdatedAt
+                },
+                TagsJson = s.DefaultTagsJson
             })
-            .FirstAsync();
+            .FirstOrDefaultAsync();
+
+        if (raw == null) return null;
+        raw.Response.DefaultTags = ParseDefaultTags(raw.TagsJson);
+        return raw.Response;
+    }
+
+    private static string? SerializeDefaultTags(List<string>? tags)
+    {
+        if (tags == null) return null;
+        var normalized = tags
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Distinct()
+            .Take(10)
+            .ToList();
+        return normalized.Count == 0 ? null : JsonSerializer.Serialize(normalized);
+    }
+
+    private static List<string> ParseDefaultTags(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
     }
 }

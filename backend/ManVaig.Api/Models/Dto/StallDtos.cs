@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ManVaig.Api.Models.Enums;
 
 namespace ManVaig.Api.Models.Dto;
 
@@ -12,6 +13,21 @@ public class CreateStallRequest
 
     [MaxLength(7)]
     public string? AccentColor { get; set; }
+
+    public StallVisibility Visibility { get; set; } = StallVisibility.Public;
+
+    public int? DefaultCategoryId { get; set; }
+
+    [MaxLength(200)]
+    public string? DefaultLocation { get; set; }
+
+    public bool DefaultCanShip { get; set; }
+
+    public List<string>? DefaultTags { get; set; }
+
+    public Condition? DefaultCondition { get; set; }
+
+    public bool DefaultAcceptOffers { get; set; }
 }
 
 public class UpdateStallRequest
@@ -27,6 +43,21 @@ public class UpdateStallRequest
 
     [MaxLength(7)]
     public string? AccentColor { get; set; }
+
+    public StallVisibility? Visibility { get; set; }
+
+    public int? DefaultCategoryId { get; set; }
+
+    [MaxLength(200)]
+    public string? DefaultLocation { get; set; }
+
+    public bool? DefaultCanShip { get; set; }
+
+    public List<string>? DefaultTags { get; set; }
+
+    public Condition? DefaultCondition { get; set; }
+
+    public bool? DefaultAcceptOffers { get; set; }
 }
 
 public class StallResponse
@@ -41,6 +72,14 @@ public class StallResponse
     public string? AccentColor { get; set; }
     public int SortOrder { get; set; }
     public bool IsDefault { get; set; }
+    public StallVisibility Visibility { get; set; }
+    public int? DefaultCategoryId { get; set; }
+    public string? DefaultCategoryName { get; set; }
+    public string? DefaultLocation { get; set; }
+    public bool DefaultCanShip { get; set; }
+    public List<string> DefaultTags { get; set; } = new();
+    public Condition? DefaultCondition { get; set; }
+    public bool DefaultAcceptOffers { get; set; }
     public int ItemCount { get; set; }
     public List<string> PreviewImageUrls { get; set; } = new();
     public List<Guid> FeaturedItemIds { get; set; } = new();
