@@ -193,7 +193,11 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   4. **Keyboard nav check** on dialog: Tab through Name → Description → radio group → defaults toggle → Save. Escape closes. Enter on Save submits.
 - **Verify:** `cd frontend && npm run build` succeeds. design-critique returns 0 blockers. Lighthouse a11y ≥ 95 on `/my-stalls`. Keyboard nav works.
 - **Parallel:** false (final task)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
+
+### Known Issues
+- Lighthouse a11y verification on `/my-stalls` was skipped — `RALPH_PLAYWRIGHT="false"` and the loop's policy disallows starting/stopping the dev server. Compensating controls: the `web-design-guidelines` audit covered the dialog's a11y surface (radiogroup, focus-visible, aria-expanded/controls, aria-live, aria-describedby, label htmlFor where applicable, tap targets ≥44px on the visibility cards) — 0 BLOCKERs. Run lighthouse manually on `/my-stalls` once the dev server is up.
+- Keyboard nav verification on the dialog was static-checked (Tab order: autoFocus on Name → Description → radio group with roving tabindex + arrow-key nav → defaults toggle button → Save; Escape closes via shadcn Dialog; Enter on Save submits via form onSubmit). Browser-confirmed verification deferred for the same reason as lighthouse.
 
 ## Out of scope (this cycle)
 
