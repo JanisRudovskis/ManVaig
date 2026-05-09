@@ -9,7 +9,8 @@
     "login": "Ielogoties",
     "logout": "Izlogoties",
     "more": "Vairāk",
-    "showListingTips": "Rādīt sludinājumu padomus"
+    "showListingTips": "Rādīt sludinājumu padomus",
+    "findPeople": "Atrast cilvēkus"
   },
   "home": {
     "title": "Laipni lūgti ManVaig",
@@ -753,5 +754,26 @@
     "retry": "Mēģināt vēlreiz",
     "liveCountItems": "{count, plural, one {# prece atbilst} other {# preces atbilst}}",
     "liveCountStalls": "{count, plural, one {# stends atbilst} other {# stendi atbilst}}"
+  },
+  "people": {
+    "title": "Cilvēki",
+    "placeholder": "Meklēt cilvēkus…",
+    "clearSearch": "Notīrīt meklēšanu",
+    "loading": "Meklē…",
+    "loadMore": "Ielādēt vairāk",
+    "emptyInitial": "Atrast cilvēkus",
+    "emptyInitialDescription": "Ieraksti lietotājvārdu, lai kādu atrastu",
+    "noResults": "Nav atrasts neviens cilvēks ar {q}",
+    "noResultsDescription": "Mēģini citu lietotājvārdu",
+    "errorLoadFailed": "Neizdevās ielādēt cilvēkus",
+    "retry": "Mēģināt vēlreiz",
+    "liveCount": "{count, plural, one {# cilvēks atbilst} other {# cilvēki atbilst}}",
+    "memberSinceShort": "Reģistrējies {year}",
+    "activeNever": "Nav redzēts",
+    "activeAgo": "Aktīvs {time}",
+    "contactWhatsApp": "Pieejams WhatsApp",
+    "contactTelegram": "Pieejams Telegram",
+    "contactPhone": "Pieejams tālrunis",
+    "contactEmail": "Pieejams e-pasts"
   }
 }

@@ -1,174 +1,238 @@
 # Implementation Plan
 
 ## Goal
-Build a unified /search page with a Stalls | Items tab toggle. Reuse the existing /api/v1/public/items endpoint and add a parallel /api/v1/public/stalls. Add ?q= text-search support to both. MVP: text search + result list cards (mobile-first, shadcn/ui, EN+LV i18n). Required: empty state, skeleton loading state, debounced input (300ms). No filters in this pass.
+Build a `/people` page (people directory) where any visitor can search for users by display name, click a result card, and land on the existing `/user/[displayName]` profile. MVP: text search by displayName only, mobile-first, EN+LV i18n, debounced input (300ms), min 2 chars, empty-initial state with hint, "Active N ago" label sourced from existing `LastSeenAt` field. No new sidebar item — entry point is at the top of the existing sidebar More menu. No filters.
+
+## Privacy contract (load-bearing — read carefully)
+
+- `ApplicationUser.IsProfilePublic` defaults `true`. Recent commit added private-profile visibility.
+- **Anonymous viewer:** only `IsActive == true AND IsProfilePublic == true` users appear in `/api/v1/public/users` results. Private users are completely invisible to anonymous searchers.
+- **Authenticated viewer:** sees all `IsActive == true` users (public + private), full card.
+- Rule of thumb: **if a user is visible at all in the result set, ALL fields on the card are shown** (avatar, displayName, memberSince, last-seen, contact-method icons). Don't invent partial cards.
 
 ## Context (from codebase exploration)
 
-- **Existing items endpoint** — `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs` `GET /api/v1/public/items` already supports `page`, `pageSize`, `categoryId`. Needs `?q=` added (search title, description, tag names).
-- **Stalls** — only owner endpoints exist (`/api/v1/stalls`, `[Authorize]`). DTO `PublicStallResponse` already defined in `backend/ManVaig.Api/Models/Dto/StallDtos.cs` but no public controller. Stalls are tied to a single owner; `Stall` model has Name, Slug, Description, AccentColor, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, ItemCount derived.
-- **Frontend client lib** — `frontend/src/lib/items.ts` has `fetchPublicItems(page, pageSize, categoryId, signal)`. `frontend/src/lib/stalls.ts` only has authed stall functions. Both need extension.
-- **Sidebar nav** — `frontend/src/components/app-sidebar.tsx` already maps `key: "browse"` -> `/browse` (no page exists). We retarget to `/search`.
-- **shadcn components installed** — no `tabs` component yet; will use a simple segmented button toggle (consistent with Condition segmented in ItemForm) instead of installing tabs.
-- **i18n** — namespaces under `frontend/messages/{en,lv}.json`. No `search` namespace exists yet. Pattern: `useTranslations("search")` in client component.
-- **Reuse** — `PublicItemCard` component (`frontend/src/components/public-item-card.tsx`) already renders item cards from `PublicItemCardType` and triggers `ItemDetailModal` + `OffersPopup` on click. `ItemCardSkeleton` is exported from `item-card-shared.tsx`.
-- **Locale-aware case-insensitive search** — backend uses Npgsql; use `EF.Functions.ILike(field, $"%{q}%")` for Postgres ILIKE, wrapped with `EF.Functions.Unaccent(...)` on BOTH sides so Latvian diacritics fold (`Rīga` matches `riga`). Trim/lowercase q server-side; cap length at 100 chars to avoid pathological queries. Min query length enforced client-side (2 chars).
-- **`unaccent` Postgres extension** is required — added in Task 1 as an EF migration. Applying `unaccent()` on an indexed column bypasses the index in v1 (acceptable for current data volume; revisit with `pg_trgm` if needed).
+- **`ApplicationUser`** (`backend/ManVaig.Api/Models/ApplicationUser.cs`) has: `DisplayName` (3–30 chars, regex `^[a-zA-Z0-9_-]{3,30}$` — **no diacritics, no spaces**, so no `unaccent` needed for this search), `AvatarUrl`, `Bio`, `Location`, `Phone`, `TelegramUsername`, `IsProfilePublic` (bool, default true), `EnabledChannels` (flags: WhatsApp=1, Telegram=2, ShowEmail=4, ShowPhone=8), `IsActive` (bool), `CreatedAt`, `LastSeenAt` (nullable, populated by `LastSeenMiddleware` with 5-minute throttle), `EmailConfirmed` (Identity-managed).
+- **DisplayName uniqueness** is enforced at registration via case-insensitive `AnyAsync` check in `AuthController.Register`. There is no DB unique index, but in practice every register check enforces it. Safe to use `displayName` as a key in URLs.
+- **Existing public controllers** to mirror: `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs` and `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs`. Both are anonymous, paginated (`page`, `pageSize`), accept `?q=`, return `{ Items|Stalls, TotalCount, Page, PageSize }`. Stalls controller filters out private content (only stalls with at least one public item) — same shape applies to user privacy here.
+- **DTO file convention:** `backend/ManVaig.Api/Models/Dto/PublicItemDtos.cs` exists. Add `PublicUserDtos.cs` alongside (do NOT cram into `ProfileDtos.cs` — different concern).
+- **Frontend search shell to mirror:** `frontend/src/app/search/search-client.tsx` is the canonical pattern. It has: debounced input (300ms via `lib/use-debounced-value.ts`), URL state via `useSearchParams` + `replace` + `scroll: false`, min query length 2, `Enter` skips debounce, generation counter + `AbortController` for race safety, pagination ("Load more" appends), `role="status"` + `aria-live="polite"` live region with ICU plurals, empty-initial state with hint chip(s), error/retry, skeletons. Copy the structure directly — do not reinvent.
+- **`fetchPublicStalls`** in `frontend/src/lib/stalls.ts` is the call-pattern. Plain `fetch` (not `authFetch`), URLSearchParams append, returns typed list response.
+- **`PublicStallCard`** (`frontend/src/components/public-stall-card.tsx`) is the card pattern: same `rounded-xl`, same border, mobile-first, skeleton variant exported alongside.
+- **`UserAvatar`** (`frontend/src/components/user-avatar.tsx`) handles avatar + initials fallback. Reuse it on the card.
+- **Sidebar More menu** lives at `frontend/src/components/sidebar-more-menu.tsx`. Current order: Theme / Language / Listing tips / (sep) / Logout. Add "Find people" at the very top (above Theme), with `Users` lucide icon. Click → close popover + `router.push("/people")`.
+- **i18n:** namespaces under `frontend/messages/{en,lv}.json`. Add a new top-level `people.*` namespace, plus one new key `nav.findPeople` for the More menu entry. Latvian terminology is "stendi" for stalls already established — keep "cilvēki" (people) consistent with that natural-language style.
+- **Last-active label format:** use `next-intl`'s `useFormatter().relativeTime(date, now)` — handles all unit bucketing (minutes / hours / days / weeks / months) and i18n automatically. Wrap in a tiny `useRelativeTime()` hook in `frontend/src/lib/use-relative-time.ts` that returns `t("activeAgo", { time })` or `t("activeNever")` if `LastSeenAt` is null.
+- **Routing:** `/user/[displayName]` already exists (handled by `ProfileController.GetPublicProfile`). Card click links there directly.
 
 ## Tasks
 
-### Task 1: Backend — add Postgres `unaccent` extension migration
-- **Files:** `backend/ManVaig.Api/Migrations/20260508173423_AddUnaccentExtension.cs` (new), `backend/ManVaig.Api/Migrations/AppDbContextModelSnapshot.cs` (auto-updated)
-- **Action:** Generate a new EF Core migration that executes `CREATE EXTENSION IF NOT EXISTS unaccent;` in `Up()` and `DROP EXTENSION IF EXISTS unaccent;` in `Down()`. Use `migrationBuilder.Sql(...)`. Run via `dotnet ef migrations add AddUnaccentExtension --project backend/ManVaig.Api`. The `Migrate()` call at startup (`Program.cs:97`) will apply it on next API boot. Verify the extension is present after `dotnet run` against a clean DB.
-- **Verify:** `cd backend && dotnet build ManVaig.sln`; `dotnet ef migrations list --project ManVaig.Api` lists the new migration. After running the API, `psql` query `SELECT extname FROM pg_extension WHERE extname = 'unaccent';` returns one row.
-- **Parallel:** false (foundation for Tasks 2 and 4)
-- **Status:** [x] Complete
-
-### Task 2: Backend — add ?q= text search to PublicItemsController.Browse
-- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicItemsController.cs`
-- **Action:** Add `[FromQuery] string? q = null` parameter to `Browse`. When `q` is non-null/whitespace, trim, cap at 100 chars, build `pattern = $"%{q}%"`, then apply:
+### Task 1: Backend — add `PublicUserCardDto` + `PublicUserListResponse` DTOs
+- **Files:** `backend/ManVaig.Api/Models/Dto/PublicUserDtos.cs` (new)
+- **Action:** Create new file with two classes:
   ```csharp
-  query = query.Where(i =>
-      EF.Functions.ILike(EF.Functions.Unaccent(i.Title), EF.Functions.Unaccent(pattern)) ||
-      (i.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(i.Description), EF.Functions.Unaccent(pattern))) ||
-      i.ItemTags.Any(it => EF.Functions.ILike(EF.Functions.Unaccent(it.Tag.Name), EF.Functions.Unaccent(pattern))));
+  public class PublicUserCardDto
+  {
+      public string DisplayName { get; set; } = "";
+      public string? AvatarUrl { get; set; }
+      public DateTime MemberSince { get; set; }
+      public DateTime? LastSeenAt { get; set; }
+      public bool HasWhatsApp { get; set; }
+      public bool HasTelegram { get; set; }
+      public bool HasPhone { get; set; }
+      public bool HasEmail { get; set; }
+  }
+
+  public class PublicUserListResponse
+  {
+      public List<PublicUserCardDto> Users { get; set; } = new();
+      public int TotalCount { get; set; }
+      public int Page { get; set; }
+      public int PageSize { get; set; }
+  }
   ```
-  Keep `categoryId` filter behavior. Order by CreatedAt desc (no relevance ranking in MVP).
-- **Verify:** `cd backend && dotnet build ManVaig.sln`; `curl "http://localhost:5100/api/v1/public/items?q=test&pageSize=5"` returns 200 with filtered items; `curl "http://localhost:5100/api/v1/public/items?q=riga"` matches an item titled "Rīga" (diacritic fold).
-- **Parallel:** false (depends on Task 1; foundation for Task 5)
+  Namespace `ManVaig.Api.Models.Dto`. Mirror naming convention of `PublicStallListResponse` in `StallDtos.cs`.
+- **Verify:** `cd backend && dotnet build ManVaig.sln` — 0 errors.
+- **Parallel:** true (independent of all others)
 - **Status:** [x] Complete
 
-### Task 3: Backend — add PublicStallListResponse DTO
-- **Files:** `backend/ManVaig.Api/Models/Dto/StallDtos.cs`
-- **Action:** Append a `PublicStallListResponse` class: `List<PublicStallResponse> Stalls`, `int TotalCount`, `int Page`, `int PageSize`. Used by Task 4.
-- **Verify:** `cd backend && dotnet build ManVaig.sln`.
-- **Parallel:** true (independent; Task 4 references this)
+### Task 2: Backend — create `PublicUsersController` with browse + search + privacy filter
+- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicUsersController.cs` (new)
+- **Action:** New controller `[Route("api/v1/public/users")] [ApiController]`, action `[HttpGet] Browse([FromQuery] int page = 1, int pageSize = 20, string? q = null)`. Mirror the shape of `PublicStallsController.Browse`. Logic:
+  - `page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 50);`
+  - Base query: `_db.Users.Where(u => u.IsActive)`.
+  - **Privacy filter:** if `User.Identity?.IsAuthenticated != true`, also `Where(u => u.IsProfilePublic)`. Anonymous viewers never see private users.
+  - When `q` is non-null/non-whitespace: trim, cap at 100 chars, `var pattern = $"%{trimmed}%"`. Apply `.Where(u => u.DisplayName != null && EF.Functions.ILike(u.DisplayName, pattern))`. **No `EF.Functions.Unaccent` needed** — DisplayName regex already excludes diacritics.
+  - Sort: `OrderByDescending(u => u.LastSeenAt.HasValue).ThenByDescending(u => u.LastSeenAt).ThenByDescending(u => u.CreatedAt)` — most recently active first, never-seen users at the bottom.
+  - Project to `PublicUserCardDto`. Compute `Has*` flags inline:
+    - `HasEmail = (u.EnabledChannels & CommunicationChannels.ShowEmail) != 0 && u.EmailConfirmed`
+    - `HasPhone = (u.EnabledChannels & CommunicationChannels.ShowPhone) != 0 && u.Phone != null && u.Phone != ""`
+    - `HasWhatsApp = (u.EnabledChannels & CommunicationChannels.ShowPhone) != 0 && (u.EnabledChannels & CommunicationChannels.WhatsApp) != 0 && u.Phone != null && u.Phone != ""`
+    - `HasTelegram = (u.EnabledChannels & CommunicationChannels.Telegram) != 0 && u.TelegramUsername != null && u.TelegramUsername != ""`
+  - Return `Ok(new PublicUserListResponse { Users = users, TotalCount = totalCount, Page = page, PageSize = pageSize })`.
+- **Verify:** `cd backend && dotnet build ManVaig.sln`. After API restart: `curl "http://localhost:5100/api/v1/public/users?q=cak&pageSize=5"` returns 200 JSON; should include the seed user "Čaks" (display name `Caks` — verify exact casing). `curl "http://localhost:5100/api/v1/public/users?q=ABC123XYZ"` returns 200 with `users: []`, `totalCount: 0`.
+- **Parallel:** false (depends on Task 1)
 - **Status:** [x] Complete
 
-### Task 4: Backend — create PublicStallsController with browse + search
-- **Files:** `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs` (new)
-- **Action:** New controller `[Route("api/v1/public/stalls")] [ApiController]`, anonymous. `GET` action `Browse` with `[FromQuery] int page = 1, int pageSize = 20, string? q = null`. Query `_db.Stalls` with includes for owner User + items + primary images. Only include stalls that have at least one `Item.Visibility == ItemVisibility.Public` so empty/private-only stalls are not exposed. When `q` set (trimmed, capped at 100 chars):
-  ```csharp
-  .Where(s =>
-      EF.Functions.ILike(EF.Functions.Unaccent(s.Name), EF.Functions.Unaccent(pattern)) ||
-      (s.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(s.Description), EF.Functions.Unaccent(pattern))) ||
-      EF.Functions.ILike(EF.Functions.Unaccent(s.User.DisplayName!), EF.Functions.Unaccent(pattern)))
+### Task 3: Frontend — `lib/users.ts` with `fetchPublicUsers`
+- **Files:** `frontend/src/lib/users.ts` (new)
+- **Action:** Mirror `lib/stalls.ts` `fetchPublicStalls`. Export:
+  ```typescript
+  export interface PublicUserCard {
+    displayName: string;
+    avatarUrl: string | null;
+    memberSince: string;       // ISO date
+    lastSeenAt: string | null; // ISO date
+    hasWhatsApp: boolean;
+    hasTelegram: boolean;
+    hasPhone: boolean;
+    hasEmail: boolean;
+  }
+  export interface PublicUserListResponse {
+    users: PublicUserCard[];
+    totalCount: number;
+    page: number;
+    pageSize: number;
+  }
+  export async function fetchPublicUsers(opts: {
+    page?: number; pageSize?: number; q?: string; signal?: AbortSignal;
+  }): Promise<PublicUserListResponse> { ... }
   ```
-  Project to existing `PublicStallResponse` DTO (Id, Name, Slug, Description, ThumbnailUrl, HeaderImageUrl, BackgroundImageUrl, AccentColor, ItemCount = public items only, PreviewImageUrls = up to 4 primary image URLs from public items, Owner = DisplayName/AvatarUrl/Location). Order by ItemCount desc then CreatedAt desc. Return `PublicStallListResponse`.
-- **Verify:** `cd backend && dotnet build ManVaig.sln`; `curl "http://localhost:5100/api/v1/public/stalls?q=test"` returns 200 JSON.
-- **Parallel:** false (depends on Tasks 1 and 3)
+  Use plain `fetch` (no `authFetch`). Build URLSearchParams; only append `q` when truthy and trimmed. API base URL same as other lib files (`process.env.NEXT_PUBLIC_API_URL`).
+- **Verify:** `cd frontend && npx tsc --noEmit` — 0 errors.
+- **Parallel:** true (independent)
 - **Status:** [x] Complete
 
-### Task 5: Frontend — extend lib/items.ts + lib/stalls.ts with search clients
-- **Files:** `frontend/src/lib/items.ts`, `frontend/src/lib/stalls.ts`, `frontend/src/app/page.tsx` (call-site update)
+### Task 4: Frontend — `useRelativeTime` hook for "Active N ago" labels
+- **Files:** `frontend/src/lib/use-relative-time.ts` (new)
+- **Action:** Tiny hook combining `next-intl`'s formatter with i18n strings:
+  ```typescript
+  "use client";
+  import { useFormatter, useTranslations } from "next-intl";
+  export function useRelativeTime() {
+    const format = useFormatter();
+    const t = useTranslations("people");
+    return (date: Date | string | null | undefined): string => {
+      if (!date) return t("activeNever");
+      const d = typeof date === "string" ? new Date(date) : date;
+      return t("activeAgo", { time: format.relativeTime(d, new Date()) });
+    };
+  }
+  ```
+  `format.relativeTime` returns localized strings like "5 minutes ago" / "pirms 5 minūtēm" — i18n is free.
+- **Verify:** `cd frontend && npx tsc --noEmit`.
+- **Parallel:** true (independent)
+- **Status:** [x] Complete
+
+### Task 5: Frontend — `PublicUserCard` component + skeleton variant
+- **Files:** `frontend/src/components/public-user-card.tsx` (new)
+- **Action:** Mobile-first card. Visual primitives MUST match `PublicStallCard` (`rounded-xl`, `border`, comparable shadow + height) so the design system stays coherent. Layout:
+  - `next/link` to `/user/{displayName}` wraps the whole card (block-level link). `aria-label` describes the destination.
+  - Top row: `UserAvatar` (size `md`, reuse `frontend/src/components/user-avatar.tsx`) + displayName (`font-semibold`, truncate).
+  - Second row (small, muted): `t("memberSinceShort", { year })` where `year = new Date(memberSince).getFullYear()`.
+  - Third row (small, muted): `useRelativeTime()` formatter applied to `lastSeenAt`.
+  - Fourth row: contact-method icon strip — show small lucide icons (`MessageCircle` for WhatsApp, `Send` for Telegram, `Phone`, `Mail`) ONLY for the channels where the corresponding `has*` boolean is true. Each icon needs an `aria-label` from i18n. If all four are false, hide the row entirely (no empty placeholder).
+  - Hover/focus state matches stall card (subtle bg shift).
+- Export `PublicUserCardSkeleton` alongside (avatar circle + 3 text lines). Match height of the real card.
+- **Verify:** `cd frontend && npx tsc --noEmit`. Renders on `/people` in Task 6.
+- **Parallel:** true (does not block Tasks 1–4)
+- **Status:** [x] Complete
+
+### Task 6: Frontend — `/people` page (server wrapper + client)
+- **Files:** `frontend/src/app/people/page.tsx` (new server-page wrapper), `frontend/src/app/people/people-client.tsx` (new client component)
 - **Action:**
-  1. In `lib/items.ts` extend `fetchPublicItems` to accept `q?: string`. Refactor to options object form `fetchPublicItems({ page, pageSize, categoryId, q, signal })` and update homepage call site `app/page.tsx` accordingly. Append `q` to URLSearchParams when truthy and trimmed.
-  2. In `lib/stalls.ts` add interface `PublicStallListResponse` and exported `fetchPublicStalls({ page, pageSize, q, signal })` hitting `/api/v1/public/stalls`. No auth header required (use plain `fetch`, not `authFetch`).
-- **Verify:** `cd frontend && npx tsc --noEmit`. Homepage `/` still loads and paginates.
-- **Parallel:** false (Tasks 6/7 depend on these types)
+  - **Server page** (`page.tsx`): export `metadata` with `robots: { index: false }` and `title` from `t("people.title")` (use `getTranslations` for server-side i18n on metadata). Body: `<Suspense fallback={null}><PeopleClient /></Suspense>`. Suspense is required because `PeopleClient` calls `useSearchParams`.
+  - **Client** (`people-client.tsx`, `"use client"`): copy the structure of `frontend/src/app/search/search-client.tsx` and trim to a single tab (no Items/Stalls toggle). Specifically:
+    - URL state via `useSearchParams` + `useRouter` (`replace`, `scroll: false`): `q` only.
+    - Local input state, debounced 300ms via `useDebouncedValue`.
+    - **Min query length 2.** Below that, do not fire the API; show empty-initial state.
+    - **Enter skips debounce.** `onKeyDown`: if `e.key === "Enter"` and trimmed length ≥ 2, fire fetch immediately.
+    - Search input: shadcn `Input` with `Search` lucide icon prefix + clear `X` button when value present. Placeholder = `t("placeholder")`. Clear button has `aria-label={t("clearSearch")}` and tap target ≥ 44px (use `p-2`). **No browser-native validation** (no `required`/`minLength`).
+    - `genRef` (incrementing number) + `AbortController` per fetch — drop stale responses by comparing `gen === currentGen.current` after `await`.
+    - Pagination: 20/page; show "Load more" button when `data.totalCount > rendered.length`. Click bumps `page`, appends results. Reset page to 1 whenever `q` changes.
+    - **Live region:** `<div role="status" aria-live="polite" className="sr-only">{...}</div>` announcing the count via ICU plural — use `t("liveCount", { count: totalCount })` — only when `queryReady && totalCount >= 0` and not loading/erroring. On zero results, the empty state heading already announces; do NOT also push a zero-count live announcement (matches `search-client` style).
+    - **Empty-initial state** (`q.trim().length < 2`): centered column, large muted `Users` lucide icon (~48px), heading `t("emptyInitial")`, subtitle `t("emptyInitialDescription")`. No hint chips on this page (different intent than `/search` — users come here with a name in mind).
+    - **Loading state:** 6 `PublicUserCardSkeleton` in a single column.
+    - **Loaded with results:** list of `PublicUserCard` (single column, `gap-3`).
+    - **Loaded with 0 results:** centered, `Users` icon, `t("noResults", { q })`, `t("noResultsDescription")`.
+    - **Error state:** `t("errorLoadFailed")` + retry button (`t("retry")`).
+    - Layout container: `<main className="mx-auto max-w-[600px] px-4 py-6 md:px-6 md:py-8">` — matches `/search`.
+    - Page heading: `<h1>` with `t("title")`, mobile-tight margins.
+- **Verify:** `cd frontend && npm run build` — 0 errors. Navigate to `/people`: empty-initial state renders. Type `ca` (1 char `c`, then `a`) — **no fetch on `c`, fetch fires once 300ms after `a` lands**. Press Enter mid-typing — fires immediately. Reload `/people?q=cak` — state restored, results render. Network tab shows `/api/v1/public/users?q=cak&page=1&pageSize=20` (or similar). Click a result card → lands on `/user/[displayName]` profile page.
+- **Parallel:** false (depends on Tasks 3, 4, 5)
 - **Status:** [x] Complete
 
-### Task 6: Frontend — PublicStallCard component
-- **Files:** `frontend/src/components/public-stall-card.tsx` (new)
-- **Action:** Mobile-first card. Visual primitives must match `PublicItemCard`: same `rounded-xl`, same `border`, same shadow class, comparable height range (160–220px) so a mixed-card scroll feels coherent. Layout: header strip with `headerImageUrl` (or accent gradient fallback — overlay `bg-black/30` if text sits on the strip, since `AccentColor` is user-supplied and contrast is unguaranteed); avatar/thumbnail circle with `thumbnailUrl` or initials; stall name (truncate); owner display name + small avatar + location; item count badge; preview thumbnails strip — **cap at 3 thumbnails on `< sm:` (i.e., `< 640px`); show 4 from `sm:` upward**. Click links via `next/link` to `/u/{owner.displayName}` (existing public profile route — safe target until public stall page lands). Use shadcn `Card` + `Avatar` + `Badge`. Skeleton variant `PublicStallCardSkeleton` exported alongside.
-- **Verify:** `cd frontend && npx tsc --noEmit`; renders on /search page in Task 7.
-- **Parallel:** true (independent of Task 7 once Task 5 types exist)
+### Task 7: Frontend — add "Find people" entry to sidebar More menu
+- **Files:** `frontend/src/components/sidebar-more-menu.tsx`, `frontend/messages/en.json`, `frontend/messages/lv.json`
+- **Action:** In `sidebar-more-menu.tsx`, in the `view === "main"` block, add a new button as the FIRST entry (above the theme toggle):
+  ```tsx
+  <button
+    onClick={() => { setOpen(false); router.push("/people"); }}
+    className={btnClass}
+  >
+    <Users className="size-4 shrink-0" />
+    <span className="flex-1 text-left">{t("findPeople")}</span>
+  </button>
+  ```
+  Import `Users` from `lucide-react` (already imports other lucide icons in this file). The `t` for `nav` is already in scope. Add `nav.findPeople` to BOTH `en.json` ("Find people") and `lv.json` ("Atrast cilvēkus").
+- **Verify:** Open sidebar → click hamburger ("More") → popover opens → "Find people" is the first entry, with the Users icon. Click → popover closes, navigates to `/people`. Switch language to LV → entry shows "Atrast cilvēkus".
+- **Parallel:** false (depends on Task 6 page existing for the click target to resolve)
 - **Status:** [x] Complete
 
-### Task 7: Frontend — /search page with tab toggle, debounced search, pagination
-- **Files:** `frontend/src/app/search/page.tsx` (new), `frontend/src/lib/use-debounced-value.ts` (new)
-- **Action:**
-  - `use-debounced-value.ts`: tiny generic `useDebouncedValue<T>(value, delayMs)` hook (setTimeout/clearTimeout in `useEffect`).
-  - `app/search/page.tsx` ("use client"):
-    - **URL state** via `useSearchParams` + `useRouter` (`replace`, scroll: false): `tab` (`items` | `stalls`, default `items`), `q` (string). Pagination state (`page`) is in-memory only — do NOT mirror to URL.
-    - Local input state, debounced 300ms; sync URL when debounced value settles.
-    - **Min query length 2.** Below 2 trimmed chars, do NOT fire the API; show the empty-initial state. The debounce hook still runs, the fetch effect just early-returns.
-    - **Enter key skips debounce.** `onKeyDown` handler: if `e.key === "Enter"`, immediately set the debounced value to the current input value (or fire fetch directly with current input). Trigger only when length ≥ 2. Bypasses the 300ms wait.
-    - **Tab toggle**: two segmented buttons (Items / Stalls). Style identical to the existing condition segmented in `item-form.tsx` — same active-state classes. Active button has bold/primary fill, `aria-pressed="true"`. Switching tabs: reset `page` to 1, re-fetch with the same `q` for the new endpoint.
-    - **Search input**: `Input` with `Search` lucide icon prefix + clear `X` button when not empty (`aria-label="Clear search"`, padding `p-2` so target ≥ 44px). Placeholder is **per-tab**: "Search items…" when `tab === "items"`, "Search stalls…" when `tab === "stalls"`. No browser-native validation.
-    - **Generation counter** (`genRef`) + `AbortController` per request to drop stale responses, mirroring the homepage pattern in `app/page.tsx`. Both `tab` and `q` changes share the same abort logic.
-    - **Pagination**: render first page (20 results) from API. Show a "Load more" button below the result list when `data.totalCount > rendered.length`. Clicking "Load more" bumps `page` and appends results to the existing list. Re-uses the same `q` and `tab`. Resetting `q` or switching tab resets pagination to page 1.
-    - **Empty-initial state** (no `q` yet, or `q.trim().length < 2`): centered column with a large muted `Search` lucide icon (~48px, `text-muted-foreground`), heading `t("emptyInitial")` ("Start typing to search"), subtitle `t("emptyInitialDescription")`, and a row of 4 hint chips (`Button variant="outline" size="sm"`) using `t("hints.bicycle")`, `t("hints.watch")`, `t("hints.drill")`, `t("hints.ring")`. Each chip's label IS the search query — clicking it sets `q` to the chip's translated text and fires the search immediately (skip debounce).
-    - **Loading state** (fetching): render 6 `ItemCardSkeleton` (items tab) or 6 `PublicStallCardSkeleton` (stalls tab).
-    - **Loaded with results**: list of `PublicItemCard` (items) or `PublicStallCard` (stalls). Reuse `ItemDetailModal` + `OffersPopup` like homepage for items tab.
-    - **Loaded with 0 results**: empty state ("No items match …" / "No stalls match …") with `Search` icon and `t("noResultsDescription")`.
-    - **Error state**: simple text + retry button (`t("errorLoadFailed")`, `t("retry")`).
-    - **SEO**: export `metadata` with `robots: { index: false }` so search permutations aren't crawled.
-    - Layout: `mx-auto max-w-[600px] px-4 py-6 md:px-6 md:py-8` (matches homepage).
-- **Verify:** `cd frontend && npm run build` succeeds; navigate to `/search`, see empty-initial state with icon + chips; tap a chip → fires search immediately; type a 1-char keyword → no fetch; type 2+ chars → debounced fetch fires once after 300ms; press Enter mid-typing → fetch fires immediately; tab toggle re-fetches and resets page; URL updates with `?tab=…&q=…`; reload preserves state; "Load more" appends results; clear button resets to empty state.
-- **Parallel:** false
-- **Status:** [x] Complete
-
-### Task 8: Frontend — i18n strings for search page (EN + LV)
+### Task 8: Frontend — add `people.*` i18n strings (EN + LV)
 - **Files:** `frontend/messages/en.json`, `frontend/messages/lv.json`
-- **Action:** Add a `search` namespace to both:
-  - `title`
-  - `placeholderItems` ("Search items…"), `placeholderStalls` ("Search stalls…")
-  - `clearSearch`
-  - `tabs.items`, `tabs.stalls`
-  - `loading` ("Searching…"), `loadingMore`
-  - `loadMore` ("Load more")
-  - `emptyInitial` ("Start typing to search"), `emptyInitialDescription` ("Try one of these or type your own")
-  - `hints.bicycle`, `hints.watch`, `hints.drill`, `hints.ring` — chip labels that ARE the search query (per-locale; EN: "bicycle, watch, drill, ring"; LV: "velosipēds, pulkstenis, urbis, gredzens")
-  - `noResultsItems` ("No items match {q}"), `noResultsStalls` ("No stalls match {q}"), `noResultsDescription` ("Try different keywords")
-  - `errorLoadFailed`, `retry`
-  - Stall card labels: `itemCount`, `viewStall`
-  - LV translations mirror EN keys with Latvian copy ("Meklēt", "Bodes", "Preces", "Sāc rakstīt, lai meklētu", "Nekas nav atrasts", "Mēģini citus atslēgvārdus", "Ielādēt vairāk").
-- **Verify:** `cd frontend && npm run build`. All `t("…")` lookups in Task 7 resolve in both locales.
-- **Parallel:** true (with Task 6)
+- **Action:** Add a top-level `people` namespace to BOTH locale files. Required keys (and their EN values; LV must mirror with natural Latvian, using "cilvēki" for "people"):
+  - `title` — "People" / "Cilvēki"
+  - `placeholder` — "Search people…" / "Meklēt cilvēkus…"
+  - `clearSearch` — "Clear search" / "Notīrīt meklēšanu"
+  - `loading` — "Searching…" / "Meklē…"
+  - `loadMore` — "Load more" / "Ielādēt vairāk"
+  - `emptyInitial` — "Find people" / "Atrast cilvēkus"
+  - `emptyInitialDescription` — "Type a username to find someone" / "Ieraksti lietotājvārdu, lai kādu atrastu"
+  - `noResults` — "No people match {q}" / "Nav atrasts neviens cilvēks ar {q}"
+  - `noResultsDescription` — "Try a different username" / "Mēģini citu lietotājvārdu"
+  - `errorLoadFailed` — "Couldn't load people" / "Neizdevās ielādēt cilvēkus"
+  - `retry` — "Try again" / "Mēģināt vēlreiz"
+  - `liveCount` — ICU plural: `{count, plural, one {# person matches} other {# people match}}` / `{count, plural, one {# cilvēks atbilst} other {# cilvēki atbilst}}`
+  - `memberSinceShort` — "Member since {year}" / "Reģistrējies {year}"
+  - `activeNever` — "Never seen" / "Nav redzēts"
+  - `activeAgo` — "Active {time}" / "Aktīvs {time}"
+  - `contactWhatsApp` — "WhatsApp available" / "Pieejams WhatsApp"
+  - `contactTelegram` — "Telegram available" / "Pieejams Telegram"
+  - `contactPhone` — "Phone available" / "Pieejams tālrunis"
+  - `contactEmail` — "Email available" / "Pieejams e-pasts"
+- **Verify:** `cd frontend && npm run build`. Every `t("people.*")` lookup in Tasks 4, 5, 6 resolves in BOTH locales. Switch locale via sidebar More → all `/people` strings localize.
+- **Parallel:** true (does not block Task 6 functionally — TS won't fail on missing i18n keys, only runtime would; do this before Task 6's verify)
 - **Status:** [x] Complete
 
-### Task 9: Frontend — wire sidebar Browse -> /search
-- **Files:** `frontend/src/components/app-sidebar.tsx`
-- **Action:** Change `{ key: "browse", href: "/browse", icon: Search }` to `{ key: "browse", href: "/search", icon: Search }`. Keep label "Browse" (sidebar icon already `Search`). `isActive` test naturally matches via `pathname.startsWith("/search")`.
-- **Verify:** Click "Browse" in sidebar -> lands on `/search`. Active state highlights when on /search.
-- **Parallel:** true (independent of all backend tasks once Task 7 page exists)
-- **Status:** [ ] Pending
-
-### Task 10: Polish pass — design critique + a11y
+### Task 9: Polish + design audit
 - **Files:** any of the above as needed.
-- **Action:** Run `web-design-guidelines` skill against `/search` page. Fix any blockers it surfaces: focus states on tab toggle and chips, `aria-pressed` on segmented buttons, `aria-label` on search input + clear button, `role="status"` + `aria-live="polite"` on result count + loading text (announce on both `q` change AND tab switch), semantic `<main>` landmark, mobile tap-target sizes ≥44px, consistent spacing, contrast on placeholder text and on stall card text overlaying user-supplied accent colors. Verify keyboard flow: Tab focuses input -> Enter triggers immediate search -> Tab to clear button -> Tab to tab toggles -> Tab to chips (when empty state) -> Tab to results.
-- **Verify:** `cd frontend && npm run build` succeeds. Re-run design critique — no blockers reported. Manual keyboard nav works end to end.
+- **Action:** Invoke `design:design-critique` skill via Skill tool on the `/people` page implementation (pass `app/people/page.tsx`, `app/people/people-client.tsx`, `components/public-user-card.tsx`, `lib/use-relative-time.ts`, the new i18n keys, and the More menu change). Categorize findings:
+  - **BLOCKER:** mobile responsiveness break, missing aria/semantic HTML, hardcoded strings, broken focus order, contact icons without aria-label, tap targets < 44px, missing live region, unguarded null on `lastSeenAt` causing render crash, contrast failure on muted text. Fix all.
+  - **NICE-TO-HAVE:** polish suggestions, animation, copy tweaks, follow-on cleanup. Append to `.ralph/learnings.md` under "Signs"; do NOT fix in this iteration.
+  Re-invoke skill after fixes; loop until no blockers (max 3 cycles per the prompt rules). If still blocking after 3 cycles, append to "Known Issues" and proceed.
+  Verify keyboard flow manually: Tab from sidebar → page heading → search input → clear button (when present) → result cards. Focus rings visible at every step.
+- **Verify:** `cd frontend && npm run build` succeeds. `cd backend && dotnet build ManVaig.sln` succeeds. Re-running design-critique returns zero blockers.
 - **Parallel:** false (final code task)
-- **Status:** [ ] Pending
-
-### Task 11: Smoke test — full flow
-- **Files:** none (manual / curl).
-- **Action:** With backend running on :5100 and frontend on :3000:
-  1. `curl "http://localhost:5100/api/v1/public/items?q=a&pageSize=3"` → 200 JSON with filtered items (note: client-side enforces min-length 2, but the API accepts any length).
-  2. `curl "http://localhost:5100/api/v1/public/items?q=riga"` → matches "Rīga"-titled items via unaccent.
-  3. `curl "http://localhost:5100/api/v1/public/stalls?q=a&pageSize=3"` → 200 JSON with filtered stalls.
-  4. Open `http://localhost:3000/search` → empty initial state with icon + 4 hint chips.
-  5. Tap a hint chip → search fires immediately, results render.
-  6. Clear input, type a 1-char keyword → no fetch (verify in Network tab).
-  7. Type a 2+ char keyword present in seed data → after 300ms, see skeletons → results.
-  8. Press Enter mid-typing → fetch fires without waiting for debounce.
-  9. Switch tab to Stalls → results re-fetch with same query, pagination resets.
-  10. Click "Load more" → next page appends.
-  11. Clear input → returns to initial empty state.
-  12. Switch language to Latvian via sidebar More → all search page strings localized; chips show LV labels; chip click fires LV query.
-  13. Type query that matches nothing → "no results" empty state with description.
-  14. Reload page with `?tab=stalls&q=foo` → state restored, results render.
-- **Verify:** All steps pass. `cd frontend && npm run build` and `cd backend && dotnet build ManVaig.sln` both succeed.
-- **Parallel:** false
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ## Out of scope (explicit)
-- Filters (category, price range, condition, location) — deferred per goal "No filters in this pass."
-- Relevance ranking / fuzzy match / typo tolerance — straight ILIKE only.
-- Full-text search (tsvector / pg_trgm indexes) — defer until volume warrants. Noted as a follow-up if `unaccent`-on-indexed-column performance becomes an issue.
-- Search history / suggestions / autocomplete — not in MVP.
-- Public stall detail page — card link target uses existing `/u/{displayName}` profile until a dedicated stall page lands.
-- Combined "all" tab — strict two-tab split per goal.
-- **Cross-tab fallthrough hint** ("No items match. N stalls match — try Stalls tab →") — deferred to pass 2 with filters; requires a second silent fetch per zero-result render which doubles request count.
-- Rate limiting on `/api/v1/public/*` — handled by future API gateway / middleware, not this branch.
+- Online presence (heartbeat / websocket / 5-min "online now" dot) — `LastSeenAt` is sufficient. Real-time presence deferred to a future cycle.
+- Filters by location, has-stall, member-since range — keep search query-only.
+- Default browse feed when `q` is empty — empty state is intentional per design decision.
+- New sidebar nav item — kept in More menu by design.
+- In-app messaging — out of scope for ManVaig entirely; contact happens via existing WhatsApp/Telegram/Phone links on the profile page.
+- DB unique index on `DisplayName` — left as-is; soft-uniqueness via register-time check is sufficient for v1. Revisit if collision races become an issue.
+- Tag/category surfacing on user cards — not in scope; user search is name-only.
+- Pagination URL state for `page` — kept in-memory only (matches `/search`).
+- Public stall detail link from card — card always links to `/user/[displayName]`, never to a specific stall.
 
 ## Completion Promise
 
-**NPM RUN BUILD SUCCEEDS AND DOTNET BUILD SUCCEEDS AND SEARCH PAGE RENDERS RESULTS AND DESIGN CRITIQUE RETURNS NO BLOCKERS**
+**NPM RUN BUILD SUCCEEDS AND DOTNET BUILD SUCCEEDS AND PEOPLE PAGE RENDERS RESULTS AND DESIGN CRITIQUE RETURNS NO BLOCKERS**
 
 Verify at end of build phase:
 1. `cd frontend && npm run build` — exits 0.
 2. `cd backend && dotnet build ManVaig.sln` — exits 0, 0 errors.
-3. Open `/search`, type a known-matching keyword (≥2 chars), confirm both Items and Stalls tabs render result cards (not just skeletons forever, not error state). Confirm "Load more" works when results exceed one page.
-4. Run `web-design-guidelines` skill on `/search` page; report contains zero blocker-severity findings (advisory items acceptable).
+3. Open `/people`, type a known displayName (≥2 chars, e.g. `cak`), confirm result cards render with avatar, displayName, memberSince, last-active, contact icons (where applicable). Click a card → lands on `/user/[displayName]` profile.
+4. Run `design:design-critique` skill on `/people` page; report contains zero blocker-severity findings.

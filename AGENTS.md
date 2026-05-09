@@ -13,10 +13,8 @@ from the codebase scan.
 | Frontend type-check | `cd frontend && npx tsc --noEmit` |
 | Backend run | `cd backend && dotnet run --project ManVaig.Api` (port 5100) |
 | Backend build | `cd backend && dotnet build ManVaig.sln` |
-| E2E (Playwright) | `cd frontend && npm run test:e2e` |
 
-There is NO unit test framework. Do NOT install Vitest/Jest. E2E only, and
-only when explicitly asked. This branch does not require new tests.
+There is NO unit test framework. Do NOT install Vitest/Jest. This branch does not require new tests.
 
 ## Stack
 
@@ -29,37 +27,47 @@ only when explicitly asked. This branch does not require new tests.
 - **Mobile-first.** Default Tailwind classes target mobile; use `sm:`, `md:`, `lg:` only to upscale.
 - **i18n.** Every user-facing string must come from `next-intl` (`useTranslations(...)`). Add keys to BOTH `frontend/messages/en.json` AND `frontend/messages/lv.json`. Never hardcode strings.
 - **No browser-native validation.** Never use `required`, `minLength`, `type="email"` — write custom i18n-aware validation.
-- **shadcn/ui only** for primitives (Button, Input, Card, Dialog, etc.). Do not introduce new UI libraries.
-- **No tests** unless explicitly asked. No new test files for this branch.
-- **No doc updates** unless explicitly asked. Don't touch ROADMAP.html, ARCHITECTURE.md, etc.
+- **shadcn/ui only** for primitives. Do not introduce new UI libraries.
+- **No tests** unless explicitly asked. **No doc updates** unless explicitly asked (don't touch ROADMAP.html, ARCHITECTURE.md, etc).
 
 ## Reuse — these already exist, do not rebuild
 
 | Need | Use |
 |---|---|
-| Public item card | `frontend/src/components/public-item-card.tsx` |
-| Item card shared bits (price pill, end-date pill, `timeAgo`) | `frontend/src/components/item-card-shared.tsx` |
-| Item types & API helpers | `frontend/src/lib/items.ts` |
-| Stall types & API helpers | `frontend/src/lib/stalls.ts` |
-| Auth helpers | `frontend/src/lib/auth.ts` + `auth-context.tsx` |
-| Skeleton loading | `@/components/ui/skeleton` |
-| Layout/sidebar | `frontend/src/components/app-layout.tsx` |
-| Empty-state pattern reference | `frontend/src/app/my-items/page.tsx`, `frontend/src/app/my-stalls/page.tsx` |
+| **Search page shell pattern** (debounce, URL state, pagination, AbortController, ICU plural live region, empty/loading/error states) | `frontend/src/app/search/search-client.tsx` — copy the structure, trim to one tab |
+| **Public list-endpoint pattern** (anonymous, paginated, `?q=`, ILIKE search, returns `{ Items|Stalls, TotalCount, Page, PageSize }`) | `backend/ManVaig.Api/Controllers/V1/PublicStallsController.cs` |
+| **Card component pattern** (mobile-first, rounded-xl, skeleton variant exported alongside) | `frontend/src/components/public-stall-card.tsx` |
+| **Public list client lib** (plain fetch, no auth, URLSearchParams, typed response) | `frontend/src/lib/stalls.ts` (`fetchPublicStalls`) |
+| **Debounce hook** | `frontend/src/lib/use-debounced-value.ts` (already exists, do not duplicate) |
+| **Avatar with initials fallback** | `frontend/src/components/user-avatar.tsx` |
+| **Skeleton primitive** | `@/components/ui/skeleton` |
+| **Sidebar More menu** (where the new entry goes) | `frontend/src/components/sidebar-more-menu.tsx` |
+
+## Privacy contract for `/api/v1/public/users`
+
+- Anonymous viewer → `IsActive AND IsProfilePublic` only.
+- Authenticated viewer → `IsActive` only (sees public + private).
+- If a user is in the result set at all, ALL fields render — no partial cards.
+- DisplayName regex `[a-zA-Z0-9_-]{3,30}` → no diacritics → `EF.Functions.ILike` is enough; **do NOT add `EF.Functions.Unaccent`** for this controller.
 
 ## Backend — what's already there
 
-- `PublicItemsController` (`GET /api/v1/public/items`) — already supports `categoryId`, `page`, `pageSize`. **Needs `?q=` text-search added.**
-- `StallsController` (`GET /api/v1/stalls`) — auth-required, internal CRUD. **NOT public.** A new `PublicStallsController` mirroring `PublicItemsController` is needed if you want public stall browse.
+- `LastSeenMiddleware` updates `ApplicationUser.LastSeenAt` on auth requests (5-min throttle). The data is free — just project it through.
+- `EnabledChannels` is a flags enum: `WhatsApp=1, Telegram=2, ShowEmail=4, ShowPhone=8`. Compute `Has*` booleans on the server (see plan Task 2).
+- Existing `PublicStallsController` and `PublicItemsController` are the controller-shape templates. Mirror them; add only what the privacy contract requires.
 
 ## Branch & commits
 
-- Working branch: `ralph/stalls-items-search` (do not push to or merge into master)
+- Working branch: `ralph/people-search` (do not push to or merge into master)
 - Commit style: conventional, lowercase verb (`feat:`, `fix:`, `refactor:`)
 - One commit per task
+- **Note:** the project's `.claude/settings.local.json` denies `git commit *` and `git push *` for the agent. Stage changes; the human will commit in chunks. If commits are blocked, do not stall the loop — surface the blocker in the iteration output.
 
 ## Out of scope for this branch
 
-- Filters (price/condition/location) — pass 2 only
-- New test frameworks
-- Doc updates
-- Refactoring unrelated to the search feature
+- Online presence (heartbeat / websocket) — `LastSeenAt` only
+- Filters or sort UI on `/people`
+- New sidebar nav item — entry stays in More menu
+- In-app messaging
+- DB unique index on DisplayName
+- Doc updates (ROADMAP, ARCHITECTURE)
