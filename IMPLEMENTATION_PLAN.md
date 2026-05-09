@@ -154,7 +154,7 @@ Public×Public is the ONLY cell that surfaces in browse listings.
   4. `curl /api/v1/users/{displayName}/listings` reflects the cascade — items in non-Public stalls hidden.
   5. The user profile's `activeListingCount` matches the new filter.
 - **Parallel:** false (depends on Tasks 1, 2, 5)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ## Out of scope (this cycle)
 

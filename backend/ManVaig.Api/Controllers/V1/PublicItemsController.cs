@@ -114,6 +114,7 @@ public class PublicItemsController : ControllerBase
     {
         var item = await _db.Items
             .Include(i => i.Category)
+            .Include(i => i.Stall)
             .Include(i => i.Images.OrderBy(img => img.SortOrder))
             .Include(i => i.ItemTags).ThenInclude(it => it.Tag)
             .Include(i => i.User)
@@ -123,14 +124,38 @@ public class PublicItemsController : ControllerBase
         if (item == null)
             return NotFound(new { error = "ITEM_NOT_FOUND" });
 
-        // Visibility check
+        var currentUserId = GetCurrentUserId();
+        var isAuthenticated = User.Identity?.IsAuthenticated == true;
+        var isOwner = currentUserId.HasValue && item.UserId == currentUserId.Value;
+
+        // Stall visibility gate runs FIRST — owner always passes through.
+        if (!isOwner)
+        {
+            switch (item.Stall.Visibility)
+            {
+                case StallVisibility.Private:
+                    return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+                case StallVisibility.RegisteredOnly:
+                    if (!isAuthenticated)
+                        return Unauthorized(new { error = "LOGIN_REQUIRED" });
+                    break;
+
+                case StallVisibility.Public:
+                case StallVisibility.LinkOnly:
+                    // Fall through to item-visibility switch
+                    break;
+            }
+        }
+
+        // Item visibility check (existing logic, unchanged).
         switch (item.Visibility)
         {
             case ItemVisibility.Private:
                 return NotFound(new { error = "ITEM_NOT_FOUND" });
 
             case ItemVisibility.RegisteredOnly:
-                if (User.Identity?.IsAuthenticated != true)
+                if (!isAuthenticated)
                     return Unauthorized(new { error = "LOGIN_REQUIRED" });
                 break;
 
@@ -139,10 +164,6 @@ public class PublicItemsController : ControllerBase
                 // Accessible freely
                 break;
         }
-
-        // Check if the current user owns this item
-        var currentUserId = GetCurrentUserId();
-        var isOwner = currentUserId.HasValue && item.UserId == currentUserId.Value;
 
         var detail = new PublicItemDetailDto
         {
