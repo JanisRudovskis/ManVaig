@@ -122,7 +122,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   - **DO NOT TOUCH `StallCard`'s inline thumbnail upload+crop+delete affordance** — it stays exactly as-is.
 - **Verify:** `cd frontend && npm run build`. Navigate to `/my-stalls`, click "Create stall" → dialog opens; create with various visibility states → stall appears with correct values; thumbnail upload on cards still works (visual smoke).
 - **Parallel:** false (depends on Task 3)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 5: Frontend — wire `/my-stalls/[id]/page.tsx` edit flow + extract Appearance panel
 - **Files:** `frontend/src/app/my-stalls/[id]/page.tsx`
