@@ -73,7 +73,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   - Container: `role="radiogroup"`, `aria-labelledby` referencing a section heading ID passed by parent.
 - **Verify:** `cd frontend && npx tsc --noEmit`. Used by Tasks 3 + 6.
 - **Parallel:** true (after Task 1's types land)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 3: Frontend — `StallFormDialog` component
 - **Files:** `frontend/src/components/stall-form-dialog.tsx` (new)
