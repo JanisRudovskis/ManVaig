@@ -214,7 +214,7 @@ Build a `/people` page (people directory) where any visitor can search for users
   Verify keyboard flow manually: Tab from sidebar → page heading → search input → clear button (when present) → result cards. Focus rings visible at every step.
 - **Verify:** `cd frontend && npm run build` succeeds. `cd backend && dotnet build ManVaig.sln` succeeds. Re-running design-critique returns zero blockers.
 - **Parallel:** false (final code task)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ## Out of scope (explicit)
 - Online presence (heartbeat / websocket / 5-min "online now" dot) — `LastSeenAt` is sufficient. Real-time presence deferred to a future cycle.
