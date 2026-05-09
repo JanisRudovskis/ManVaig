@@ -10,15 +10,19 @@ import type { ItemResponse } from "@/lib/items";
 import {
   fetchStall,
   updateStall,
-  deleteStall,
+  uploadStallThumbnail,
+  deleteStallThumbnail,
+  uploadStallHeader,
+  deleteStallHeader,
   uploadStallBackground,
   deleteStallBackground,
   type StallResponse,
 } from "@/lib/stalls";
 import { ItemForm } from "@/components/item-form";
 import { OffersPopup } from "@/components/offers-popup";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { StallFormDialog } from "@/components/stall-form-dialog";
 import {
   timeAgo,
   isEnded,
@@ -28,9 +32,6 @@ import {
 } from "@/components/item-card-shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Package,
   Plus,
@@ -40,13 +41,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  X,
   Trash2,
   Upload,
   ArrowLeftRight,
   AlertCircle,
   Clock,
   Gavel,
+  Palette,
 } from "lucide-react";
 
 // === Helpers ===
@@ -266,11 +267,222 @@ function ItemCard({
   );
 }
 
+// === Appearance Panel ===
+
+interface ImageControlConfig {
+  label: string;
+  hint: string;
+  url: string | null;
+  uploadCta: string;
+  removeCta: string;
+  noImage: string;
+  cropAspect?: number;
+  cropTitle?: string;
+  onUpload: (file: File) => Promise<string | null>;
+  onDelete: () => Promise<void>;
+}
+
+function AppearanceImageControl({ config }: { config: ImageControlConfig }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (config.cropAspect) {
+      const reader = new FileReader();
+      reader.onload = () => setCropSrc(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      void doUpload(file);
+    }
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const doUpload = async (file: File) => {
+    setBusy(true);
+    setError("");
+    try {
+      await config.onUpload(file);
+    } catch {
+      setError("error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCropped = async (blob: Blob) => {
+    setCropSrc(null);
+    const file = new File([blob], "image.webp", { type: "image/webp" });
+    await doUpload(file);
+  };
+
+  const handleDelete = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await config.onDelete();
+    } catch {
+      setError("error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/40 p-3">
+      <div>
+        <p className="text-sm font-medium">{config.label}</p>
+        <p className="text-xs text-muted-foreground">{config.hint}</p>
+      </div>
+      <div className="relative aspect-[5/2] w-full overflow-hidden rounded-md bg-muted/50">
+        {config.url ? (
+          <img src={config.url} alt="" className="absolute inset-0 size-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+            {config.noImage}
+          </div>
+        )}
+        {busy && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+            <Loader2 className="size-5 animate-spin" />
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={handleFile}
+        className="hidden"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+        >
+          <Upload className="size-3.5 mr-1" />
+          {config.uploadCta}
+        </Button>
+        {config.url && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleDelete}
+            disabled={busy}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-3.5 mr-1" />
+            {config.removeCta}
+          </Button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {cropSrc && config.cropAspect && (
+        <ImageCropDialog
+          open
+          imageSrc={cropSrc}
+          aspectRatio={config.cropAspect}
+          title={config.cropTitle}
+          onCrop={handleCropped}
+          onClose={() => setCropSrc(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AppearanceAccentControl({
+  value,
+  onSave,
+  ta,
+  ts,
+}: {
+  value: string | null;
+  onSave: (color: string | null) => Promise<void>;
+  ta: (key: string) => string;
+  ts: (key: string) => string;
+}) {
+  const initial = value ?? "#3b82f6";
+  const [draft, setDraft] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setDraft(value ?? "#3b82f6");
+  }, [value]);
+
+  const dirty = (value ?? "") !== draft && draft.length > 0;
+
+  const commit = async (color: string | null) => {
+    setBusy(true);
+    try {
+      await onSave(color);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/40 p-3 sm:col-span-3">
+      <div className="flex items-center gap-2">
+        <Palette className="size-4 text-muted-foreground" />
+        <p className="text-sm font-medium">{ts("accentColor")}</p>
+      </div>
+      <p className="text-xs text-muted-foreground">{ta("accentHint")}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="color"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          aria-label={ts("accentColor")}
+          className="size-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+        />
+        <span className="font-mono text-xs text-muted-foreground">{draft.toUpperCase()}</span>
+        <div className="flex-1" />
+        {dirty && (
+          <Button
+            type="button"
+            size="sm"
+            variant="default"
+            onClick={() => commit(draft)}
+            disabled={busy}
+          >
+            {busy && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+            {ts("save")}
+          </Button>
+        )}
+        {value && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => commit(null)}
+            disabled={busy}
+          >
+            {ts("clearColor")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // === Main Page ===
 
 export default function StallItemsPage() {
   const t = useTranslations("items");
   const ts = useTranslations("stalls");
+  const ta = useTranslations("stalls.appearance");
   const { isLoggedIn, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -291,16 +503,8 @@ export default function StallItemsPage() {
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderSaving, setReorderSaving] = useState(false);
 
-  // Stall edit state
-  const [editingStall, setEditingStall] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [savingStall, setSavingStall] = useState(false);
-  const [stallError, setStallError] = useState("");
-  const [uploadingBg, setUploadingBg] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deletingStall, setDeletingStall] = useState(false);
-  const bgInputRef = useRef<HTMLInputElement>(null);
+  // Stall edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
 
   const loadData = useCallback(async () => {
@@ -372,82 +576,37 @@ export default function StallItemsPage() {
 
   const endedCount = items.filter(isItemEnded).length;
 
-  const startEditingStall = () => {
-    if (!stall) return;
-    setEditName(stall.name);
-    setEditDescription(stall.description ?? "");
-    setEditingStall(true);
-    setStallError("");
+  // Appearance handlers — keep upload/delete logic local; persist by mutating stall state
+  const handleThumbnailUpload = async (file: File) => {
+    const result = await uploadStallThumbnail(stallId, file);
+    setStall((prev) => prev ? { ...prev, thumbnailUrl: result.thumbnailUrl } : prev);
+    return result.thumbnailUrl;
   };
-
-  const handleSaveStall = async () => {
-    const name = editName.trim();
-    if (name.length < 3 || name.length > 50) {
-      setStallError(ts("errorNameLength"));
-      return;
-    }
-    setSavingStall(true);
-    setStallError("");
-    try {
-      const updated = await updateStall(stallId, {
-        name,
-        description: editDescription.trim(),
-      });
-      setStall(updated);
-      setEditingStall(false);
-    } catch {
-      setStallError(ts("errorCreateFailed"));
-    } finally {
-      setSavingStall(false);
-    }
+  const handleThumbnailDelete = async () => {
+    await deleteStallThumbnail(stallId);
+    setStall((prev) => prev ? { ...prev, thumbnailUrl: null } : prev);
   };
-
-  const handleDeleteStall = async () => {
-    if (!stall) return;
-    setDeletingStall(true);
-    try {
-      await deleteStall(stallId);
-      router.push("/my-stalls?view=all");
-    } catch (err: unknown) {
-      const e = err as Error;
-      if (e.message === "LAST_STALL") {
-        setStallError(ts("errorLastStall"));
-      } else {
-        setStallError(ts("errorCreateFailed"));
-      }
-      setShowDeleteConfirm(false);
-    } finally {
-      setDeletingStall(false);
-    }
+  const handleHeaderUpload = async (file: File) => {
+    const result = await uploadStallHeader(stallId, file);
+    setStall((prev) => prev ? { ...prev, headerImageUrl: result.headerImageUrl } : prev);
+    return result.headerImageUrl;
   };
-
-
-  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingBg(true);
-    setStallError("");
-    try {
-      const result = await uploadStallBackground(stallId, file);
-      setStall((prev) => prev ? { ...prev, backgroundImageUrl: result.backgroundImageUrl } : prev);
-    } catch {
-      setStallError(ts("errorImageUpload"));
-    } finally {
-      setUploadingBg(false);
-      if (bgInputRef.current) bgInputRef.current.value = "";
-    }
+  const handleHeaderDelete = async () => {
+    await deleteStallHeader(stallId);
+    setStall((prev) => prev ? { ...prev, headerImageUrl: null } : prev);
   };
-
-  const handleBgDelete = async () => {
-    setUploadingBg(true);
-    try {
-      await deleteStallBackground(stallId);
-      setStall((prev) => prev ? { ...prev, backgroundImageUrl: null } : prev);
-    } catch {
-      setStallError(ts("errorImageUpload"));
-    } finally {
-      setUploadingBg(false);
-    }
+  const handleBackgroundUpload = async (file: File) => {
+    const result = await uploadStallBackground(stallId, file);
+    setStall((prev) => prev ? { ...prev, backgroundImageUrl: result.backgroundImageUrl } : prev);
+    return result.backgroundImageUrl;
+  };
+  const handleBackgroundDelete = async () => {
+    await deleteStallBackground(stallId);
+    setStall((prev) => prev ? { ...prev, backgroundImageUrl: null } : prev);
+  };
+  const handleAccentSave = async (color: string | null) => {
+    const updated = await updateStall(stallId, { accentColor: color ?? "" });
+    setStall(updated);
   };
 
   if (authLoading || loading) {
@@ -465,7 +624,7 @@ export default function StallItemsPage() {
   }
 
   return (
-    <div className="group/bg relative min-h-screen">
+    <div className="relative min-h-screen">
       {/* Background image — fills entire page content area */}
       {stall?.backgroundImageUrl && (
         <div
@@ -475,35 +634,6 @@ export default function StallItemsPage() {
           <div className="absolute inset-0 bg-background/85" />
         </div>
       )}
-
-      {/* Background upload controls — bottom right */}
-      <input
-        ref={bgInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        onChange={handleBgUpload}
-        className="hidden"
-      />
-      <div className="absolute bottom-4 right-4 z-20 flex gap-1 md:opacity-0 md:group-hover/bg:opacity-100 transition-opacity">
-        <button
-          onClick={() => bgInputRef.current?.click()}
-          disabled={uploadingBg}
-          className="rounded-lg bg-background/70 backdrop-blur-sm p-2 hover:bg-background/90 transition-colors text-xs flex items-center gap-1"
-          title={ts("backgroundImage")}
-        >
-          {uploadingBg ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-          <span className="hidden sm:inline">{ts("backgroundImage")}</span>
-        </button>
-        {stall?.backgroundImageUrl && (
-          <button
-            onClick={handleBgDelete}
-            disabled={uploadingBg}
-            className="rounded-lg bg-background/70 backdrop-blur-sm p-2 text-destructive hover:bg-background/90 transition-colors"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        )}
-      </div>
 
       <div className="relative z-10 mx-auto max-w-[1100px] px-4 py-4 md:px-6 md:py-6">
       {/* Back button */}
@@ -518,93 +648,93 @@ export default function StallItemsPage() {
       {/* Stall header */}
       {stall && (
         <div className="mb-4">
-          {!editingStall ? (
-            /* View mode */
-            <div>
-              {/* Title row: thumbnail + name + edit stall */}
-              <div className="flex items-center gap-3 mb-2">
-                {stall.thumbnailUrl && (
-                  <img
-                    src={stall.thumbnailUrl}
-                    alt=""
-                    className="size-12 rounded-lg object-cover shrink-0 ring-1 ring-border"
-                  />
-                )}
-                <h1 className="text-2xl font-bold flex-1 min-w-0">{stall.name}</h1>
-                <Button variant="outline" size="sm" onClick={startEditingStall} className="shrink-0">
-                  <Pencil className="size-4 mr-1" />
-                  {ts("editStall")}
-                </Button>
-              </div>
-              {/* Description — collapsible */}
-              <StallDescription description={stall.description} ts={ts} />
-              {/* Item count */}
-              <div className="mt-2">
-                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-                  {ts("itemCountInStall", { count: totalCount })}
-                </span>
-              </div>
-            </div>
-          ) : (
-            /* Edit mode */
-            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold">{ts("editStall")}</h2>
-                <button
-                  onClick={() => setEditingStall(false)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-              <div>
-                <Label className="text-sm">{ts("name")}</Label>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder={ts("namePlaceholder")}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-sm">{ts("description")}</Label>
-                <Textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder={ts("descriptionPlaceholder")}
-                  className="mt-1 min-h-16"
-                  maxLength={500}
-                />
-              </div>
-
-              {stallError && (
-                <p className="text-sm text-destructive">{stallError}</p>
-              )}
-              <div className="flex items-center gap-2 pt-1">
-                <Button onClick={handleSaveStall} disabled={savingStall} size="sm">
-                  {savingStall && <Loader2 className="size-4 mr-1 animate-spin" />}
-                  {ts("save")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingStall(false)}
-                >
-                  {ts("cancel")}
-                </Button>
-                <div className="flex-1" />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
-                  <Trash2 className="size-4 mr-1" />
-                  {ts("deleteStall")}
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="flex items-center gap-3 mb-2">
+            {stall.thumbnailUrl && (
+              <img
+                src={stall.thumbnailUrl}
+                alt=""
+                className="size-12 rounded-lg object-cover shrink-0 ring-1 ring-border"
+              />
+            )}
+            <h1 className="text-2xl font-bold flex-1 min-w-0">{stall.name}</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditDialogOpen(true)}
+              className="shrink-0"
+            >
+              <Pencil className="size-4 mr-1" />
+              {ts("editStall")}
+            </Button>
+          </div>
+          <StallDescription description={stall.description} ts={ts} />
+          <div className="mt-2">
+            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+              {ts("itemCountInStall", { count: totalCount })}
+            </span>
+          </div>
         </div>
+      )}
+
+      {/* Appearance panel */}
+      {stall && (
+        <section
+          aria-labelledby="appearance-heading"
+          className="mb-6 rounded-xl border border-border/70 bg-card/50 p-4 backdrop-blur-sm"
+        >
+          <h2
+            id="appearance-heading"
+            className="mb-3 text-sm font-semibold"
+          >
+            {ta("title")}
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <AppearanceImageControl
+              config={{
+                label: ts("thumbnail"),
+                hint: ta("thumbnailHint"),
+                url: stall.thumbnailUrl,
+                uploadCta: ta("uploadCta"),
+                removeCta: ta("removeCta"),
+                noImage: ta("noImage"),
+                cropAspect: 5 / 2,
+                cropTitle: ts("cropImage"),
+                onUpload: handleThumbnailUpload,
+                onDelete: handleThumbnailDelete,
+              }}
+            />
+            <AppearanceImageControl
+              config={{
+                label: ts("headerImage"),
+                hint: ta("headerHint"),
+                url: stall.headerImageUrl,
+                uploadCta: ta("uploadCta"),
+                removeCta: ta("removeCta"),
+                noImage: ta("noImage"),
+                onUpload: handleHeaderUpload,
+                onDelete: handleHeaderDelete,
+              }}
+            />
+            <AppearanceImageControl
+              config={{
+                label: ts("backgroundImage"),
+                hint: ta("backgroundHint"),
+                url: stall.backgroundImageUrl,
+                uploadCta: ta("uploadCta"),
+                removeCta: ta("removeCta"),
+                noImage: ta("noImage"),
+                onUpload: handleBackgroundUpload,
+                onDelete: handleBackgroundDelete,
+              }}
+            />
+            <AppearanceAccentControl
+              value={stall.accentColor}
+              onSave={handleAccentSave}
+              ta={ta}
+              ts={ts}
+            />
+          </div>
+        </section>
       )}
 
       {/* Filter pills + reorder */}
@@ -757,18 +887,18 @@ export default function StallItemsPage() {
         />
       )}
 
-      {/* Delete stall confirmation */}
+      {/* Stall edit dialog */}
       {stall && (
-        <ConfirmDialog
-          open={showDeleteConfirm}
-          title={ts("deleteStall")}
-          description={ts("deleteConfirm", { count: stall.itemCount })}
-          confirmLabel={ts("confirmDelete")}
-          cancelLabel={ts("cancel")}
-          variant="destructive"
-          loading={deletingStall}
-          onConfirm={handleDeleteStall}
-          onCancel={() => setShowDeleteConfirm(false)}
+        <StallFormDialog
+          mode="edit"
+          stall={stall}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSaved={(updated) => {
+            setEditDialogOpen(false);
+            setStall(updated);
+          }}
+          onDeleted={() => router.push("/my-stalls?view=all")}
         />
       )}
     </div>

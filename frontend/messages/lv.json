@@ -310,6 +310,16 @@
     "defaultAcceptOffers": "Pēc noklusējuma pieņemt piedāvājumus",
     "stallUrlLabel": "Stenda URL",
     "errorDescriptionLength": "Aprakstam jābūt 500 rakstzīmes vai mazāk",
+    "appearance": {
+      "title": "Izskats",
+      "thumbnailHint": "Kvadrāta vāka attēls, redzams stendu sarakstos.",
+      "headerHint": "Plats baneris publiskajā stenda lapā.",
+      "backgroundHint": "Smalks fons aiz preču režģa.",
+      "accentHint": "Tiek izmantota kā tonis, ja attēla nav.",
+      "uploadCta": "Augšupielādēt",
+      "removeCta": "Noņemt",
+      "noImage": "Nav attēla"
+    },
     "errors": {
       "nameTaken": "Jums jau ir stends ar šādu nosaukumu.",
       "isDefaultRequiresPublic": "Noklusētajam stendam jāpaliek publiskam, lai ikviens varētu pārlūkot jūsu preces.",

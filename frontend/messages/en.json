@@ -310,6 +310,16 @@
     "defaultAcceptOffers": "Accept offers by default",
     "stallUrlLabel": "Stall URL",
     "errorDescriptionLength": "Description must be 500 characters or less",
+    "appearance": {
+      "title": "Appearance",
+      "thumbnailHint": "Square cover photo shown on stall lists.",
+      "headerHint": "Wide banner shown on the public stall page.",
+      "backgroundHint": "Subtle background behind the items grid.",
+      "accentHint": "Used as a soft tint where no image is set.",
+      "uploadCta": "Upload",
+      "removeCta": "Remove",
+      "noImage": "No image"
+    },
     "errors": {
       "nameTaken": "You already have a stall with this name.",
       "isDefaultRequiresPublic": "The default stall must stay Public so anyone can browse your items.",

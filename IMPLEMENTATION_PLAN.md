@@ -132,7 +132,7 @@ Frontend Cycle B for the stall + item visibility redesign. Build the popup `Stal
   - Remove unused inline-edit state/functions: `editName`, `editDescription`, `editing`, `editError`, `handleSaveEdit`, `handleCancelEdit`.
 - **Verify:** `cd frontend && npm run build`. Navigate to `/my-stalls/[id]`, click "Edit stall" → dialog opens with values pre-filled; defaults section starts collapsed but shows "{N} defaults set" badge if any are set; Save persists; Appearance panel shows thumbnail+header+background+accent in one coherent group; image uploads still work end-to-end.
 - **Parallel:** false (depends on Task 3)
-- **Status:** [ ] Pending
+- **Status:** [x] Complete
 
 ### Task 6: Frontend — wizard + ItemForm wiring (defaults + visibility parity)
 - **Files:** `frontend/src/app/my-stalls/[id]/items/new/page.tsx`, `frontend/src/components/item-form.tsx`
