@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  Users,
 } from "lucide-react";
 import {
   Popover,
@@ -102,18 +101,6 @@ export function SidebarMoreMenu() {
       >
         {view === "main" && (
           <div className="flex flex-col">
-            {/* Find people */}
-            <button
-              onClick={() => {
-                setOpen(false);
-                router.push("/people");
-              }}
-              className={btnClass}
-            >
-              <Users className="size-4 shrink-0" />
-              <span className="flex-1 text-left">{t("findPeople")}</span>
-            </button>
-
             {/* Theme toggle */}
             <button onClick={toggleTheme} className={btnClass}>
               <ThemeIcon className="size-4 shrink-0" />

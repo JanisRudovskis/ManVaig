@@ -169,6 +169,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             entity.HasIndex(i => i.StallId);
             entity.HasIndex(i => i.CategoryId);
             entity.HasIndex(i => i.CreatedAt);
+            entity.HasIndex(i => i.Price);
+            entity.HasIndex(i => i.Condition);
         });
 
         // === ItemImage ===

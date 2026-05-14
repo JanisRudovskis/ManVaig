@@ -444,13 +444,18 @@ export interface FetchPublicItemsOptions {
   pageSize?: number;
   categoryId?: number | null;
   q?: string;
+  priceMin?: number | null;
+  priceMax?: number | null;
+  types?: string[];
+  conditions?: number[];
+  sort?: string;
   signal?: AbortSignal;
 }
 
 export async function fetchPublicItems(
   options: FetchPublicItemsOptions = {}
 ): Promise<PublicItemListResponse> {
-  const { page = 1, pageSize = 20, categoryId, q, signal } = options;
+  const { page = 1, pageSize = 20, categoryId, q, priceMin, priceMax, types, conditions, sort, signal } = options;
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -458,6 +463,11 @@ export async function fetchPublicItems(
   if (categoryId) params.set("categoryId", String(categoryId));
   const trimmedQ = q?.trim();
   if (trimmedQ) params.set("q", trimmedQ);
+  if (priceMin != null) params.set("priceMin", String(priceMin));
+  if (priceMax != null) params.set("priceMax", String(priceMax));
+  if (types && types.length > 0) params.set("types", types.join(","));
+  if (conditions && conditions.length > 0) params.set("conditions", conditions.join(","));
+  if (sort && sort !== "newest") params.set("sort", sort);
 
   const res = await fetch(`${API_URL}/api/v1/public/items?${params}`, { signal });
   if (!res.ok) throw new Error("browse_fetch_failed");

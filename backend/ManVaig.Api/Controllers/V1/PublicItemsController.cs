@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using ManVaig.Api.Data;
+using ManVaig.Api.Models;
 using ManVaig.Api.Models.Dto;
 using ManVaig.Api.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
@@ -20,14 +21,19 @@ public class PublicItemsController : ControllerBase
     }
 
     /// <summary>
-    /// Browse public items (no auth required). Supports category filter + pagination.
+    /// Browse public items (no auth required). Supports category, price, type, condition filters + sorting + pagination.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> Browse(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] int? categoryId = null,
-        [FromQuery] string? q = null)
+        [FromQuery] string? q = null,
+        [FromQuery] decimal? priceMin = null,
+        [FromQuery] decimal? priceMax = null,
+        [FromQuery] string? types = null,
+        [FromQuery] string? conditions = null,
+        [FromQuery] string? sort = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 50);
@@ -50,10 +56,60 @@ public class PublicItemsController : ControllerBase
                 i.ItemTags.Any(it => EF.Functions.ILike(EF.Functions.Unaccent(it.Tag.Name), EF.Functions.Unaccent(pattern))));
         }
 
+        // Price range filter — offer-only items (Price == null) are included so they're
+        // not silently hidden; users can exclude them via the type filter.
+        if (priceMin.HasValue && priceMin.Value >= 0)
+            query = query.Where(i => i.Price == null || i.Price >= priceMin.Value);
+
+        if (priceMax.HasValue && priceMax.Value >= 0)
+            query = query.Where(i => i.Price == null || i.Price <= priceMax.Value);
+
+        // Listing type filter — comma-separated: "fixed", "offers", "timed"
+        if (!string.IsNullOrWhiteSpace(types))
+        {
+            var typeSet = types.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim().ToLowerInvariant())
+                .ToHashSet();
+
+            if (typeSet.Count > 0 && typeSet.Count < 3) // all 3 selected = no filter needed
+            {
+                var wantFixed = typeSet.Contains("fixed");
+                var wantOffers = typeSet.Contains("offers");
+                var wantTimed = typeSet.Contains("timed");
+
+                query = query.Where(i =>
+                    (wantFixed && i.Price != null) ||
+                    (wantOffers && i.AcceptOffers) ||
+                    (wantTimed && i.EndDate != null));
+            }
+        }
+
+        // Condition filter — comma-separated int values: "0,1,2"
+        if (!string.IsNullOrWhiteSpace(conditions))
+        {
+            var condList = conditions.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(c => int.TryParse(c.Trim(), out var v) && v >= 0 && v <= 4 ? (Condition?)v : null)
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .Distinct()
+                .ToList();
+
+            if (condList.Count > 0 && condList.Count < 5) // all 5 selected = no filter
+                query = query.Where(i => condList.Contains(i.Condition));
+        }
+
         var totalCount = await query.CountAsync();
 
-        var items = await query
-            .OrderByDescending(i => i.CreatedAt)
+        // Sort
+        IOrderedQueryable<Item> ordered = sort switch
+        {
+            "oldest" => query.OrderBy(i => i.CreatedAt),
+            "priceAsc" => query.OrderBy(i => i.Price ?? decimal.MaxValue),
+            "priceDesc" => query.OrderByDescending(i => i.Price ?? decimal.MinValue),
+            _ => query.OrderByDescending(i => i.CreatedAt) // "newest" default
+        };
+
+        var items = await ordered
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(i => new PublicItemCardDto
