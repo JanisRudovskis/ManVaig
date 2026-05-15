@@ -10,7 +10,8 @@
     "logout": "Logout",
     "more": "More",
     "showListingTips": "Show listing tips",
-    "findPeople": "Find people"
+    "findPeople": "Find people",
+    "myPage": "My Page"
   },
   "home": {
     "title": "Welcome to ManVaig",
@@ -218,6 +219,8 @@
     "activeListings": "Active listings",
     "showingOf": "Showing {shown} of {total}",
     "viewAllListings": "View all {count} listings",
+    "followers": "followers",
+    "followingLabel": "following",
     "close": "Close"
   },
   "stalls": {
@@ -874,5 +877,46 @@
     "contactTelegram": "Telegram available",
     "contactPhone": "Phone available",
     "contactEmail": "Email available"
+  },
+  "follow": {
+    "follow": "Follow",
+    "following": "Following",
+    "unfollow": "Unfollow",
+    "followers": "followers",
+    "followingTab": "following",
+    "noFollowers": "No followers yet",
+    "noFollowing": "Not following anyone yet",
+    "followError": "Could not follow user"
+  },
+  "myPage": {
+    "title": "My Page",
+    "editProfile": "Edit Profile",
+    "myStalls": "My Stalls",
+    "myItems": "My Items",
+    "loginRequired": "Log in to see your page",
+    "logIn": "Log In"
+  },
+  "messages": {
+    "title": "Messages",
+    "inbox": "Inbox",
+    "noConversations": "No messages yet",
+    "noConversationsHint": "Start a conversation from an item page",
+    "typeMessage": "Type a message...",
+    "send": "Send",
+    "you": "You",
+    "messageSeller": "Message Seller",
+    "messageBidder": "Message",
+    "seeAll": "See all messages",
+    "unreadCount": "{count, plural, one {# unread} other {# unread}}",
+    "loadOlder": "Load older messages",
+    "justNow": "Just now",
+    "connectionLost": "Connection lost. Reconnecting...",
+    "connectionRestored": "Connected",
+    "rateLimited": "Too many messages. Please wait.",
+    "tooLong": "Message is too long (max 2000 characters)",
+    "sendError": "Could not send message. Please try again.",
+    "loadError": "Could not load conversation",
+    "backToMessages": "Back to messages",
+    "loginRequired": "Log in to view your messages"
   }
 }

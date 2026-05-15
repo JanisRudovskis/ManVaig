@@ -14,6 +14,7 @@ public class PublicSellerSummaryDto
 
 public class PublicSellerDetailDto : PublicSellerSummaryDto
 {
+    public Guid SellerId { get; set; }
     public string? Bio { get; set; }
 }
 

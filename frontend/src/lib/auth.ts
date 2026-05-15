@@ -279,6 +279,10 @@ export interface UserProfile {
   stallCount: number;
   activeListingCount: number;
   completedDealCount: number;
+  // Follow
+  followerCount: number;
+  followingCount: number;
+  isFollowedByMe: boolean | null;
 }
 
 export interface UpdateProfileData {

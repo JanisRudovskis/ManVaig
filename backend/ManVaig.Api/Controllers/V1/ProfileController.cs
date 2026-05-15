@@ -148,7 +148,8 @@ public class ProfileController : ControllerBase
             });
         }
 
-        return Ok(await MapToResponse(user, isOwner: false));
+        Guid? viewerId = Guid.TryParse(GetCurrentUserId(), out var vid) ? vid : null;
+        return Ok(await MapToResponse(user, isOwner: false, viewerId));
     }
 
     /// <summary>
@@ -238,7 +239,7 @@ public class ProfileController : ControllerBase
             .FirstOrDefaultAsync(u => u.Id.ToString() == userId);
     }
 
-    private async Task<UserProfileResponse> MapToResponse(ApplicationUser user, bool isOwner)
+    private async Task<UserProfileResponse> MapToResponse(ApplicationUser user, bool isOwner, Guid? viewerId = null)
     {
         // Compute stats
         var stallCount = await _db.Stalls.CountAsync(s => s.UserId == user.Id);
@@ -248,6 +249,14 @@ public class ProfileController : ControllerBase
             && i.Stall.Visibility == StallVisibility.Public);
         var completedDealCount = await _db.Bids.CountAsync(b =>
             b.Status == BidStatus.Completed && b.Item.UserId == user.Id);
+        var followerCount = await _db.UserFollows.CountAsync(f => f.FolloweeId == user.Id);
+        var followingCount = await _db.UserFollows.CountAsync(f => f.FollowerId == user.Id);
+
+        bool? isFollowedByMe = null;
+        if (viewerId.HasValue && !isOwner)
+        {
+            isFollowedByMe = await _db.UserFollows.AnyAsync(f => f.FollowerId == viewerId.Value && f.FolloweeId == user.Id);
+        }
 
         var channels = user.EnabledChannels;
 
@@ -298,6 +307,9 @@ public class ProfileController : ControllerBase
             StallCount = stallCount,
             ActiveListingCount = activeListingCount,
             CompletedDealCount = completedDealCount,
+            FollowerCount = followerCount,
+            FollowingCount = followingCount,
+            IsFollowedByMe = isFollowedByMe,
             DisplayedBadges = user.DisplayedBadges
                 .OrderBy(db => db.SortOrder)
                 .Select(db => new BadgeDto

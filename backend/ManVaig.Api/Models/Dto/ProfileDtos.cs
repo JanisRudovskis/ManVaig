@@ -30,6 +30,9 @@ public class UserProfileResponse
     public int StallCount { get; set; }
     public int ActiveListingCount { get; set; }
     public int CompletedDealCount { get; set; }
+    public int FollowerCount { get; set; }
+    public int FollowingCount { get; set; }
+    public bool? IsFollowedByMe { get; set; } // null for anonymous
 }
 
 public class BadgeDto
@@ -38,6 +41,23 @@ public class BadgeDto
     public string Key { get; set; } = default!;
     public string Name { get; set; } = default!;
     public string? IconUrl { get; set; }
+}
+
+public class FollowUserDto
+{
+    public Guid UserId { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string? AvatarUrl { get; set; }
+    public string? Location { get; set; }
+    public DateTime FollowedSince { get; set; }
+}
+
+public class FollowListResponse
+{
+    public List<FollowUserDto> Users { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
 }
 
 public class UpdateProfileRequest

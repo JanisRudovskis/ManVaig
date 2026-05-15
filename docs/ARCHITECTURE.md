@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-09 (stall + item visibility redesign: 4-state StallVisibility cascade through public endpoints, stall-level defaults for new items, StallFormDialog popup replacing inline add/edit, shared VisibilityRadioCards used by both stall dialog and ItemForm, Appearance panel on detail page; also: /people directory in sidebar More menu)
+> Last updated: 2026-05-15 (Follow Users + My Page, Messaging System with SignalR real-time, TopBar with unread badge, sidebar footer links to My Page, design docs for reviews+trust system)
 
 ---
 
@@ -179,6 +179,42 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 
 **Offer lock**: Items with Accepted or Completed bids are locked (cannot edit). Non-timed offer items are NOT locked until acceptance.
 
+### Follow System
+
+**Model: `Models/UserFollow.cs`** — FollowerId + FolloweeId (composite PK), CreatedAt. Two FKs to ApplicationUser (Cascade on Follower, Restrict on Followee). Index on FolloweeId.
+
+**Controller: `Controllers/V1/FollowController.cs`**:
+
+| Endpoint | Auth | What it does |
+|----------|------|-------------|
+| `POST /api/v1/users/{displayName}/follow` | Bearer | Follow a user. Idempotent. Cannot follow self. Race condition handled (DbUpdateException catch). |
+| `DELETE /api/v1/users/{displayName}/follow` | Bearer | Unfollow a user. Idempotent. |
+| `GET /api/v1/users/{displayName}/followers` | AllowAnonymous | Paginated follower list. Private profile + anonymous → empty. |
+| `GET /api/v1/users/{displayName}/following` | AllowAnonymous | Paginated following list. Private profile + anonymous → empty. |
+
+ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`, `completedDealCount` added to UserProfileResponse.
+
+### Messaging System (SignalR)
+
+**Models:** `Conversation` (Id, User1Id, User2Id, CreatedAt, LastMessageAt) + `Message` (Id, ConversationId, SenderId, Text max 2000, IsRead, CreatedAt). One conversation per user pair — deduplication via normalized Guid order (smaller Guid = User1Id) + unique constraint on `(User1Id, User2Id)`.
+
+**SignalR Hub: `Hubs/ChatHub.cs`** — JWT auth via query string (`OnMessageReceived` event extracts `access_token` from `/hubs/chat` requests). On connect: auto-joins `user_{userId}` group. Methods: `JoinConversation(id)` (DB-validated participant check), `LeaveConversation(id)`. Server events: `ReceiveMessage`, `MessagesRead`, `UnreadCountChanged`.
+
+**Controller: `Controllers/V1/ConversationsController.cs`**:
+
+| Endpoint | Auth | What it does |
+|----------|------|-------------|
+| `GET /api/v1/conversations` | Bearer | Inbox — paginated conversations sorted by LastMessageAt. Includes other user info, last message preview, unread count per conversation. |
+| `GET /api/v1/conversations/{id}/messages` | Bearer | Paginated messages (newest first). Validates participant. |
+| `POST /api/v1/conversations` | Bearer | Start or get existing conversation. Body: `{ participantId }`. Target must have public profile. Cannot message self. |
+| `POST /api/v1/conversations/{id}/messages` | Bearer | Send message. Rate limited: 20/min sliding window. Broadcasts via SignalR to conversation group + updates other user's unread count. |
+| `POST /api/v1/conversations/{id}/read` | Bearer | Mark all messages as read (where sender != current user). Broadcasts MessagesRead event. |
+| `GET /api/v1/conversations/unread-count` | Bearer | Total unread count for top bar badge. |
+
+**Program.cs changes:** `builder.Services.AddSignalR()`, `.AllowCredentials()` on CORS, `app.MapHub<ChatHub>("/hubs/chat")`.
+
+**Rate limiting:** In-memory `ConcurrentDictionary<Guid, List<DateTime>>` with sliding window (60s). Periodic cleanup removes empty entries. Returns 429 with `retryAfter`.
+
 ### Image Service: `Services/CloudinaryImageService.cs`
 
 - Implements `IImageService.UploadAvatarAsync(stream, fileName, userId)`
@@ -217,7 +253,9 @@ html (lang={locale} from cookie)
               └─ AuthProvider (JWT state + login dialog)
                   └─ AppLayout
                       ├─ AppSidebar (collapsible, Claude-style)
-                      └─ SidebarInset > main > {children}
+                      └─ SidebarInset
+                          ├─ TopBar (sticky, messages icon + unread badge)
+                          └─ main > {children}
 ```
 
 ### i18n System
@@ -226,7 +264,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `search`, `common`, `help`, `tips`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `search`, `common`, `help`, `tips`, `offers`, `people`, `follow`, `myPage`, `messages`, `visibility`
 - Plural-aware messages use ICU `{count, plural, one {…} other {…}}` (see `search.liveCountItems`, `search.liveCountStalls`)
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
@@ -274,7 +312,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 **Sidebar (Instagram-style):** `AppSidebar` uses shadcn `Sidebar` with `collapsible="icon"`.
 - Nav items defined as array, 24px icons (`size-6`), 48px tall buttons (`size="lg"`), `rounded-xl`
 - Active items: bold text + thicker stroke (`strokeWidth={2.5}`)
-- Footer: Profile link with `UserAvatar` (xs size) + `SidebarMoreMenu` popover
+- Footer: My Page link with `UserAvatar` (xs size) + `SidebarMoreMenu` popover
 - `SidebarMoreMenu`: theme toggle, language sub-view (back navigation), logout. Replaces standalone ThemeToggle + LanguageSwitcher.
 - Collapsed mode: `4rem` width (64px), `size-10` (40px) buttons, icons centered via padding
 - Collapse/expand state persisted via `sidebar_state` cookie (read in `useEffect` to avoid hydration mismatch)
@@ -299,12 +337,20 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/items/[id]` | `app/items/[id]/page.tsx` | Public item detail page |
 | `/search` | `app/search/page.tsx` (server, exports `metadata` with `robots: { index: false }`) + `app/search/search-client.tsx` ("use client" inside `<Suspense>`) | Unified search: Items|Stalls segmented tabs, ?q= debounced 300ms, min 2 chars, Enter skips debounce, hint chips, Load more pagination, plural-aware live region |
 | `/people` | `app/people/page.tsx` (server, `noindex`) + `app/people/people-client.tsx` ("use client" inside `<Suspense>`) | People directory — search users by displayName. Anon: only public users; authed: all active users. Cards show avatar + displayName + member-since + "Active N ago" + contact-method icons. Entry from sidebar More menu, no top-level nav. |
+| `/my-page` | `app/my-page/page.tsx` | Personal dashboard — profile summary, quick links (Edit Profile, My Stalls, My Items), followers/following tabs. Auth required. |
+| `/messages` | `app/messages/page.tsx` | Inbox — conversation list sorted by last message time, unread indicators, skeleton loading, empty state. Auth required. |
+| `/messages/[id]` | `app/messages/[id]/page.tsx` | Chat view — real-time via SignalR, message bubbles (own=blue right, theirs=muted left), read receipts (✓/✓✓), auto-scroll, mark-as-read, inline send errors. |
 
 ### Component Map
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| AppLayout | `components/app-layout.tsx` | SidebarProvider + SidebarInset wrapper |
+| AppLayout | `components/app-layout.tsx` | SidebarProvider + SidebarInset wrapper + TopBar |
+| TopBar | `components/top-bar.tsx` | Sticky header — mobile sidebar trigger + messages icon with unread badge. Replaces previous mobile-only header. |
+| FollowButton | `components/follow-button.tsx` | Follow/unfollow toggle with optimistic UI, tap-to-toggle on mobile |
+| ConversationListItem | `components/conversation-list-item.tsx` | Inbox row — avatar, name, last message preview, time, unread badge |
+| MessageBubble | `components/message-bubble.tsx` | Chat bubble — own (blue, right) vs theirs (muted, left), timestamps, read receipts (✓/✓✓), link detection |
+| MessageInput | `components/message-input.tsx` | Auto-growing textarea + send button (ArrowUp icon), 2000 char limit with counter, Enter to send |
 | AppSidebar | `components/app-sidebar.tsx` | Instagram-style nav, profile link with avatar, More menu |
 | SidebarMoreMenu | `components/sidebar-more-menu.tsx` | Popover with theme toggle, language sub-view, logout |
 | LoginFormContent | `components/login-form.tsx` | Reusable login form (email or username + forgot password link) |

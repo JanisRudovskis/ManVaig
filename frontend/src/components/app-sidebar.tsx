@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, Search, PlusCircle, Bell, LogIn, Store, PanelLeft, PanelLeftClose } from "lucide-react";
+import { Home, Search, PlusCircle, Bell, LogIn, Store, Users, PanelLeft, PanelLeftClose } from "lucide-react";
 import { SidebarMoreMenu } from "@/components/sidebar-more-menu";
 import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth-context";
@@ -24,6 +24,7 @@ const navItems = [
   { key: "home", href: "/", icon: Home },
   { key: "browse", href: "/search", icon: Search },
   { key: "myStalls", href: "/my-stalls", icon: Store, auth: true },
+  { key: "myPage", href: "/my-page", icon: Users, auth: true },
   { key: "sell", href: "/sell", icon: PlusCircle },
   { key: "notifications", href: "/notifications", icon: Bell },
 ];
@@ -121,9 +122,9 @@ export function AppSidebar() {
               <SidebarMenuButton
                 size="lg"
                 className={navButtonClass}
-                isActive={pathname === "/profile"}
+                isActive={pathname === "/my-page"}
                 tooltip={user?.displayName ?? ""}
-                render={<Link href="/profile" onClick={closeMobile} />}
+                render={<Link href="/my-page" onClick={closeMobile} />}
               >
                 <UserAvatar
                   displayName={user?.displayName ?? ""}

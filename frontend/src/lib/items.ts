@@ -294,6 +294,7 @@ export interface PublicSellerSummary {
 }
 
 export interface PublicSellerDetail extends PublicSellerSummary {
+  sellerId: string;
   bio: string | null;
 }
 

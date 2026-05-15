@@ -59,6 +59,20 @@ try
                 ValidAudience = jwtAudience,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
             };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+                    {
+                        context.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
 
     // CORS
@@ -69,7 +83,8 @@ try
         {
             policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .AllowCredentials();
         });
     });
 
@@ -85,6 +100,9 @@ try
 
     // Cloudinary image service
     builder.Services.AddSingleton<IImageService, CloudinaryImageService>();
+
+    // SignalR for real-time messaging
+    builder.Services.AddSignalR();
 
     builder.Services.AddControllers();
 
@@ -103,6 +121,8 @@ try
     app.UseAuthorization();
     app.UseMiddleware<LastSeenMiddleware>();
     app.MapControllers();
+
+    app.MapHub<ManVaig.Api.Hubs.ChatHub>("/hubs/chat");
 
     app.Run();
 }

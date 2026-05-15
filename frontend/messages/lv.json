@@ -10,7 +10,8 @@
     "logout": "Izlogoties",
     "more": "Vairāk",
     "showListingTips": "Rādīt sludinājumu padomus",
-    "findPeople": "Atrast cilvēkus"
+    "findPeople": "Atrast cilvēkus",
+    "myPage": "Mana Lapa"
   },
   "home": {
     "title": "Laipni lūgti ManVaig",
@@ -218,6 +219,8 @@
     "activeListings": "Aktīvie sludinājumi",
     "showingOf": "Rāda {shown} no {total}",
     "viewAllListings": "Skatīt visus {count} sludinājumus",
+    "followers": "sekotāji",
+    "followingLabel": "seko",
     "close": "Aizvērt"
   },
   "stalls": {
@@ -874,5 +877,46 @@
     "contactTelegram": "Pieejams Telegram",
     "contactPhone": "Pieejams tālrunis",
     "contactEmail": "Pieejams e-pasts"
+  },
+  "follow": {
+    "follow": "Sekot",
+    "following": "Seko",
+    "unfollow": "Atsekot",
+    "followers": "sekotāji",
+    "followingTab": "seko",
+    "noFollowers": "Vēl nav sekotāju",
+    "noFollowing": "Vēl neseko nevienu",
+    "followError": "Nevarēja sekot lietotājam"
+  },
+  "myPage": {
+    "title": "Mana Lapa",
+    "editProfile": "Rediģēt Profilu",
+    "myStalls": "Mani Stendi",
+    "myItems": "Manas Lietas",
+    "loginRequired": "Piesakieties, lai redzētu savu lapu",
+    "logIn": "Pieteikties"
+  },
+  "messages": {
+    "title": "Ziņojumi",
+    "inbox": "Iesūtne",
+    "noConversations": "Vēl nav ziņojumu",
+    "noConversationsHint": "Sāciet sarunu no preces lapas",
+    "typeMessage": "Rakstiet ziņojumu...",
+    "send": "Sūtīt",
+    "you": "Jūs",
+    "messageSeller": "Rakstīt pārdevējam",
+    "messageBidder": "Rakstīt",
+    "seeAll": "Skatīt visus ziņojumus",
+    "unreadCount": "{count, plural, one {# nelasīts} other {# nelasīti}}",
+    "loadOlder": "Ielādēt vecākus ziņojumus",
+    "justNow": "Tikko",
+    "connectionLost": "Savienojums zaudēts. Atjaunošana...",
+    "connectionRestored": "Savienots",
+    "rateLimited": "Pārāk daudz ziņojumu. Lūdzu, uzgaidiet.",
+    "tooLong": "Ziņojums ir pārāk garš (maks. 2000 rakstzīmes)",
+    "sendError": "Nevarēja nosūtīt ziņojumu. Lūdzu, mēģiniet vēlreiz.",
+    "loadError": "Nevarēja ielādēt sarunu",
+    "backToMessages": "Atpakaļ uz ziņojumiem",
+    "loginRequired": "Piesakieties, lai skatītu ziņojumus"
   }
 }

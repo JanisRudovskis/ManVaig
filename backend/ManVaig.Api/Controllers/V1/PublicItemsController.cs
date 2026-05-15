@@ -249,6 +249,7 @@ public class PublicItemsController : ControllerBase
             Tags = item.ItemTags?.Select(it => it.Tag.Name).ToList() ?? new(),
             Seller = new PublicSellerDetailDto
             {
+                SellerId = item.UserId,
                 DisplayName = item.User?.DisplayName ?? "User",
                 AvatarUrl = item.User?.AvatarUrl,
                 Location = item.User?.Location,

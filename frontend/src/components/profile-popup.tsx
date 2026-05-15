@@ -20,6 +20,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { BadgeDisplay } from "@/components/badge-display";
+import { FollowButton } from "@/components/follow-button";
 import { PublicItemCard } from "@/components/public-item-card";
 import { getPublicProfile, getUserListings } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth";
@@ -36,7 +37,7 @@ export function ProfilePopup({ displayName, onClose }: ProfilePopupProps) {
   const t = useTranslations("profile");
   const locale = useLocale();
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user: authUser } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [listings, setListings] = useState<PublicItemCardType[]>([]);
@@ -187,6 +188,26 @@ export function ProfilePopup({ displayName, onClose }: ProfilePopupProps) {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Follow button — non-owner only */}
+              {isLoggedIn && authUser && profile.userId !== authUser.userId && (
+                <FollowButton
+                  displayName={profile.displayName}
+                  isFollowing={profile.isFollowedByMe ?? false}
+                  size="sm"
+                  onFollowChange={(following) => {
+                    setProfile((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            isFollowedByMe: following,
+                            followerCount: prev.followerCount + (following ? 1 : -1),
+                          }
+                        : prev
+                    );
+                  }}
+                />
               )}
 
               {/* Bio */}

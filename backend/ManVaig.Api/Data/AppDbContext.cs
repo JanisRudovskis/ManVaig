@@ -22,6 +22,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Bid> Bids => Set<Bid>();
     public DbSet<Stall> Stalls => Set<Stall>();
     public DbSet<StallFeaturedItem> StallFeaturedItems => Set<StallFeaturedItem>();
+    public DbSet<UserFollow> UserFollows => Set<UserFollow>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -217,6 +220,60 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
             entity.HasIndex(b => b.ItemId);
             entity.HasIndex(b => new { b.ItemId, b.Amount });
+        });
+
+        // === UserFollow ===
+        builder.Entity<UserFollow>(entity =>
+        {
+            entity.HasKey(uf => new { uf.FollowerId, uf.FolloweeId });
+
+            entity.HasOne(uf => uf.Follower)
+                .WithMany(u => u.Following)
+                .HasForeignKey(uf => uf.FollowerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(uf => uf.Followee)
+                .WithMany(u => u.Followers)
+                .HasForeignKey(uf => uf.FolloweeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(uf => uf.FolloweeId);
+        });
+
+        // === Conversation ===
+        builder.Entity<Conversation>(entity =>
+        {
+            entity.HasOne(c => c.User1)
+                .WithMany(u => u.ConversationsAsUser1)
+                .HasForeignKey(c => c.User1Id)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.User2)
+                .WithMany(u => u.ConversationsAsUser2)
+                .HasForeignKey(c => c.User2Id)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(c => new { c.User1Id, c.User2Id }).IsUnique();
+            entity.HasIndex(c => c.User1Id);
+            entity.HasIndex(c => c.User2Id);
+        });
+
+        // === Message ===
+        builder.Entity<Message>(entity =>
+        {
+            entity.Property(m => m.Text).HasMaxLength(2000);
+
+            entity.HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(m => new { m.ConversationId, m.CreatedAt });
         });
     }
 }

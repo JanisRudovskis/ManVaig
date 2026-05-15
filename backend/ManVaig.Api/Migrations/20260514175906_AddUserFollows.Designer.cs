@@ -3,6 +3,7 @@ using System;
 using ManVaig.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ManVaig.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260514175906_AddUserFollows")]
+    partial class AddUserFollows
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -324,36 +327,6 @@ namespace ManVaig.Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ManVaig.Api.Models.Conversation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastMessageAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("User1Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("User2Id")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("User1Id");
-
-                    b.HasIndex("User2Id");
-
-                    b.HasIndex("User1Id", "User2Id")
-                        .IsUnique();
-
-                    b.ToTable("Conversations");
-                });
-
             modelBuilder.Entity("ManVaig.Api.Models.Item", b =>
                 {
                     b.Property<Guid>("Id")
@@ -478,38 +451,6 @@ namespace ManVaig.Api.Migrations
                     b.HasIndex("TagId");
 
                     b.ToTable("ItemTags");
-                });
-
-            modelBuilder.Entity("ManVaig.Api.Models.Message", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ConversationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("SenderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SenderId");
-
-                    b.HasIndex("ConversationId", "CreatedAt");
-
-                    b.ToTable("Messages");
                 });
 
             modelBuilder.Entity("ManVaig.Api.Models.Stall", b =>
@@ -838,25 +779,6 @@ namespace ManVaig.Api.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("ManVaig.Api.Models.Conversation", b =>
-                {
-                    b.HasOne("ManVaig.Api.Models.ApplicationUser", "User1")
-                        .WithMany("ConversationsAsUser1")
-                        .HasForeignKey("User1Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ManVaig.Api.Models.ApplicationUser", "User2")
-                        .WithMany("ConversationsAsUser2")
-                        .HasForeignKey("User2Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User1");
-
-                    b.Navigation("User2");
-                });
-
             modelBuilder.Entity("ManVaig.Api.Models.Item", b =>
                 {
                     b.HasOne("ManVaig.Api.Models.Category", "Category")
@@ -912,25 +834,6 @@ namespace ManVaig.Api.Migrations
                     b.Navigation("Item");
 
                     b.Navigation("Tag");
-                });
-
-            modelBuilder.Entity("ManVaig.Api.Models.Message", b =>
-                {
-                    b.HasOne("ManVaig.Api.Models.Conversation", "Conversation")
-                        .WithMany("Messages")
-                        .HasForeignKey("ConversationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ManVaig.Api.Models.ApplicationUser", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Conversation");
-
-                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("ManVaig.Api.Models.Stall", b =>
@@ -1079,10 +982,6 @@ namespace ManVaig.Api.Migrations
 
             modelBuilder.Entity("ManVaig.Api.Models.ApplicationUser", b =>
                 {
-                    b.Navigation("ConversationsAsUser1");
-
-                    b.Navigation("ConversationsAsUser2");
-
                     b.Navigation("DisplayedBadges");
 
                     b.Navigation("Followers");
@@ -1104,11 +1003,6 @@ namespace ManVaig.Api.Migrations
             modelBuilder.Entity("ManVaig.Api.Models.Category", b =>
                 {
                     b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("ManVaig.Api.Models.Conversation", b =>
-                {
-                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("ManVaig.Api.Models.Item", b =>

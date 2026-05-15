@@ -6,9 +6,11 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { fetchPublicItem, Condition } from "@/lib/items";
 import type { PublicItemDetail } from "@/lib/items";
+import { startConversation } from "@/lib/messages";
 import { ImageGallery } from "@/components/image-gallery";
 import { OffersPopup } from "@/components/offers-popup";
 import { formatPrice, EndDateCountdown, isEnded } from "@/components/item-card-shared";
+import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +25,7 @@ import {
   Check,
   User,
   ArrowLeft,
+  Send,
 } from "lucide-react";
 
 // === Condition label ===
@@ -188,13 +191,31 @@ export default function ItemDetailPage() {
   const params = useParams();
   const router = useRouter();
   const t = useTranslations("itemDetail");
+  const tm = useTranslations("messages");
   const tc = useTranslations("categories");
+  const { isLoggedIn, openLoginDialog } = useAuth();
   const id = params.id as string;
 
   const [item, setItem] = useState<PublicItemDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showOffers, setShowOffers] = useState(false);
+  const [messagingLoading, setMessagingLoading] = useState(false);
+
+  const handleMessageSeller = async () => {
+    if (!isLoggedIn) { openLoginDialog(); return; }
+    if (!item) return;
+    setMessagingLoading(true);
+    try {
+      const conv = await startConversation(item.seller.sellerId);
+      router.push(`/messages/${conv.id}`);
+    } catch {
+      // Fallback: navigate to messages page
+      router.push("/messages");
+    } finally {
+      setMessagingLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -349,6 +370,20 @@ export default function ItemDetailPage() {
             </div>
             {item.seller.bio && (
               <p className="mt-3 text-sm text-muted-foreground">{item.seller.bio}</p>
+            )}
+
+            {/* Message Seller button — only for non-owners */}
+            {!item.isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={handleMessageSeller}
+                disabled={messagingLoading}
+              >
+                <Send className="mr-2 size-4" />
+                {tm("messageSeller")}
+              </Button>
             )}
           </div>
         </div>
