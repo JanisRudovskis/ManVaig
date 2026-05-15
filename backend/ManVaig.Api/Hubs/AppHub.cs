@@ -8,11 +8,11 @@ using Microsoft.EntityFrameworkCore;
 namespace ManVaig.Api.Hubs;
 
 [Authorize]
-public class ChatHub : Hub
+public class AppHub : Hub
 {
     private readonly AppDbContext _db;
 
-    public ChatHub(AppDbContext db)
+    public AppHub(AppDbContext db)
     {
         _db = db;
     }

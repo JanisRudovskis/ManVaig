@@ -1,0 +1,71 @@
+using ManVaig.Api.Data;
+using ManVaig.Api.Models.Enums;
+using Microsoft.EntityFrameworkCore;
+
+namespace ManVaig.Api.Services;
+
+public class AuctionEndedService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<AuctionEndedService> _logger;
+    private static readonly SemaphoreSlim _tickLock = new(1, 1);
+
+    public AuctionEndedService(IServiceScopeFactory scopeFactory, ILogger<AuctionEndedService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Wait briefly on startup to let the app fully initialize
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            if (!await _tickLock.WaitAsync(0, stoppingToken))
+            {
+                // Previous tick still running — skip this one
+                await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+                continue;
+            }
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+                // Find items where EndDate has passed and no AuctionEnded notification exists
+                var endedItems = await db.Items
+                    .Where(i => i.EndDate != null
+                        && i.EndDate < DateTime.UtcNow
+                        && i.AcceptOffers
+                        && !db.Notifications.Any(n =>
+                            n.ItemId == i.Id
+                            && n.UserId == i.UserId
+                            && n.Type == NotificationType.AuctionEnded))
+                    .Select(i => new { i.Id, i.UserId })
+                    .Take(50)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var item in endedItems)
+                {
+                    await notificationService.NotifyAuctionEnded(item.UserId, item.Id);
+                }
+
+                if (endedItems.Count > 0)
+                    _logger.LogInformation("AuctionEndedService: sent {Count} auction-ended notifications", endedItems.Count);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "AuctionEndedService tick failed");
+            }
+            finally
+            {
+                _tickLock.Release();
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+        }
+    }
+}

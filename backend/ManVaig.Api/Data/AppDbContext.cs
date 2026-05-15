@@ -25,6 +25,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -274,6 +275,33 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(m => new { m.ConversationId, m.CreatedAt });
+        });
+
+        // === Notification ===
+        builder.Entity<Notification>(entity =>
+        {
+            entity.HasOne(n => n.User)
+                .WithMany(u => u.Notifications)
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(n => n.Actor)
+                .WithMany()
+                .HasForeignKey(n => n.ActorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(n => n.Item)
+                .WithMany()
+                .HasForeignKey(n => n.ItemId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(n => n.Bid)
+                .WithMany()
+                .HasForeignKey(n => n.BidId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
+            entity.HasIndex(n => new { n.UserId, n.Type, n.ActorId, n.IsRead });
         });
     }
 }

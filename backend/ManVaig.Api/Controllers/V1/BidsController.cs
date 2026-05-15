@@ -4,6 +4,7 @@ using ManVaig.Api.Data;
 using ManVaig.Api.Models;
 using ManVaig.Api.Models.Dto;
 using ManVaig.Api.Models.Enums;
+using ManVaig.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,10 +16,12 @@ namespace ManVaig.Api.Controllers.V1;
 public class BidsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly INotificationService _notificationService;
 
-    public BidsController(AppDbContext db)
+    public BidsController(AppDbContext db, INotificationService notificationService)
     {
         _db = db;
+        _notificationService = notificationService;
     }
 
     /// <summary>
@@ -311,6 +314,9 @@ public class BidsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        // Notify seller about new bid
+        await _notificationService.NotifyNewBid(item.UserId, userId.Value, itemId, bid.Id);
+
         return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe, updated = canUpdate });
     }
 
@@ -349,6 +355,9 @@ public class BidsController : ControllerBase
         bid.AcceptedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        // Notify bidder that their bid was accepted
+        await _notificationService.NotifyBidAccepted(bid.UserId, itemId, bid.Id);
 
         return Ok(new
         {

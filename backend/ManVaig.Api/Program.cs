@@ -66,7 +66,7 @@ try
                 {
                     var accessToken = context.Request.Query["access_token"];
                     var path = context.HttpContext.Request.Path;
-                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/app"))
                     {
                         context.Token = accessToken;
                     }
@@ -101,6 +101,11 @@ try
     // Cloudinary image service
     builder.Services.AddSingleton<IImageService, CloudinaryImageService>();
 
+    // Notification service
+    builder.Services.AddScoped<INotificationService, NotificationService>();
+    builder.Services.AddHostedService<NotificationCleanupService>();
+    builder.Services.AddHostedService<AuctionEndedService>();
+
     // SignalR for real-time messaging
     builder.Services.AddSignalR();
 
@@ -122,7 +127,7 @@ try
     app.UseMiddleware<LastSeenMiddleware>();
     app.MapControllers();
 
-    app.MapHub<ManVaig.Api.Hubs.ChatHub>("/hubs/chat");
+    app.MapHub<ManVaig.Api.Hubs.AppHub>("/hubs/app");
 
     app.Run();
 }

@@ -18,12 +18,12 @@ namespace ManVaig.Api.Controllers.V1;
 public class ConversationsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IHubContext<ChatHub> _hubContext;
+    private readonly IHubContext<AppHub> _hubContext;
 
     // Rate limiting: 20 messages per minute per user (sliding window)
     private static readonly ConcurrentDictionary<Guid, List<DateTime>> _messageRateLimits = new();
 
-    public ConversationsController(AppDbContext db, IHubContext<ChatHub> hubContext)
+    public ConversationsController(AppDbContext db, IHubContext<AppHub> hubContext)
     {
         _db = db;
         _hubContext = hubContext;

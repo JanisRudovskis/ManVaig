@@ -27,4 +27,5 @@ public class ApplicationUser : IdentityUser<Guid>
     public ICollection<UserFollow> Followers { get; set; } = new List<UserFollow>();
     public ICollection<Conversation> ConversationsAsUser1 { get; set; } = new List<Conversation>();
     public ICollection<Conversation> ConversationsAsUser2 { get; set; } = new List<Conversation>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }

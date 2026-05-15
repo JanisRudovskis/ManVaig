@@ -18,11 +18,13 @@ public class ItemsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IImageService _imageService;
+    private readonly INotificationService _notificationService;
 
-    public ItemsController(AppDbContext db, IImageService imageService)
+    public ItemsController(AppDbContext db, IImageService imageService, INotificationService notificationService)
     {
         _db = db;
         _imageService = imageService;
+        _notificationService = notificationService;
     }
 
     /// <summary>
@@ -210,6 +212,12 @@ public class ItemsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // Notify followers about new item (only for public items)
+        if (item.Visibility == ItemVisibility.Public)
+        {
+            await _notificationService.NotifyNewItemFromFollowed(userId.Value, item.Id);
+        }
 
         // Reload with includes for response
         var created = await GetItemWithIncludes()

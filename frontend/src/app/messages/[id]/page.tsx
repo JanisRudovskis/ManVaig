@@ -69,7 +69,7 @@ export default function ChatPage() {
         const token = getToken();
         if (!token || stopped) return;
 
-        const hubUrl = API_URL.replace(/\/$/, "") + "/hubs/chat";
+        const hubUrl = API_URL.replace(/\/$/, "") + "/hubs/app";
         const connection = new signalR.HubConnectionBuilder()
           .withUrl(hubUrl, { accessTokenFactory: () => token })
           .withAutomaticReconnect()

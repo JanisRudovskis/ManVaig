@@ -918,5 +918,22 @@
     "loadError": "Nevarēja ielādēt sarunu",
     "backToMessages": "Atpakaļ uz ziņojumiem",
     "loginRequired": "Piesakieties, lai skatītu ziņojumus"
+  },
+  "notifications": {
+    "title": "Paziņojumi",
+    "noNotifications": "Nav paziņojumu",
+    "noNotificationsHint": "Jūs saņemsiet paziņojumus par piedāvājumiem, izsolēm un jaunām precēm",
+    "seeAll": "Skatīt visus paziņojumus",
+    "newBid": "{actor} piedāvāja €{amount} par {itemTitle}",
+    "auctionEnded": "Izsole beidzās: {itemTitle}",
+    "bidAccepted": "Jūsu piedāvājums tika pieņemts: {itemTitle}",
+    "newItem": "{actor} publicēja jaunu preci",
+    "newItems": "{actor} publicēja {count} jaunas preces",
+    "justNow": "Tikko",
+    "loginRequired": "Piesakieties, lai skatītu paziņojumus",
+    "loadMore": "Ielādēt vairāk",
+    "loadError": "Nevarēja ielādēt paziņojumus",
+    "retry": "Mēģināt vēlreiz",
+    "loading": "Ielādē..."
   }
 }

@@ -918,5 +918,22 @@
     "loadError": "Could not load conversation",
     "backToMessages": "Back to messages",
     "loginRequired": "Log in to view your messages"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "noNotifications": "No notifications",
+    "noNotificationsHint": "You'll be notified about bids, auctions, and new items from people you follow",
+    "seeAll": "See all notifications",
+    "newBid": "{actor} bid €{amount} on {itemTitle}",
+    "auctionEnded": "Bidding ended on {itemTitle}",
+    "bidAccepted": "Your bid was accepted on {itemTitle}",
+    "newItem": "{actor} posted a new item",
+    "newItems": "{actor} posted {count} new items",
+    "justNow": "Just now",
+    "loginRequired": "Log in to see notifications",
+    "loadMore": "Load more",
+    "loadError": "Could not load notifications",
+    "retry": "Try again",
+    "loading": "Loading..."
   }
 }
