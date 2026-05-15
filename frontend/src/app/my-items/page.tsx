@@ -62,11 +62,12 @@ function ItemCard({
   onViewBids?: (item: ItemResponse) => void;
 }) {
   const ended = isEnded(item.endDate);
+  const dimmed = ended || item.isSold;
   const primaryImage = item.images.find((img) => img.isPrimary) ?? item.images[0];
 
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80 ${ended ? "opacity-60 hover:opacity-80" : ""}`}
+      className={`relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80 ${dimmed ? "opacity-60 hover:opacity-80" : ""}`}
     >
       {/* Image */}
       <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
@@ -80,6 +81,13 @@ function ItemCard({
           <ImageIcon className="size-12 text-muted-foreground" />
         )}
         {item.endDate && <EndDatePill end={item.endDate} t={t} />}
+        {item.isSold && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="rounded-md bg-emerald-500 px-3 py-1 text-sm font-bold text-white shadow-lg">
+              {t("sold")}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Info */}

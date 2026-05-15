@@ -13,9 +13,7 @@ public class Bid
     public ApplicationUser User { get; set; } = default!;
 
     public decimal Amount { get; set; }
-    public bool IsAnonymous { get; set; } = false;
     public BidStatus Status { get; set; } = BidStatus.Active;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? AcceptedAt { get; set; }
 }

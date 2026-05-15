@@ -164,8 +164,7 @@ export function PublicItemCard({ item, onClick, onOffer }: PublicItemCardProps) 
           t={t}
           bidCount={item.bidCount}
           highestBid={item.highestBid}
-          biddingPaused={item.biddingPaused}
-          biddingClosed={item.biddingClosed}
+          isSold={item.isSold}
           hideEndedStatus
         />
       </div>
@@ -213,13 +212,13 @@ export function PublicItemCard({ item, onClick, onOffer }: PublicItemCardProps) 
               onOffer(item);
             }}
             className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-medium transition-colors ${
-              item.biddingClosed
+              item.isSold
                 ? "bg-emerald-500/15 text-emerald-400"
                 : "bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
             }`}
           >
             <HandCoins className="size-3" />
-            {item.biddingClosed
+            {item.isSold
               ? to("sold")
               : item.bidCount > 0
                 ? to("bids", { count: item.bidCount })

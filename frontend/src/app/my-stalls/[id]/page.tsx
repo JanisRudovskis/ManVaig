@@ -95,33 +95,28 @@ function ActivityBadges({ item, ts }: { item: ItemResponse; ts: (key: string, va
   const endingSoon = isEndingSoon(item);
   const hasBids = item.bidCount > 0;
 
-  if (!ended && !endingSoon && !hasBids && !item.biddingPaused && !item.biddingClosed) return null;
+  if (!ended && !endingSoon && !hasBids && !item.isSold) return null;
 
   return (
     <div className="absolute bottom-2 left-2 z-10 flex flex-wrap gap-1">
-      {item.biddingClosed && (
+      {item.isSold && (
         <span className="flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
           {ts("sold")}
         </span>
       )}
-      {item.biddingPaused && !item.biddingClosed && (
-        <span className="flex items-center gap-1 rounded-full bg-blue-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
-          {ts("dealInProgress")}
-        </span>
-      )}
-      {ended && !item.biddingPaused && !item.biddingClosed && (
+      {ended && !item.isSold && (
         <span className="flex items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
           <AlertCircle className="size-3" />
           {ts("auctionEnded")}
         </span>
       )}
-      {!ended && endingSoon && !item.biddingPaused && !item.biddingClosed && (
+      {!ended && endingSoon && !item.isSold && (
         <span className="flex items-center gap-1 rounded-full bg-yellow-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-black backdrop-blur-sm">
           <Clock className="size-3" />
           {ts("endingSoon")}
         </span>
       )}
-      {hasBids && !ended && !item.biddingPaused && !item.biddingClosed && (
+      {hasBids && !ended && !item.isSold && (
         <span className="flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-white backdrop-blur-sm">
           <Gavel className="size-3" />
           {ts("bidsCount", { count: item.bidCount })}

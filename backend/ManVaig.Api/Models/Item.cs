@@ -29,7 +29,8 @@ public class Item
     public ItemVisibility Visibility { get; set; } = ItemVisibility.Public;
     public string? Location { get; set; }
     public bool CanShip { get; set; }
-    public bool AllowGuestOffers { get; set; }
+
+    public bool IsSold { get; set; }
 
     public int SortOrder { get; set; }
 

@@ -32,7 +32,7 @@ public class PublicStallsController : ControllerBase
 
         var query = _db.Stalls
             .Where(s => s.Visibility == StallVisibility.Public)
-            .Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public));
+            .Where(s => s.Items.Any(i => i.Visibility == ItemVisibility.Public && !i.IsSold));
 
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -48,7 +48,7 @@ public class PublicStallsController : ControllerBase
         var totalCount = await query.CountAsync();
 
         var stalls = await query
-            .OrderByDescending(s => s.Items.Count(i => i.Visibility == ItemVisibility.Public))
+            .OrderByDescending(s => s.Items.Count(i => i.Visibility == ItemVisibility.Public && !i.IsSold))
             .ThenByDescending(s => s.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -62,9 +62,9 @@ public class PublicStallsController : ControllerBase
                 HeaderImageUrl = s.HeaderImageUrl,
                 BackgroundImageUrl = s.BackgroundImageUrl,
                 AccentColor = s.AccentColor,
-                ItemCount = s.Items.Count(i => i.Visibility == ItemVisibility.Public),
+                ItemCount = s.Items.Count(i => i.Visibility == ItemVisibility.Public && !i.IsSold),
                 PreviewImageUrls = s.Items
-                    .Where(i => i.Visibility == ItemVisibility.Public)
+                    .Where(i => i.Visibility == ItemVisibility.Public && !i.IsSold)
                     .SelectMany(i => i.Images.Where(img => img.IsPrimary).Select(img => img.Url))
                     .Take(4)
                     .ToList(),

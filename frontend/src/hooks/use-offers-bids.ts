@@ -1,13 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  fetchPublicBids,
-  acceptBid,
-  completeBid,
-  failBid,
-  denyBid,
-} from "@/lib/items";
+import { fetchPublicBids } from "@/lib/items";
 import type { BidListResponse } from "@/lib/items";
 
 const INITIAL_LIMIT = 5;
@@ -40,12 +34,6 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     if (typeof window === "undefined") return true;
     return localStorage.getItem("manvaig_bid_sound") !== "off";
   });
-  const [confirmAction, setConfirmAction] = useState<{
-    type: "accept" | "complete" | "fail";
-    bidId: string;
-    bidAmount: number;
-    bidderName: string;
-  } | null>(null);
 
   // Reliability state
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
@@ -147,12 +135,10 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
       prevHighestRef.current = { amount: topBid.amount, id: topBid.id };
     }
 
-    // Reliability: mark success
     setLastUpdatedAt(Date.now());
     setConsecutiveFailures(0);
     consecutiveFailuresRef.current = 0;
     setConnectionLost(false);
-
     setData(newData);
   }, [playDing]);
 
@@ -164,7 +150,6 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
       .then((d) => handleNewData(d, isPolling))
       .catch(() => {
         if (isPolling) {
-          // Track consecutive failures
           const fails = consecutiveFailuresRef.current + 1;
           consecutiveFailuresRef.current = fails;
           setConsecutiveFailures(fails);
@@ -183,7 +168,7 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     loadBids(currentLimit);
   }, [currentLimit, loadBids]);
 
-  // --- Polling with retry: normal = 10s, after failure = 3s ---
+  // --- Polling with retry ---
   useEffect(() => {
     const getInterval = () =>
       consecutiveFailuresRef.current > 0 ? RETRY_INTERVAL_MS : POLL_INTERVAL_MS;
@@ -215,62 +200,7 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     };
   }, [currentLimit, loadBids]);
 
-  // --- Show all / show less ---
-  const hasMore = data != null && data.totalAllBids > data.bids.length;
-
-  // --- Seller actions ---
-  const handleAccept = async (bidId: string) => {
-    try {
-      await acceptBid(itemId, bidId);
-      setConfirmAction(null);
-      loadBids(currentLimit);
-    } catch (err) {
-      const code = err instanceof Error ? err.message : "bid_accept_failed";
-      setError(code);
-      setConfirmAction(null);
-    }
-  };
-
-  const handleComplete = async (bidId: string) => {
-    try {
-      await completeBid(itemId, bidId);
-      setConfirmAction(null);
-      loadBids(currentLimit);
-    } catch (err) {
-      const code = err instanceof Error ? err.message : "bid_complete_failed";
-      setError(code);
-      setConfirmAction(null);
-    }
-  };
-
-  const handleFail = async (bidId: string) => {
-    try {
-      await failBid(itemId, bidId);
-      setConfirmAction(null);
-      loadBids(currentLimit);
-    } catch (err) {
-      const code = err instanceof Error ? err.message : "bid_fail_failed";
-      setError(code);
-      setConfirmAction(null);
-    }
-  };
-
-  const handleDeny = async (bidId: string) => {
-    try {
-      await denyBid(itemId, bidId);
-      loadBids(currentLimit);
-    } catch (err) {
-      const code = err instanceof Error ? err.message : "bid_deny_failed";
-      setError(code);
-    }
-  };
-
-  const executeConfirm = () => {
-    if (!confirmAction) return;
-    if (confirmAction.type === "accept") handleAccept(confirmAction.bidId);
-    else if (confirmAction.type === "complete") handleComplete(confirmAction.bidId);
-    else if (confirmAction.type === "fail") handleFail(confirmAction.bidId);
-  };
+  const hasMore = data != null && data.totalBids > data.bids.length;
 
   return {
     data,
@@ -280,7 +210,6 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     topBidFlash,
     newBidIds,
     soundEnabled,
-    // Reliability
     lastUpdatedAt,
     consecutiveFailures,
     connectionLost,
@@ -292,7 +221,6 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
       fetchPublicBids(itemId, currentLimit)
         .then((d) => {
           handleNewData(d, false);
-          // Small delay so the fade-in animation is visible even on fast loads
           setTimeout(() => setManualRefreshing(false), 300);
         })
         .catch(() => {
@@ -311,15 +239,11 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
         return next;
       });
     },
-    confirmAction,
     inputFocusedRef,
     currentLimit,
     hasMore,
     setExpanded,
-    setConfirmAction,
     setError,
-    handleDeny,
-    executeConfirm,
     loadBids,
   };
 }

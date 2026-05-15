@@ -198,7 +198,6 @@ public class ItemsController : ControllerBase
             Visibility = request.Visibility,
             Location = request.Location,
             CanShip = request.CanShip,
-            AllowGuestOffers = request.AllowGuestOffers,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -268,7 +267,6 @@ public class ItemsController : ControllerBase
         if (request.Visibility.HasValue) item.Visibility = request.Visibility.Value;
         if (request.Location != null) item.Location = request.Location;
         if (request.CanShip.HasValue) item.CanShip = request.CanShip.Value;
-        if (request.AllowGuestOffers.HasValue) item.AllowGuestOffers = request.AllowGuestOffers.Value;
 
         if (request.CategoryId.HasValue)
         {
@@ -682,14 +680,8 @@ public class ItemsController : ControllerBase
         if (!item.AcceptOffers)
             return null;
 
-        // Items with an accepted bid are always locked (deal in progress)
-        var hasAccepted = await _db.Bids.AnyAsync(b => b.ItemId == item.Id && b.Status == BidStatus.Accepted);
-        if (hasAccepted)
-            return "OFFERS_LOCKED";
-
-        // Items with a completed bid are always locked (sold)
-        var hasCompleted = await _db.Bids.AnyAsync(b => b.ItemId == item.Id && b.Status == BidStatus.Completed);
-        if (hasCompleted)
+        // Sold items are always locked
+        if (item.IsSold)
             return "OFFERS_LOCKED";
 
         // Timed items with active bids: locked during auction and 48h grace period
@@ -735,14 +727,12 @@ public class ItemsController : ControllerBase
             Visibility = item.Visibility,
             Location = item.Location,
             CanShip = item.CanShip,
-            AllowGuestOffers = item.AllowGuestOffers,
+            IsSold = item.IsSold,
             SortOrder = item.SortOrder,
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt,
             BidCount = activeBids?.Count ?? 0,
             HighestBid = activeBids?.Count > 0 ? activeBids.Max(b => b.Amount) : null,
-            BiddingPaused = allBids?.Any(b => b.Status == BidStatus.Accepted) ?? false,
-            BiddingClosed = allBids?.Any(b => b.Status == BidStatus.Completed) ?? false,
             Images = item.Images?.Select(img => new ItemImageDto
             {
                 Id = img.Id,

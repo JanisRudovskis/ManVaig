@@ -176,6 +176,7 @@ public class ProfileController : ControllerBase
         var items = await _db.Items
             .Where(i => i.UserId == user.Id && i.Visibility == ItemVisibility.Public)
             .Where(i => i.Stall.Visibility == StallVisibility.Public)
+            .Where(i => !i.IsSold)
             .OrderByDescending(i => i.CreatedAt)
             .Take(limit)
             .Select(i => new PublicItemCardDto
@@ -213,9 +214,7 @@ public class ProfileController : ControllerBase
                 BidCount = i.Bids.Count(b => b.Status == BidStatus.Active),
                 HighestBid = i.Bids.Any(b => b.Status == BidStatus.Active)
                     ? i.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
-                    : (decimal?)null,
-                BiddingPaused = i.Bids.Any(b => b.Status == BidStatus.Accepted),
-                BiddingClosed = i.Bids.Any(b => b.Status == BidStatus.Completed)
+                    : (decimal?)null
             })
             .ToListAsync();
 
@@ -246,9 +245,10 @@ public class ProfileController : ControllerBase
         var activeListingCount = await _db.Items.CountAsync(i =>
             i.UserId == user.Id
             && i.Visibility == ItemVisibility.Public
-            && i.Stall.Visibility == StallVisibility.Public);
-        var completedDealCount = await _db.Bids.CountAsync(b =>
-            b.Status == BidStatus.Completed && b.Item.UserId == user.Id);
+            && i.Stall.Visibility == StallVisibility.Public
+            && !i.IsSold);
+        var completedDealCount = await _db.Items.CountAsync(i =>
+            i.UserId == user.Id && i.IsSold);
         var followerCount = await _db.UserFollows.CountAsync(f => f.FolloweeId == user.Id);
         var followingCount = await _db.UserFollows.CountAsync(f => f.FollowerId == user.Id);
 

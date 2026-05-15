@@ -30,14 +30,12 @@ export interface ItemResponse {
   visibility: number; // 0=Public, 1=RegisteredOnly, 2=LinkOnly, 3=Private
   location: string | null;
   canShip: boolean;
-  allowGuestOffers: boolean;
+  isSold: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
   bidCount: number;
   highestBid: number | null;
-  biddingPaused: boolean;
-  biddingClosed: boolean;
   images: ItemImage[];
   tags: string[];
 }
@@ -312,19 +310,17 @@ export interface PublicItemCard {
   endDate: string | null;
   location: string | null;
   canShip: boolean;
+  isSold: boolean;
   createdAt: string;
   images: ItemImage[];
   tags: string[];
   seller: PublicSellerSummary;
   bidCount: number;
   highestBid: number | null;
-  biddingPaused: boolean;
-  biddingClosed: boolean;
 }
 
 export interface PublicItemDetail extends PublicItemCard {
   description: string | null;
-  allowGuestOffers: boolean;
   isOwner: boolean;
   seller: PublicSellerDetail;
 }
@@ -340,25 +336,18 @@ export interface PublicItemListResponse {
 
 export interface BidResponse {
   id: string;
-  bidderName: string | null;
+  bidderName: string;
   bidderAvatarUrl: string | null;
-  bidderInitial: string | null;
-  isAnonymous: boolean;
-  bidderLabel: string;
-  bidderContact: string | null;
-  sellerContact: string | null;
+  bidderId: string;
   amount: number;
-  status: string; // Active, Accepted, Completed, Denied, Failed
   isOwnBid: boolean;
   createdAt: string;
-  acceptedAt: string | null;
 }
 
 export interface BidListResponse {
   bids: BidResponse[];
   totalBids: number;
-  totalAllBids: number;
-  highestActiveBid: number | null;
+  highestBid: number | null;
   minNextBid: number | null;
   acceptOffers: boolean;
   price: number | null;
@@ -366,10 +355,7 @@ export interface BidListResponse {
   offerStep: number | null;
   endDate: string | null;
   isOwner: boolean;
-  biddingPaused: boolean;
-  biddingClosed: boolean;
-  failedDealCount: number;
-  uniqueBidders: number;
+  isSold: boolean;
 }
 
 export async function fetchPublicBids(itemId: string, limit = 5): Promise<BidListResponse> {
@@ -383,59 +369,18 @@ export async function fetchPublicBids(itemId: string, limit = 5): Promise<BidLis
 
 export async function placeBid(
   itemId: string,
-  amount: number,
-  isAnonymous: boolean
+  amount: number
 ): Promise<{ id: string; amount: number; antiSnipe: boolean; updated: boolean }> {
   const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount, isAnonymous }),
+    body: JSON.stringify({ amount }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "bid_place_failed");
   }
   return res.json();
-}
-
-export async function acceptBid(itemId: string, bidId: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/accept`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "bid_accept_failed");
-  }
-}
-
-export async function completeBid(itemId: string, bidId: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/complete`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "bid_complete_failed");
-  }
-}
-
-export async function failBid(itemId: string, bidId: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/fail`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "bid_fail_failed");
-  }
-}
-
-export async function denyBid(itemId: string, bidId: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bids/${bidId}/deny`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "bid_deny_failed");
-  }
 }
 
 // === Public Browse API (no auth required) ===

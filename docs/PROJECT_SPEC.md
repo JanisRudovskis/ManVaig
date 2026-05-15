@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-05-09 (rev 15 — stall + item visibility redesign: 4-state StallVisibility cascade through public endpoints, stall-level defaults for new items, StallFormDialog popup, shared VisibilityRadioCards used by both stall and item, Appearance panel; also: /people directory in sidebar More menu)
-> **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done
+> **Last updated:** 2026-05-15 (rev 16 — Notification System: 4 event types, AppHub consolidation, background services, bell icon + dropdown + full page)
+> **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done, Phase 6 notifications in-app done
 
 ---
 
@@ -76,14 +76,12 @@
 - 💡 Advanced filters (price range, condition, location)
 
 ### Bidding / Offer System
-- ✅ Public bid list — anyone can see bid history (GET /api/v1/items/{id}/bids, no auth)
-- ✅ Place bid (auth required) — amount > highest active, respects minOfferPrice + offerStep
-- ✅ Anonymous bidding — toggle per bid, hides bidder identity in public view
-- ✅ Update-in-place — max 1 anon + 1 non-anon active bid per user per item
-- ✅ Seller accept/deny workflow — accept pauses bidding, deny strikes through bid
-- ✅ Two-phase acceptance — Accepted → Completed (sold) or Failed (deal fell through, reopens bidding)
-- ✅ Contact info reveal — bidder email ↔ seller email shown after acceptance
+- ✅ Public bid list — anyone can see bids (GET /api/v1/items/{id}/bids, no auth). All bidders identified (registered users only).
+- ✅ Place bid (auth required) — amount > highest active, respects minOfferPrice + offerStep. Update-in-place (1 active bid per user).
 - ✅ Anti-snipe — bids in last 10 min extend EndDate by 10 min
+- ✅ Timed auctions auto-complete — AuctionEndedService sets IsSold + notifies winner
+- ✅ IsSold on Item — auto for timed auctions with bids, seller deletes for non-timed
+- ✅ Sold items hidden from public feeds (browse, search, homepage, profile listings)
 - ✅ Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + place bid form
 - ✅ Full offers page — /items/{id}/offers route, openable in new tab
 - ✅ Real-time polling (10s, 3s retry on failure) + tab focus refresh
@@ -92,12 +90,11 @@
 - ✅ Two-tap confirm on bid submission (prevents accidental bids)
 - ✅ Image gallery — click thumbnail to browse item photos during auction
 - ✅ Reliability indicators — stale data warning, connection lost detection
+- ✅ "Message" button on bid rows — seller can message any bidder via existing messaging system. Timed items: only after auction ends. Non-timed: always visible.
+- ~~Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers, contact info reveal. Simplified: bids are price signals, communication via messaging.~~
 - 💡 Auto-bidding (proxy bids) — premium users set max limit, system bids for them
 - 💡 Auction audit log — track all bid events for dispute resolution
-- 💡 Bid cancellation — 2-minute grace period after placement
 - 💡 Buyer bid tracking dashboard ("My Bids" page)
-- 💡 Built-in messaging system (v2)
-- 💡 Contact blacklist — block specific values per shop
 
 ### Discovery
 - ✅ Homepage with latest items
@@ -110,10 +107,16 @@
 - 💡 Trending items algorithm
 
 ### Notifications
-- 🕐 In-app real-time notifications (SignalR)
-- 🕐 Email on new offer received
+- ✅ In-app real-time notifications (SignalR via AppHub) — 4 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed
+- ✅ Bell icon + dropdown in TopBar (mark-all-read on open, item thumbnails, relative time)
+- ✅ Full notifications page (/notifications) with load-more pagination
+- ✅ Follower notification throttling (1hr dedup window — same actor → increment GroupCount)
+- ✅ AuctionEndedService (BackgroundService, 60s polling, SemaphoreSlim guard)
+- ✅ NotificationCleanupService (90-day retention, 24h cycle, batch delete)
+- ✅ Merged use-realtime.ts hook — single SignalR connection for messages + notifications
+- 🕐 Email on new offer received (Resend)
 - 💡 Email digest
-- 💡 Push notifications
+- 💡 Push notifications (browser / mobile)
 
 ### UI Foundation
 - ✅ Collapsible sidebar (Claude-style, shadcn/ui)
@@ -234,7 +237,7 @@ Item
   - Visibility (enum: Public / RegisteredOnly / LinkOnly / Private, default: Public)
   - Location (string, nullable)              ← Nominatim autocomplete, stores "City, Country"
   - CanShip (bool, default false)            ← local pickup vs shipping
-  - AllowGuestOffers (bool, default false)   ← unregistered users can submit offers
+  - IsSold (bool, default false)             ← auto-set by AuctionEndedService for timed items
   - SortOrder (int, default 0)              ← custom ordering within stall
   - CreatedAt
   - UpdatedAt
@@ -260,24 +263,29 @@ Bid
   - ItemId → Item
   - UserId → User
   - Amount (decimal)
-  - IsAnonymous (bool, default false)        ← hides bidder identity in public view
-  - Status (enum: Active=0 / Accepted=1 / Completed=2 / Denied=3 / Failed=4 / Expired=5)
-  - AcceptedAt (DateTime, nullable)          ← when seller accepted this bid
+  - Status (enum: Active=0)                  ← simplified, only Active state
   - CreatedAt
-  RULE: max 1 anonymous + 1 non-anonymous active bid per user per item (update-in-place)
-  NOTE: Active → Accepted (seller accepts) → Completed (deal done) or Failed (deal fell through)
-  NOTE: Accepted bid pauses bidding (no new bids). Failed bid reopens bidding.
-  NOTE: Contact info revealed to both parties after acceptance (bidder email ↔ seller email)
+  RULE: 1 active bid per user per item (update-in-place — new bid replaces old)
+  NOTE: All bidders are registered users (no anonymous bidding, no guest offers)
+  NOTE: Timed auctions: highest bid wins when EndDate passes (AuctionEndedService auto-sells)
+  NOTE: Non-timed items: bids are price signals, seller contacts bidders via messaging, deletes item when done
   NOTE: Anti-snipe: bids in last 10 min of timed auction extend EndDate by 10 min
+  NOTE: No contact info reveal — seller uses in-app messaging to reach bidders
 
 Notification
   - Id (uuid)
-  - UserId → User
-  - Type (enum: NewOffer / OfferAccepted / OfferDeclined / OfferCountered / CounterReceived)
-  - ReferenceId (uuid, nullable)
-  - Message (string)
-  - IsRead (bool)
+  - UserId → User                        ← notification recipient (Cascade delete)
+  - Type (enum: NewBid=0 / AuctionEnded=1 / BidAccepted=2 / NewItemFromFollowed=3)
+  - ActorId → User (nullable)            ← who triggered it (SetNull — preserved if actor deleted)
+  - ItemId → Item (nullable)             ← related item (SetNull — preserved if item deleted)
+  - BidId → Bid (nullable)               ← related bid (SetNull — preserved if bid deleted)
+  - IsRead (bool, default false)
+  - GroupCount (int, default 1)           ← for throttled notifications (e.g. "X posted 3 new items")
   - CreatedAt
+  INDEX: (UserId, IsRead, CreatedAt) — paginated listing
+  INDEX: (UserId, Type, ActorId, IsRead) — throttle dedup check
+  NOTE: 90-day retention via NotificationCleanupService (BackgroundService, 24h cycle)
+  NOTE: SetNull FKs preserve notification history when related entities are deleted
 ```
 
 ---
@@ -334,6 +342,14 @@ Notification
 | 46 | Countdown delete confirmation | 3s countdown for normal items, 5s for items with active offers. Prevents accidental deletion without friction for intentional deletes. | 2026-05-07 |
 | 47 | 3-layer in-form help system | Inline hints (always visible), HelpPopover (?) for complex fields with examples, dismissible TipsBanner per tab. Cookie-persisted dismissal, re-enable toggle in sidebar. | 2026-05-07 |
 | 48 | Tips dismissal in cookie (not localStorage) | SSR-aware, consistent with theme/language storage pattern. Permanent dismiss with re-enable toggle — no per-session dismiss to avoid "cookie banner" annoyance. | 2026-05-07 |
+| 49 | Single AppHub for messages + notifications | Renamed ChatHub → AppHub. Single SignalR connection per client reduces overhead. Both UnreadCountChanged and NotificationCountChanged events on same hub. | 2026-05-15 |
+| 50 | SetNull FKs on Notification (Actor, Item, Bid) | Notifications survive deletion of referenced entities. User sees "deleted item" gracefully instead of losing notification history. UserId FK is Cascade (delete user → delete their notifications). | 2026-05-15 |
+| 51 | 90-day notification retention + daily cleanup | Prevents unbounded table growth. BackgroundService with EF Core batch delete (1000/batch). Acceptable for marketplace scale. | 2026-05-15 |
+| 52 | Follower notification throttling (1hr dedup) | Same seller posting multiple items quickly → single "X posted N items" notification instead of spam. Check: unread + same actor + same type + within 1 hour → increment GroupCount. | 2026-05-15 |
+| 53 | ~~Accept/deny/complete/fail~~ → Simplified bid system | Removed 6-state workflow. Bids are price signals. Timed auctions auto-sell (highest wins). Non-timed: seller messages bidders, deletes item when done. Platform doesn't handle payments → no need for deal management. | 2026-05-15 |
+| 54 | ~~Anonymous bidding + guest offers~~ → All bidders registered | Removed IsAnonymous toggle and AllowGuestOffers. Every bidder has an account and is identified. Simplifies messaging (seller can always reach bidder via platform). | 2026-05-15 |
+| 55 | No contact info reveal | Seller contacts bidders via in-app messaging, never sees their email/phone. Privacy by default. | 2026-05-15 |
+| 56 | IsSold auto-set by AuctionEndedService | Timed items: IsSold=true when EndDate passes + has bids. Non-timed: seller deletes (no IsSold). Sold items filtered from all public feeds. | 2026-05-15 |
 
 ---
 

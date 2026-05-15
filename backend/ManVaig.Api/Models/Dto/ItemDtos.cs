@@ -33,7 +33,6 @@ public class CreateItemRequest
     public string? Location { get; set; }
 
     public bool CanShip { get; set; }
-    public bool AllowGuestOffers { get; set; }
 
     public List<string>? Tags { get; set; }
 }
@@ -63,7 +62,6 @@ public class UpdateItemRequest
     public string? Location { get; set; }
 
     public bool? CanShip { get; set; }
-    public bool? AllowGuestOffers { get; set; }
 
     public List<string>? Tags { get; set; }
 
@@ -102,7 +100,7 @@ public class ItemResponse
     public ItemVisibility Visibility { get; set; }
     public string? Location { get; set; }
     public bool CanShip { get; set; }
-    public bool AllowGuestOffers { get; set; }
+    public bool IsSold { get; set; }
     public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -111,10 +109,6 @@ public class ItemResponse
     public int BidCount { get; set; }
     /// <summary>Highest active bid amount, null if no bids.</summary>
     public decimal? HighestBid { get; set; }
-    /// <summary>True when a bid has been accepted (deal in progress).</summary>
-    public bool BiddingPaused { get; set; }
-    /// <summary>True when a bid has been completed (item sold).</summary>
-    public bool BiddingClosed { get; set; }
 
     public List<ItemImageDto> Images { get; set; } = new();
     public List<string> Tags { get; set; } = new();

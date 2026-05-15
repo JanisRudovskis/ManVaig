@@ -277,6 +277,8 @@
   <div class="header-left">
     <h1>Man<span>Vaig</span> Roadmap</h1>
     <p>// click any task to toggle status · last updated 2026-05-15</p>
+    <!-- Session: 2026-05-15c — Bid system simplification + transaction workflow: Removed accept/deny/complete/fail workflow, anonymous bidding (IsAnonymous), guest offers (AllowGuestOffers). Simplified BidStatus to Active-only. Added IsSold on Item (auto-set by AuctionEndedService for timed auctions with bids). Sold items filtered from all public feeds. SOLD badge on seller item cards. AuctionEndedService now also notifies winner (BidAccepted notification). "Message" button on bid rows — seller can message bidders via platform messaging (timed: after auction ends, non-timed: always). Wired to startConversation + router.push. offers-popup.tsx rewritten from ~1100 to ~400 lines. 3 migrations: AddItemSoldAndBidSnapshot, BumpFailReasonMaxLength, SimplifyBidSystem. -->
+    <!-- Session: 2026-05-15b — Notification System (Ralph loop #4): Notification model + migration (UserId, Type, ActorId?, ItemId?, BidId?, IsRead, GroupCount, CreatedAt; SetNull FKs for Actor/Item/Bid). NotificationType enum (NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed). NotificationService (scoped, 4 methods, follower throttling: 1hr dedup window for NewItemFromFollowed). AuctionEndedService (BackgroundService, 60s polling with SemaphoreSlim re-entrancy guard, NOT EXISTS dedup). NotificationCleanupService (BackgroundService, 24h cycle, 90-day retention, EF Core batch delete). NotificationsController (3 endpoints: GET paginated with item thumbnails, POST read-all, GET unread-count). Hub rename: ChatHub → AppHub, /hubs/chat → /hubs/app. Merged use-realtime.ts hook (replaces use-unread-count.ts, single SignalR connection for messages + notifications). NotificationDropdown (bell icon + badge + Popover with lazy fetch + mark-all-read). Notifications page (/notifications with load-more pagination, error/retry, login-required states). TopBar updated with bell icon. 15 i18n keys EN+LV. 27 files changed, 2,604 insertions. -->
     <!-- Session: 2026-03-18 — sidebar polish, i18n, theme toggle, language switcher -->
     <!-- Session: 2026-03-20 — email confirmation flow (Resend), password validation improvements -->
     <!-- Session: 2026-03-20 — user profile page (ID card design, inline edit, badge system, Cloudinary avatar, communication channels, public/private profiles) -->
@@ -672,27 +674,12 @@
   <div class="tasks" id="ph5">
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Bid model + BidStatus enum (Active/Accepted/Completed/Denied/Failed/Expired) + EF migration</div>
+      <div class="task-text">Bid model (simplified: Id, ItemId, UserId, Amount, Status=Active, CreatedAt) + BidsController (GET list, POST place bid)</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">BidsController rewrite — public GET, place bid, accept/complete/fail/deny endpoints</div>
-      <div class="task-badge badge-done">done</div>
-    </div>
-    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Anonymous bidding — toggle per bid, update-in-place (max 1 anon + 1 non-anon per user)</div>
-      <div class="task-badge badge-done">done</div>
-    </div>
-    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Accept/deny workflow — two-phase acceptance (Accepted → Completed or Failed)</div>
-      <div class="task-badge badge-done">done</div>
-    </div>
-    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Contact info reveal after acceptance (bidder email ↔ seller email)</div>
+      <div class="task-text">Update-in-place bidding — 1 active bid per user per item, amount > highest, offerStep/minOfferPrice validation</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
@@ -702,7 +689,17 @@
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + seller actions + place bid form</div>
+      <div class="task-text">IsSold + timed auction auto-complete — AuctionEndedService sets IsSold=true, notifies winner + seller</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Sold items filtered from public feeds (browse, search, homepage, profile listings) + SOLD badge on seller cards</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + place bid form</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
@@ -712,37 +709,17 @@
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Real-time UX — polling (10s/3s retry), Web Audio API sound, slide-in animations, reliability indicators</div>
+      <div class="task-text">Real-time UX — polling (10s/3s retry), Web Audio API sound, reliability indicators, two-tap bid confirm</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="done" data-phase="5" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Two-tap bid confirm, custom +/- step buttons, reverse numbering, body scroll lock</div>
+      <div class="task-text">"Message" button on bid rows — seller can message bidders via platform messaging (timed: after auction ends, non-timed: always)</div>
       <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
-      <div class="task-text">Buyer offer status tracking dashboard</div>
-      <div class="task-badge badge-future">future</div>
-    </div>
-    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
-      <div class="task-check"></div>
-      <div class="task-text">Offer expiry — auto-decline after X days</div>
-      <div class="task-badge badge-future">future</div>
-    </div>
-    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
-      <div class="task-check"></div>
-      <div class="task-text">Built-in messaging system (replaces external contact in v2)</div>
-      <div class="task-badge badge-future">future</div>
-    </div>
-    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
-      <div class="task-check"></div>
-      <div class="task-text">Contact blacklist — block phone / email / messenger values per shop</div>
-      <div class="task-badge badge-future">future</div>
-    </div>
-    <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
-      <div class="task-check"></div>
-      <div class="task-text">Fake offer / abuse detection + rate limiting</div>
+      <div class="task-text">Buyer bid tracking dashboard ("My Bids" page)</div>
       <div class="task-badge badge-future">future</div>
     </div>
     <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
@@ -752,7 +729,7 @@
     </div>
     <div class="task" data-status="future" data-phase="5" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
-      <div class="task-text">Auction audit log — track all bid events, seller actions, timestamps for dispute resolution</div>
+      <div class="task-text">Auction audit log — track all bid events for dispute resolution</div>
       <div class="task-badge badge-future">future</div>
     </div>
   </div>
@@ -766,34 +743,64 @@
     <span class="phase-count" id="ph6-count"></span>
   </div>
   <div class="tasks" id="ph6">
-    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Notification model + migration</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Notification model + migration (UserId, Type enum, ActorId?, ItemId?, BidId?, IsRead, GroupCount; SetNull FKs for historical preservation)</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">SignalR hub setup in ASP.NET Core</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">Hub consolidation — ChatHub renamed to AppHub (/hubs/app), single SignalR connection for messages + notifications</div>
+      <div class="task-badge badge-done">done</div>
     </div>
-    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
-      <div class="task-text">Real-time offer alert (push to shop owner)</div>
-      <div class="task-badge badge-planned">planned</div>
+      <div class="task-text">NotificationService — 4 events: NewBid (seller), AuctionEnded (seller), BidAccepted (bidder), NewItemFromFollowed (followers with 1hr throttle)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">AuctionEndedService — BackgroundService polling every 60s with SemaphoreSlim guard + NOT EXISTS dedup</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">NotificationCleanupService — BackgroundService, 24h cycle, 90-day retention, EF Core batch delete</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">NotificationsController — GET paginated (item thumbnails + actor info), POST read-all, GET unread-count</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Notification bell + dropdown (TopBar, lazy fetch on open, mark-all-read, item thumbnails, relative time)</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Notifications page (/notifications) — load-more pagination, error/retry, login-required, skeleton loading</div>
+      <div class="task-badge badge-done">done</div>
+    </div>
+    <div class="task" data-status="done" data-phase="6" data-mvp="1" onclick="cycle(this)">
+      <div class="task-check">✓</div>
+      <div class="task-text">Merged use-realtime.ts hook — single SignalR connection for UnreadCountChanged + NotificationCountChanged, polling fallback</div>
+      <div class="task-badge badge-done">done</div>
     </div>
     <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
       <div class="task-check">✓</div>
       <div class="task-text">Email on new offer received (Resend)</div>
       <div class="task-badge badge-planned">planned</div>
     </div>
-    <div class="task" data-status="planned" data-phase="6" data-mvp="1" onclick="cycle(this)">
-      <div class="task-check">✓</div>
-      <div class="task-text">Notification bell UI (Next.js, mark as read)</div>
-      <div class="task-badge badge-planned">planned</div>
-    </div>
     <div class="task" data-status="future" data-phase="6" data-mvp="0" onclick="cycle(this)">
       <div class="task-check"></div>
       <div class="task-text">Daily email digest</div>
+      <div class="task-badge badge-future">future</div>
+    </div>
+    <div class="task" data-status="future" data-phase="6" data-mvp="0" onclick="cycle(this)">
+      <div class="task-check"></div>
+      <div class="task-text">Push notifications (browser / mobile)</div>
       <div class="task-badge badge-future">future</div>
     </div>
   </div>

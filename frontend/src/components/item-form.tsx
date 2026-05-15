@@ -159,9 +159,6 @@ export function ItemForm({
   const [canShip, setCanShip] = useState(
     item?.canShip ?? (defaultsActive ? stallDefaults?.canShip ?? false : false)
   );
-  const [allowGuestOffers, setAllowGuestOffers] = useState(
-    item?.allowGuestOffers ?? false
-  );
   const [tags, setTags] = useState<string[]>(
     item?.tags ?? (defaultsActive ? stallDefaults?.tags ?? [] : [])
   );
@@ -414,7 +411,7 @@ export function ItemForm({
           visibility,
           location: location || undefined,
           canShip,
-          allowGuestOffers,
+
           tags: tags.length > 0 ? tags : undefined,
         };
         const created = await createItem(data);
@@ -444,7 +441,7 @@ export function ItemForm({
           visibility,
           location: location || "",
           canShip,
-          allowGuestOffers,
+
           tags,
           clearPricingFields: true,
         };
@@ -1102,19 +1099,6 @@ export function ItemForm({
           <p className="mt-2 text-xs text-muted-foreground">
             {t("visibilityHint")}
           </p>
-        </div>
-
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex-1">
-            <p className="text-sm font-medium">{t("guestOffers")}</p>
-            <p className="text-xs text-muted-foreground">
-              {t("guestOffersHint")}
-            </p>
-          </div>
-          <Switch
-            checked={allowGuestOffers}
-            onCheckedChange={setAllowGuestOffers}
-          />
         </div>
 
         <div className="flex items-center gap-3">

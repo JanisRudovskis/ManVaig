@@ -37,6 +37,7 @@ public class PublicItemCardDto
 
     public string? Location { get; set; }
     public bool CanShip { get; set; }
+    public bool IsSold { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public List<ItemImageDto> Images { get; set; } = new();
@@ -48,8 +49,6 @@ public class PublicItemCardDto
     // Offer summary
     public int BidCount { get; set; }
     public decimal? HighestBid { get; set; }
-    public bool BiddingPaused { get; set; }
-    public bool BiddingClosed { get; set; }
 }
 
 // === Item detail DTO (for detail page) ===
@@ -57,7 +56,6 @@ public class PublicItemCardDto
 public class PublicItemDetailDto : PublicItemCardDto
 {
     public string? Description { get; set; }
-    public bool AllowGuestOffers { get; set; }
 
     /// <summary>True if the currently authenticated user owns this item.</summary>
     public bool IsOwner { get; set; }

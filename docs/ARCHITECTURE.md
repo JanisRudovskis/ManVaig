@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-15 (Follow Users + My Page, Messaging System with SignalR real-time, TopBar with unread badge, sidebar footer links to My Page, design docs for reviews+trust system)
+> Last updated: 2026-05-15 (Bid system simplification: removed accept/deny/complete/fail workflow, anonymous bidding, guest offers. Timed auctions auto-sell on end. Message button for seller after bidding ends.)
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### Entry Point: `Program.cs`
 
-DI registration order: EF Core → Identity → JWT → CORS → Resend → Cloudinary/ImageService → Controllers
+DI registration order: EF Core → Identity → JWT → CORS → Resend → Cloudinary/ImageService → NotificationService → BackgroundServices → Controllers
 
 Middleware pipeline includes `LastSeenMiddleware` — updates `LastSeenAt` on authenticated requests (throttled to once per 5 minutes to avoid DB writes on every request).
 
@@ -160,24 +160,23 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 
 ### Bidding System
 
-**Model: `Models/Bid.cs`** — ItemId, UserId, Amount, IsAnonymous, Status (BidStatus enum), AcceptedAt, CreatedAt.
-
-**BidStatus Enum**: Active(0), Accepted(1), Completed(2), Denied(3), Failed(4), Expired(5).
+**Model: `Models/Bid.cs`** — ItemId, UserId, Amount, Status (BidStatus.Active only), CreatedAt. All bidders are registered users (no anonymous bidding, no guest offers).
 
 **Controller: `Controllers/V1/BidsController.cs`**:
 
 | Endpoint | Auth | What it does |
 |----------|------|-------------|
-| `GET /api/v1/items/{itemId}/bids` | Public | Public bid list with viewer-aware response (isOwnBid, contact reveal after acceptance). Supports `?limit=` param. |
-| `POST /api/v1/items/{itemId}/bids` | Bearer | Place bid. Update-in-place (max 1 anon + 1 non-anon per user). Validates amount > highest active, respects offerStep/minOfferPrice. Anti-snipe extends EndDate by 10 min. |
-| `POST .../bids/{bidId}/accept` | Bearer (owner) | Set bid to Accepted, pause bidding. Only one accepted bid at a time. Reveals contact info. |
-| `POST .../bids/{bidId}/complete` | Bearer (owner) | Set bid to Completed (from Accepted only). Item effectively sold. |
-| `POST .../bids/{bidId}/fail` | Bearer (owner) | Set bid to Failed (from Accepted only). Reopens bidding. |
-| `POST .../bids/{bidId}/deny` | Bearer (owner) | Set bid to Denied (Active bids only). Bid shown struck-through. |
+| `GET /api/v1/items/{itemId}/bids` | Public | Bid list ordered by amount desc. Shows bidder name, avatar, amount, time. `?limit=` param. |
+| `POST /api/v1/items/{itemId}/bids` | Bearer | Place bid. Update-in-place (1 active bid per user). Validates amount > highest, respects offerStep/minOfferPrice. Anti-snipe extends EndDate by 10 min. Rejects if IsSold or ended. |
 
-**Bid lifecycle**: Active → Accepted (pauses bidding) → Completed (sold) or Failed (reopens). Denied is independent (Active → Denied).
+**Removed endpoints** (simplified in 2026-05-15 redesign): accept, complete, fail, deny. No seller actions on bids — timed auctions auto-complete, non-timed items use messaging.
 
-**Offer lock**: Items with Accepted or Completed bids are locked (cannot edit). Non-timed offer items are NOT locked until acceptance.
+**Item sold lifecycle**:
+- **Timed items**: `AuctionEndedService` detects EndDate passed → sets `IsSold=true` → notifies seller + winner (highest bidder)
+- **Non-timed items**: seller deletes item when done (no formal "sold" state)
+- **Offer lock**: sold items (`IsSold`) are locked (cannot edit). Timed items with active bids locked during auction + 48h grace.
+
+**Seller ↔ bidder communication**: After bidding ends, seller sees "Message" button on each bid row → creates conversation via existing messaging system → navigates to `/messages/{id}`. For non-timed items, message buttons always visible.
 
 ### Follow System
 
@@ -198,7 +197,7 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 
 **Models:** `Conversation` (Id, User1Id, User2Id, CreatedAt, LastMessageAt) + `Message` (Id, ConversationId, SenderId, Text max 2000, IsRead, CreatedAt). One conversation per user pair — deduplication via normalized Guid order (smaller Guid = User1Id) + unique constraint on `(User1Id, User2Id)`.
 
-**SignalR Hub: `Hubs/ChatHub.cs`** — JWT auth via query string (`OnMessageReceived` event extracts `access_token` from `/hubs/chat` requests). On connect: auto-joins `user_{userId}` group. Methods: `JoinConversation(id)` (DB-validated participant check), `LeaveConversation(id)`. Server events: `ReceiveMessage`, `MessagesRead`, `UnreadCountChanged`.
+**SignalR Hub: `Hubs/AppHub.cs`** (renamed from ChatHub) — JWT auth via query string (`OnMessageReceived` event extracts `access_token` from `/hubs/app` requests). On connect: auto-joins `user_{userId}` group. Methods: `JoinConversation(id)` (DB-validated participant check), `LeaveConversation(id)`. Server events: `ReceiveMessage`, `MessagesRead`, `UnreadCountChanged`, `NotificationCountChanged`.
 
 **Controller: `Controllers/V1/ConversationsController.cs`**:
 
@@ -211,9 +210,37 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 | `POST /api/v1/conversations/{id}/read` | Bearer | Mark all messages as read (where sender != current user). Broadcasts MessagesRead event. |
 | `GET /api/v1/conversations/unread-count` | Bearer | Total unread count for top bar badge. |
 
-**Program.cs changes:** `builder.Services.AddSignalR()`, `.AllowCredentials()` on CORS, `app.MapHub<ChatHub>("/hubs/chat")`.
+**Program.cs changes:** `builder.Services.AddSignalR()`, `.AllowCredentials()` on CORS, `app.MapHub<AppHub>("/hubs/app")`. DI: `INotificationService → NotificationService` (scoped), `AuctionEndedService` + `NotificationCleanupService` (hosted).
 
 **Rate limiting:** In-memory `ConcurrentDictionary<Guid, List<DateTime>>` with sliding window (60s). Periodic cleanup removes empty entries. Returns 429 with `retryAfter`.
+
+### Notification System
+
+**Model: `Models/Notification.cs`** — UserId, Type (NotificationType enum), ActorId? (nullable FK → User, SetNull), ItemId? (nullable FK → Item, SetNull), BidId? (nullable FK → Bid, SetNull), IsRead, GroupCount, CreatedAt. SetNull FKs preserve notifications even when actor/item/bid is deleted.
+
+**NotificationType Enum** (`Models/Enums/NotificationType.cs`): NewBid(0), AuctionEnded(1), BidAccepted(2), NewItemFromFollowed(3).
+
+**Service: `Services/NotificationService.cs`** — Scoped service implementing `INotificationService`. 4 methods:
+- `NotifyNewBid(sellerId, bidderId, itemId, bidId)` — called from BidsController.PlaceBid
+- `NotifyAuctionEnded(sellerId, itemId)` — called from AuctionEndedService
+- `NotifyBidAccepted(bidderId, itemId, bidId)` — called from BidsController.AcceptBid
+- `NotifyNewItemFromFollowed(sellerId, itemId)` — queries UserFollows for followers, **throttle check**: unread + same actor + within 1 hour → increment GroupCount instead of creating new notification. Broadcasts `NotificationCountChanged` via SignalR per follower.
+
+**BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Creates notification + broadcasts. Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
+
+**BackgroundService: `Services/NotificationCleanupService.cs`** — Runs every 24h. Deletes notifications older than 90 days using EF Core LINQ (RemoveRange + SaveChanges in batches of 1000).
+
+**Controller: `Controllers/V1/NotificationsController.cs`** — All `[Authorize]`:
+
+| Endpoint | What it does |
+|----------|-------------|
+| `GET /api/v1/notifications?page=&pageSize=` | Paginated notifications (newest first). Joins Actor (displayName, avatar), Item (title, primary image URL), Bid (amount). |
+| `POST /api/v1/notifications/read-all` | Mark all unread as read. Broadcasts `NotificationCountChanged(0)` via SignalR. |
+| `GET /api/v1/notifications/unread-count` | Count of unread notifications for bell badge. |
+
+**SignalR Hub: `Hubs/AppHub.cs`** (renamed from ChatHub) — Single hub at `/hubs/app` serving both messaging and notifications. JWT auth via query string. On connect: auto-joins `user_{userId}` group. Server events: `ReceiveMessage`, `MessagesRead`, `UnreadCountChanged` (messages), `NotificationCountChanged` (notifications).
+
+**DB Indexes** (on Notifications table): `(UserId, IsRead, CreatedAt)` for paginated listing, `(UserId, Type, ActorId, IsRead)` for throttle dedup check.
 
 ### Image Service: `Services/CloudinaryImageService.cs`
 
@@ -264,7 +291,7 @@ html (lang={locale} from cookie)
 - Request: `src/i18n/request.ts` — reads `NEXT_LOCALE` cookie, imports `messages/{locale}.json`
 - Switching: `LanguageSwitcher` sets cookie + `router.refresh()` (full page re-render, no URL prefix)
 - Translation files: `messages/en.json`, `messages/lv.json`
-- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `search`, `common`, `help`, `tips`, `offers`, `people`, `follow`, `myPage`, `messages`, `visibility`
+- Namespaces: `nav`, `home`, `language`, `theme`, `login`, `register`, `emailConfirmation`, `emailManagement`, `passwordChecklist`, `usernameChecklist`, `forgotPassword`, `resetPassword`, `profile`, `items`, `itemForm`, `stalls`, `feed`, `itemDetail`, `search`, `common`, `help`, `tips`, `offers`, `people`, `follow`, `myPage`, `messages`, `notifications`, `visibility`
 - Plural-aware messages use ICU `{count, plural, one {…} other {…}}` (see `search.liveCountItems`, `search.liveCountStalls`)
 - Rich text pattern: `t.rich("key", { tag: (chunks) => <Link>{chunks}</Link> })`
 
@@ -340,13 +367,15 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | `/my-page` | `app/my-page/page.tsx` | Personal dashboard — profile summary, quick links (Edit Profile, My Stalls, My Items), followers/following tabs. Auth required. |
 | `/messages` | `app/messages/page.tsx` | Inbox — conversation list sorted by last message time, unread indicators, skeleton loading, empty state. Auth required. |
 | `/messages/[id]` | `app/messages/[id]/page.tsx` | Chat view — real-time via SignalR, message bubbles (own=blue right, theirs=muted left), read receipts (✓/✓✓), auto-scroll, mark-as-read, inline send errors. |
+| `/notifications` | `app/notifications/page.tsx` | Full notification list — load-more pagination (20/page), item thumbnails (40px), relative time, error/retry state, login-required state, skeleton loading. Auth required. |
 
 ### Component Map
 
 | Component | File | Purpose |
 |-----------|------|---------|
 | AppLayout | `components/app-layout.tsx` | SidebarProvider + SidebarInset wrapper + TopBar |
-| TopBar | `components/top-bar.tsx` | Sticky header — mobile sidebar trigger + messages icon with unread badge. Replaces previous mobile-only header. |
+| TopBar | `components/top-bar.tsx` | Sticky header — mobile sidebar trigger + messages icon + notification bell with unread badges. |
+| NotificationDropdown | `components/notification-dropdown.tsx` | Bell icon with red badge, Popover dropdown (base-ui). Lazy fetch on open, mark-all-read after API success, item thumbnails (32px) with UserAvatar fallback, relative time, "See all" link to /notifications. |
 | FollowButton | `components/follow-button.tsx` | Follow/unfollow toggle with optimistic UI, tap-to-toggle on mobile |
 | ConversationListItem | `components/conversation-list-item.tsx` | Inbox row — avatar, name, last message preview, time, unread badge |
 | MessageBubble | `components/message-bubble.tsx` | Chat bubble — own (blue, right) vs theirs (muted, left), timestamps, read receipts (✓/✓✓), link detection |
@@ -379,6 +408,7 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
 | OffersPopup | `components/offers-popup.tsx` | Public bid list popup — bottom sheet (mobile) / centered modal (desktop). Exports shared sub-components: StatusBanner, BidRow, BidListBody, PlaceBidForm, ConfirmDialog, BidsSummaryBar, FreshnessIndicator, ImageGallery, LiveCountdown. |
 | OffersPage | `app/items/[id]/offers/page.tsx` | Full-page offers view, openable in new tab. Tab title blink on background bids. Reuses shared components from offers-popup. |
+| useRealtime | `hooks/use-realtime.ts` | Merged SignalR hook — single connection to `/hubs/app`, listens for `UnreadCountChanged` + `NotificationCountChanged`. Returns `{ messageCount, notificationCount, setNotificationCount, refetch }`. Polling fallback (30s) if SignalR fails. Replaces deleted `use-unread-count.ts`. |
 | useOffersBids | `hooks/use-offers-bids.ts` | Core bidding hook: polling (10s/3s retry), Web Audio API sound, slide-in animations, reliability tracking (stale/connection lost), manual refresh, sound toggle with localStorage (popup) or session-only (tab). |
 | DateTimePicker | `components/datetime-picker.tsx` | Combined date + time picker for end dates. Uses shadcn Calendar + time inputs. |
 | HelpPopover | `components/help-popover.tsx` | Reusable `(?)` icon → click-triggered Popover with title, description, optional good/bad examples. Uses `help` i18n namespace. |
@@ -550,16 +580,16 @@ Composable pricing rules:
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
 - **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
-- **Phase 5** (Bidding): Complete redesign — public offers popup (bottom sheet/modal), accept/deny/complete/fail workflow, anonymous bidding, update-in-place, real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators.
+- **Phase 5** (Bidding): Simplified — public offers popup (bottom sheet/modal), real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators. Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers. Timed auctions auto-sell. Seller contacts bidders via messaging.
 - **Phase 7** (Browse): Homepage feed with category chips + infinite scroll, public item detail page, **unified `/search` page** with Items|Stalls tabs and `?q=` text search (server-side ILIKE on title + description + tag name + stall name + owner display name, Postgres `unaccent` extension for diacritic folding so `riga` matches `Rīga`), debounced 300ms input with min 2 chars, hint chips, Load more pagination. Lighthouse mobile a11y/best-practices/agentic 100/100/100. Remaining: standalone browse-all-items page, category/tag filters as facets, public stall detail page (`/search` stall card currently links to `/user/{displayName}` profile)
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
-- **Phase 6**: Not started
+- **Phase 6** (Notifications): In-app notifications done — Notification model (4 event types), NotificationService with follower throttling, AuctionEndedService (60s polling), NotificationCleanupService (90-day retention), AppHub (consolidated from ChatHub), bell icon + dropdown + full page with load-more pagination. Remaining: email notification on new offer (Resend)
 
 ## What's Next
 
 1. Complete Railway deployment configuration (env vars)
 2. Phase 3: Public stall page, contact details
-3. Phase 6: Notifications (outbid alerts, bid accepted alerts, new bid alerts for seller)
+3. Phase 6: Email notification on new offer (Resend)
 4. Phase 5 extras: "My Bids" page, bid cancellation (2-min grace period)
 5. Phase 7: Standalone browse-all-items page (no query required), category/tag filter facets on `/search`, public stall detail page (currently `/search` stall card links to `/user/{displayName}`)
 

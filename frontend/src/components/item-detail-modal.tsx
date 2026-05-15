@@ -100,20 +100,11 @@ function ActionButton({
   t: (key: string) => string;
   onOpenOffers: () => void;
 }) {
-  if (item.biddingClosed) {
+  if (item.isSold) {
     return (
       <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-400">
         <Check className="size-4" />
         {t("sold")}
-      </div>
-    );
-  }
-
-  if (item.biddingPaused) {
-    return (
-      <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-3 text-sm font-medium text-blue-400">
-        <HandCoins className="size-4" />
-        {t("dealInProgress")}
       </div>
     );
   }

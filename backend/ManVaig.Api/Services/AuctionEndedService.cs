@@ -25,7 +25,6 @@ public class AuctionEndedService : BackgroundService
         {
             if (!await _tickLock.WaitAsync(0, stoppingToken))
             {
-                // Previous tick still running — skip this one
                 await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
                 continue;
             }
@@ -40,6 +39,7 @@ public class AuctionEndedService : BackgroundService
                     .Where(i => i.EndDate != null
                         && i.EndDate < DateTime.UtcNow
                         && i.AcceptOffers
+                        && !i.IsSold
                         && !db.Notifications.Any(n =>
                             n.ItemId == i.Id
                             && n.UserId == i.UserId
@@ -50,11 +50,32 @@ public class AuctionEndedService : BackgroundService
 
                 foreach (var item in endedItems)
                 {
+                    // Notify seller
                     await notificationService.NotifyAuctionEnded(item.UserId, item.Id);
+
+                    // Find winning bid (highest active)
+                    var winningBid = await db.Bids
+                        .Where(b => b.ItemId == item.Id && b.Status == BidStatus.Active)
+                        .OrderByDescending(b => b.Amount)
+                        .FirstOrDefaultAsync(stoppingToken);
+
+                    if (winningBid != null)
+                    {
+                        // Mark item as sold
+                        var dbItem = await db.Items.FindAsync(new object[] { item.Id }, stoppingToken);
+                        if (dbItem != null)
+                        {
+                            dbItem.IsSold = true;
+                            await db.SaveChangesAsync(stoppingToken);
+                        }
+
+                        // Notify winner (BidAccepted notification — their bid won)
+                        await notificationService.NotifyBidAccepted(winningBid.UserId, item.Id, winningBid.Id);
+                    }
                 }
 
                 if (endedItems.Count > 0)
-                    _logger.LogInformation("AuctionEndedService: sent {Count} auction-ended notifications", endedItems.Count);
+                    _logger.LogInformation("AuctionEndedService: processed {Count} ended auctions", endedItems.Count);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

@@ -40,7 +40,8 @@ public class PublicItemsController : ControllerBase
 
         var query = _db.Items
             .Where(i => i.Visibility == ItemVisibility.Public)
-            .Where(i => i.Stall.Visibility == StallVisibility.Public);
+            .Where(i => i.Stall.Visibility == StallVisibility.Public)
+            .Where(i => !i.IsSold);
 
         if (categoryId.HasValue)
             query = query.Where(i => i.CategoryId == categoryId.Value);
@@ -126,6 +127,7 @@ public class PublicItemsController : ControllerBase
                 EndDate = i.EndDate,
                 Location = i.Location,
                 CanShip = i.CanShip,
+                IsSold = i.IsSold,
                 CreatedAt = i.CreatedAt,
                 Images = i.Images
                     .OrderBy(img => img.SortOrder)
@@ -147,9 +149,7 @@ public class PublicItemsController : ControllerBase
                 BidCount = i.Bids.Count(b => b.Status == BidStatus.Active),
                 HighestBid = i.Bids.Any(b => b.Status == BidStatus.Active)
                     ? i.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
-                    : (decimal?)null,
-                BiddingPaused = i.Bids.Any(b => b.Status == BidStatus.Accepted),
-                BiddingClosed = i.Bids.Any(b => b.Status == BidStatus.Completed)
+                    : (decimal?)null
             })
             .ToListAsync();
 
@@ -237,7 +237,7 @@ public class PublicItemsController : ControllerBase
             EndDate = item.EndDate,
             Location = item.Location,
             CanShip = item.CanShip,
-            AllowGuestOffers = item.AllowGuestOffers,
+            IsSold = item.IsSold,
             CreatedAt = item.CreatedAt,
             Images = item.Images?.Select(img => new ItemImageDto
             {
@@ -259,9 +259,7 @@ public class PublicItemsController : ControllerBase
             BidCount = item.Bids?.Count(b => b.Status == BidStatus.Active) ?? 0,
             HighestBid = item.Bids != null && item.Bids.Any(b => b.Status == BidStatus.Active)
                 ? item.Bids.Where(b => b.Status == BidStatus.Active).Max(b => b.Amount)
-                : null,
-            BiddingPaused = item.Bids?.Any(b => b.Status == BidStatus.Accepted) ?? false,
-            BiddingClosed = item.Bids?.Any(b => b.Status == BidStatus.Completed) ?? false
+                : null
         };
 
         return Ok(detail);

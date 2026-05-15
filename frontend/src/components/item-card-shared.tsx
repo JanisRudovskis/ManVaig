@@ -114,32 +114,25 @@ interface PriceDisplayProps {
   t: (key: string, values?: Record<string, string | number>) => string;
   bidCount?: number;
   highestBid?: number | null;
-  biddingPaused?: boolean;
-  biddingClosed?: boolean;
+  isSold?: boolean;
   /** Hide the "ended" text when an activity badge already shows it */
   hideEndedStatus?: boolean;
 }
 
 export function PriceDisplay({
   price, acceptOffers, minOfferPrice, offerStep, endDate,
-  t, bidCount, highestBid, biddingPaused, biddingClosed, hideEndedStatus,
+  t, bidCount, highestBid, isSold, hideEndedStatus,
 }: PriceDisplayProps) {
   const priceClass = "text-lg font-bold text-emerald-400";
   const detailClass = "text-xs text-muted-foreground";
 
-  // Has active offers/bids?
   const hasActiveBids = highestBid != null && highestBid > 0;
 
   return (
     <div className="flex flex-col gap-0.5">
       {/* Sold indicator */}
-      {biddingClosed && (
+      {isSold && (
         <span className="text-xs font-medium text-emerald-400">{t("sold")}</span>
-      )}
-
-      {/* Deal in progress indicator */}
-      {biddingPaused && !biddingClosed && (
-        <span className="text-xs font-medium text-blue-400">{t("dealInProgress")}</span>
       )}
 
       {/* Main price line */}
@@ -163,12 +156,12 @@ export function PriceDisplay({
       ) : null}
 
       {/* Detail line: offer info */}
-      {acceptOffers && !hasActiveBids && price != null && !biddingClosed && !biddingPaused && (
+      {acceptOffers && !hasActiveBids && price != null && !isSold && (
         <span className={detailClass}>{t("acceptsOffers")}</span>
       )}
 
       {/* Min offer / offer step info */}
-      {acceptOffers && !hasActiveBids && minOfferPrice != null && !biddingClosed && !biddingPaused && (
+      {acceptOffers && !hasActiveBids && minOfferPrice != null && !isSold && (
         <span className={detailClass}>
           {t("minOffer")}: {formatPrice(minOfferPrice)}
           {offerStep ? ` · ${t("offerStep")}: ${formatPrice(offerStep)}` : ""}
