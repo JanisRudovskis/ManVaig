@@ -15,5 +15,10 @@ public class Bid
     public decimal Amount { get; set; }
     public BidStatus Status { get; set; } = BidStatus.Active;
 
+    // Deny fields (populated when Status == Denied)
+    public string? DenyReason { get; set; }
+    public string? DenyDetail { get; set; }
+    public DateTime? DeniedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

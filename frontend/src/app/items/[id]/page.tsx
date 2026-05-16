@@ -397,7 +397,7 @@ export default function ItemDetailPage() {
         <OffersPopup
           itemId={item.id}
           itemTitle={item.title}
-          itemImages={item.images}
+          itemImageUrl={(item.images.find(i => i.isPrimary) ?? item.images[0])?.url}
           onClose={() => setShowOffers(false)}
         />
       )}

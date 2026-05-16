@@ -6,4 +6,5 @@ public enum NotificationType
     AuctionEnded = 1,
     BidAccepted = 2,
     NewItemFromFollowed = 3,
+    BidDenied = 4,
 }

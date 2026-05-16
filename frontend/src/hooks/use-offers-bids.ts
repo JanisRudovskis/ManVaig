@@ -5,6 +5,7 @@ import { fetchPublicBids } from "@/lib/items";
 import type { BidListResponse } from "@/lib/items";
 
 const INITIAL_LIMIT = 5;
+const PAGE_SIZE = 5;
 const EXPANDED_LIMIT = 200;
 const POLL_INTERVAL_MS = 10_000;
 const RETRY_INTERVAL_MS = 3_000;
@@ -26,6 +27,7 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [limit, setLimit] = useState(INITIAL_LIMIT);
   const [topBidFlash, setTopBidFlash] = useState(false);
   const [newBidIds, setNewBidIds] = useState<Set<string>>(new Set());
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -50,7 +52,7 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
   onNewExternalBidRef.current = onNewExternalBid;
   const consecutiveFailuresRef = useRef(0);
 
-  const currentLimit = expanded ? EXPANDED_LIMIT : INITIAL_LIMIT;
+  const currentLimit = expanded ? limit : INITIAL_LIMIT;
 
   // --- Ding sound via Web Audio API ---
 
@@ -191,11 +193,13 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     const handleFocus = () => {
       loadBids(currentLimit, true);
     };
-    document.addEventListener("visibilitychange", () => {
+    const handleVisibility = () => {
       if (!document.hidden) handleFocus();
-    });
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleFocus);
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleFocus);
     };
   }, [currentLimit, loadBids]);
@@ -243,6 +247,20 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     currentLimit,
     hasMore,
     setExpanded,
+    loadMore: () => {
+      if (!expanded) {
+        // First expand — show next page
+        setExpanded(true);
+        setLimit(INITIAL_LIMIT + PAGE_SIZE);
+      } else {
+        // Already expanded — load next page
+        setLimit((prev) => prev + PAGE_SIZE);
+      }
+    },
+    collapseAll: () => {
+      setExpanded(false);
+      setLimit(INITIAL_LIMIT);
+    },
     setError,
     loadBids,
   };

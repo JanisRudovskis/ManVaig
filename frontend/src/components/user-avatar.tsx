@@ -29,7 +29,7 @@ function getInitial(name: string): string {
 const sizeClasses = {
   xs: { container: "!size-6", text: "!text-[11px]" },
   sm: { container: "!size-8", text: "!text-xs" },
-  base: { container: "!size-10", text: "!text-sm" },
+  base: { container: "!size-10", text: "!text-base" },
   md: { container: "!size-16", text: "!text-xl" },
   lg: { container: "!size-24", text: "!text-5xl" },
 };

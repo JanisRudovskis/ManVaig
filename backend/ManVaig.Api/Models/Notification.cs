@@ -23,5 +23,8 @@ public class Notification
     public bool IsRead { get; set; } = false;
     public int GroupCount { get; set; } = 1;
 
+    // For BidDenied notifications — stores the reason for the bidder to see
+    public string? DenyReason { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

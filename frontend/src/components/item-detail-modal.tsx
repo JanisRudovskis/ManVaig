@@ -335,7 +335,7 @@ export function ItemDetailModal({ itemId, onClose }: ItemDetailModalProps) {
         <OffersPopup
           itemId={item.id}
           itemTitle={item.title}
-          itemImages={item.images}
+          itemImageUrl={(item.images.find(i => i.isPrimary) ?? item.images[0])?.url}
           onClose={() => setShowOffers(false)}
         />
       )}

@@ -868,7 +868,7 @@ export default function StallItemsPage() {
         <OffersPopup
           itemId={bidsItem.id}
           itemTitle={bidsItem.title}
-          itemImages={bidsItem.images}
+          itemImageUrl={(bidsItem.images.find(i => i.isPrimary) ?? bidsItem.images[0])?.url}
           onClose={() => setBidsItem(null)}
         />
       )}

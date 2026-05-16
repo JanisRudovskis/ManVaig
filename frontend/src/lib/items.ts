@@ -341,7 +341,22 @@ export interface BidResponse {
   bidderId: string;
   amount: number;
   isOwnBid: boolean;
+  status: "Active" | "Denied";
+  denyReason: string | null;
   createdAt: string;
+}
+
+export interface UniqueBidder {
+  bidderId: string;
+  bidderName: string;
+  bidderAvatarUrl: string | null;
+  bestAmount: number;
+  bidCount: number;
+  lastBidAt: string;
+  isTop: boolean;
+  isDenied: boolean;
+  denyReason: string | null;
+  denyDetail: string | null;
 }
 
 export interface BidListResponse {
@@ -356,6 +371,7 @@ export interface BidListResponse {
   endDate: string | null;
   isOwner: boolean;
   isSold: boolean;
+  uniqueBidders?: UniqueBidder[];
 }
 
 export async function fetchPublicBids(itemId: string, limit = 5): Promise<BidListResponse> {
@@ -379,6 +395,24 @@ export async function placeBid(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "bid_place_failed");
+  }
+  return res.json();
+}
+
+export async function denyBidder(
+  itemId: string,
+  bidderId: string,
+  reason: "fake_or_accidental" | "dont_trust" | "other",
+  detail?: string,
+): Promise<{ denied: number }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/bidders/${bidderId}/deny`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason, detail }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "deny_failed");
   }
   return res.json();
 }

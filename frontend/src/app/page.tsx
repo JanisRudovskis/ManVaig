@@ -174,7 +174,7 @@ export default function HomeFeedPage() {
         <OffersPopup
           itemId={offerItem.id}
           itemTitle={offerItem.title}
-          itemImages={offerItem.images}
+          itemImageUrl={(offerItem.images.find(i => i.isPrimary) ?? offerItem.images[0])?.url}
           onClose={() => setOfferItem(null)}
         />
       )}

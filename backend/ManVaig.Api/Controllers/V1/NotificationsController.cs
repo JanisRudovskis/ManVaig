@@ -59,6 +59,8 @@ public class NotificationsController : ControllerBase
                     : null,
                 BidId = n.BidId,
                 BidAmount = n.Bid != null ? (decimal?)n.Bid.Amount : null,
+                DenyReason = n.DenyReason,
+                DenyDetail = n.Bid != null ? n.Bid.DenyDetail : null,
                 IsRead = n.IsRead,
                 GroupCount = n.GroupCount,
                 CreatedAt = n.CreatedAt,

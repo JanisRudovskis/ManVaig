@@ -45,17 +45,25 @@ public class BidsController : ControllerBase
         var currentUserId = GetCurrentUserId();
         var isOwner = currentUserId.HasValue && item.UserId == currentUserId.Value;
 
-        var bids = await _db.Bids
+        // Active bids — used for totals, highest, minNext
+        var activeBids = await _db.Bids
             .Where(b => b.ItemId == itemId && b.Status == BidStatus.Active)
             .OrderByDescending(b => b.Amount)
             .Include(b => b.User)
             .ToListAsync();
 
-        var highestBid = bids.FirstOrDefault()?.Amount;
+        // Denied bids — shown at the end, not counted
+        var deniedBids = await _db.Bids
+            .Where(b => b.ItemId == itemId && b.Status == BidStatus.Denied)
+            .OrderByDescending(b => b.Amount)
+            .Include(b => b.User)
+            .ToListAsync();
 
-        // Calculate minimum next bid
+        var highestBid = activeBids.FirstOrDefault()?.Amount;
+
+        // Calculate minimum next bid (active bids only)
         decimal? minNextBid = null;
-        var topBid = bids.FirstOrDefault();
+        var topBid = activeBids.FirstOrDefault();
         var viewerIsHighest = currentUserId.HasValue && topBid?.UserId == currentUserId.Value;
 
         if (!item.IsSold)
@@ -75,11 +83,28 @@ public class BidsController : ControllerBase
                 minNextBid = item.MinOfferPrice.Value;
         }
 
-        var limitedBids = bids.Take(limit).ToList();
+        // Active bids first (limited), then denied appended
+        var limitedActive = activeBids.Take(limit).ToList();
+
+        BidResponse MapBid(Bid b) => new()
+        {
+            Id = b.Id,
+            BidderName = b.User.DisplayName ?? "User",
+            BidderAvatarUrl = b.User.AvatarUrl,
+            BidderId = b.UserId,
+            Amount = b.Amount,
+            IsOwnBid = currentUserId.HasValue && b.UserId == currentUserId.Value,
+            Status = b.Status.ToString(),
+            DenyReason = b.DenyReason,
+            CreatedAt = b.CreatedAt,
+        };
+
+        var bidResponses = limitedActive.Select(MapBid).ToList();
+        bidResponses.AddRange(deniedBids.Select(MapBid));
 
         var response = new BidListResponse
         {
-            TotalBids = bids.Count,
+            TotalBids = activeBids.Count,  // only active count
             HighestBid = highestBid,
             MinNextBid = minNextBid,
             AcceptOffers = item.AcceptOffers,
@@ -89,17 +114,51 @@ public class BidsController : ControllerBase
             EndDate = item.EndDate,
             IsOwner = isOwner,
             IsSold = item.IsSold,
-            Bids = limitedBids.Select(b => new BidResponse
-            {
-                Id = b.Id,
-                BidderName = b.User.DisplayName ?? "User",
-                BidderAvatarUrl = b.User.AvatarUrl,
-                BidderId = b.UserId,
-                Amount = b.Amount,
-                IsOwnBid = currentUserId.HasValue && b.UserId == currentUserId.Value,
-                CreatedAt = b.CreatedAt
-            }).ToList()
+            Bids = bidResponses,
         };
+
+        // Seller view: unique bidders (active first, then denied)
+        if (isOwner)
+        {
+            var topBidAmount = activeBids.FirstOrDefault()?.Amount ?? 0;
+
+            var activeUnique = activeBids
+                .GroupBy(b => b.UserId)
+                .Select(g => new UniqueBidderResponse
+                {
+                    BidderId = g.Key,
+                    BidderName = g.First().User.DisplayName ?? "User",
+                    BidderAvatarUrl = g.First().User.AvatarUrl,
+                    BestAmount = g.Max(b => b.Amount),
+                    BidCount = g.Count(),
+                    LastBidAt = g.Max(b => b.CreatedAt),
+                    IsTop = g.Max(b => b.Amount) == topBidAmount,
+                    IsDenied = false,
+                })
+                .OrderByDescending(ub => ub.BestAmount)
+                .ToList();
+
+            var deniedUnique = deniedBids
+                .GroupBy(b => b.UserId)
+                .Select(g => new UniqueBidderResponse
+                {
+                    BidderId = g.Key,
+                    BidderName = g.First().User.DisplayName ?? "User",
+                    BidderAvatarUrl = g.First().User.AvatarUrl,
+                    BestAmount = g.Max(b => b.Amount),
+                    BidCount = g.Count(),
+                    LastBidAt = g.Max(b => b.CreatedAt),
+                    IsTop = false,
+                    IsDenied = true,
+                    DenyReason = g.First().DenyReason,
+                    DenyDetail = g.First().DenyDetail,
+                })
+                .OrderByDescending(ub => ub.BestAmount)
+                .ToList();
+
+            activeUnique.AddRange(deniedUnique);
+            response.UniqueBidders = activeUnique;
+        }
 
         return Ok(response);
     }
@@ -210,6 +269,56 @@ public class BidsController : ControllerBase
         await _notificationService.NotifyNewBid(item.UserId, userId.Value, itemId, bid.Id);
 
         return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe, updated = canUpdate });
+    }
+
+    /// <summary>
+    /// Deny all active bids from a specific bidder on this item.
+    /// Only the item owner can call this.
+    /// </summary>
+    [HttpPost("~/api/v1/items/{itemId:guid}/bidders/{bidderId:guid}/deny")]
+    [Authorize]
+    public async Task<IActionResult> DenyBidder(Guid itemId, Guid bidderId, [FromBody] DenyBidRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        // Must be item owner
+        if (item.UserId != userId.Value)
+            return Forbid();
+
+        // Validate reason
+        var validReasons = new[] { "fake_or_accidental", "dont_trust", "other" };
+        if (!validReasons.Contains(request.Reason))
+            return BadRequest(new { error = "INVALID_DENY_REASON" });
+
+        // Find all active bids from this bidder on this item
+        var bidderBids = await _db.Bids
+            .Where(b => b.ItemId == itemId && b.UserId == bidderId && b.Status == BidStatus.Active)
+            .ToListAsync();
+
+        if (bidderBids.Count == 0)
+            return NotFound(new { error = "NO_ACTIVE_BIDS" });
+
+        // Mark all as denied
+        var now = DateTime.UtcNow;
+        foreach (var bid in bidderBids)
+        {
+            bid.Status = BidStatus.Denied;
+            bid.DenyReason = request.Reason;
+            bid.DenyDetail = request.Reason == "other" ? request.Detail : null;
+            bid.DeniedAt = now;
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Notify the bidder (use the highest bid for the notification)
+        var highestDeniedBid = bidderBids.OrderByDescending(b => b.Amount).First();
+        await _notificationService.NotifyBidDenied(bidderId, itemId, highestDeniedBid.Id, request.Reason);
+
+        return Ok(new { denied = bidderBids.Count });
     }
 
     private Guid? GetCurrentUserId()

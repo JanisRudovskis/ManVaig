@@ -9,6 +9,17 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+  --font-ticker: var(--font-jb-mono), ui-monospace, monospace;
+  --color-ticker-bg:     var(--ticker-bg);
+  --color-ticker-bg-2:   var(--ticker-bg-2);
+  --color-ticker-bg-3:   var(--ticker-bg-3);
+  --color-ticker-line:   var(--ticker-line);
+  --color-ticker-text:   var(--ticker-text);
+  --color-ticker-mid:    var(--ticker-mid);
+  --color-ticker-dim:    var(--ticker-dim);
+  --color-ticker-emer:   var(--ticker-emer);
+  --color-ticker-red:    var(--ticker-red);
+  --color-ticker-amber:  var(--ticker-amber);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -72,6 +83,16 @@
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
   --radius: 0.625rem;
+  --ticker-bg:     oklch(0.99 0.005 250);
+  --ticker-bg-2:   oklch(0.97 0.005 250);
+  --ticker-bg-3:   oklch(0.94 0.005 250);
+  --ticker-line:   oklch(0.88 0.005 250);
+  --ticker-text:   oklch(0.15 0.005 250);
+  --ticker-mid:    oklch(0.40 0.012 250);
+  --ticker-dim:    oklch(0.62 0.012 250);
+  --ticker-emer:   oklch(0.55 0.14 165);
+  --ticker-red:    oklch(0.55 0.20 25);
+  --ticker-amber:  oklch(0.60 0.16 80);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -106,6 +127,16 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
+  --ticker-bg:     oklch(0.135 0.005 250);
+  --ticker-bg-2:   oklch(0.17 0.006 250);
+  --ticker-bg-3:   oklch(0.20 0.006 250);
+  --ticker-line:   oklch(0.28 0.008 250);
+  --ticker-text:   oklch(0.95 0 0);
+  --ticker-mid:    oklch(0.72 0.01 250);
+  --ticker-dim:    oklch(0.55 0.012 250);
+  --ticker-emer:   oklch(0.78 0.18 165);
+  --ticker-red:    oklch(0.68 0.22 25);
+  --ticker-amber:  oklch(0.82 0.16 80);
   --sidebar: oklch(0.22 0.005 90);
   --sidebar-foreground: oklch(0.80 0.01 90);
   --sidebar-primary: oklch(0.98 0.005 90);
@@ -126,6 +157,101 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Ticker live-dot pulse */
+@keyframes tickerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ticker-pulse {
+  animation: tickerPulse 1.4s ease-in-out infinite;
+}
+
+/* Ticker hero emerald flash on new bid */
+.tx-hero { transition: background 0.5s ease-out; }
+.tx-hero.is-flash {
+  background: radial-gradient(70% 80% at 50% 30%, oklch(0.78 0.18 165 / 0.18) 0%, transparent 70%);
+}
+
+/* "+€delta" badge — drifts up from hero, fades out */
+@keyframes tx-deltafloat {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.85); }
+  18%  { opacity: 1; transform: translateX(-50%) translateY(0)   scale(1); }
+  70%  { opacity: 1; transform: translateX(-50%) translateY(-18px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-32px) scale(0.95); }
+}
+
+.tx-deltabadge {
+  animation: tx-deltafloat 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+/* Refresh icon spin — single 720° rotation */
+@keyframes tx-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(720deg); }
+}
+
+.is-spinning svg {
+  animation: tx-spin 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+/* Rolling digits — CSS transition on the vertical column */
+.tx-rd {
+  display: inline-block;
+  overflow: hidden;
+  height: 1em;
+  line-height: 1;
+  vertical-align: top;
+}
+
+.tx-rdcol {
+  display: flex;
+  flex-direction: column;
+  transition: transform 700ms cubic-bezier(0.3, 0, 0.1, 1);
+}
+
+.tx-rdcell {
+  flex: 0 0 1em;
+  height: 1em;
+  line-height: 1;
+  display: block;
+}
+
+/* Bidder name fade-in on key change */
+@keyframes tx-fromin {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tx-from-anim {
+  animation: tx-fromin 420ms ease-out;
+}
+
+/* Final-10-minutes heartbeat pulse behind hero */
+.tx-pulse-aura {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 320px; height: 320px;
+  margin-left: -160px; margin-top: -160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, oklch(0.82 0.16 80 / 0.28) 0%, transparent 60%);
+  animation: tx-heartbeat 2.6s ease-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.tx-pulse-aura.is-final-minute {
+  background: radial-gradient(circle, oklch(0.70 0.20 25 / 0.30) 0%, transparent 60%);
+  animation-duration: 1.4s;
+}
+
+@keyframes tx-heartbeat {
+  0%   { transform: scale(0.45); opacity: 0; }
+  20%  { transform: scale(0.85); opacity: 1; }
+  100% { transform: scale(1.70); opacity: 0; }
 }
 
 /* Bid slide-in animation */

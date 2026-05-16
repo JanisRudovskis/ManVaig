@@ -11,6 +11,8 @@ public class NotificationResponse
     public string? ItemImageUrl { get; set; }
     public Guid? BidId { get; set; }
     public decimal? BidAmount { get; set; }
+    public string? DenyReason { get; set; }
+    public string? DenyDetail { get; set; }
     public bool IsRead { get; set; }
     public int GroupCount { get; set; }
     public DateTime CreatedAt { get; set; }

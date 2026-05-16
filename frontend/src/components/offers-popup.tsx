@@ -1,226 +1,500 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import {
   X,
   Loader2,
-  HandCoins,
-  Check,
-  AlertTriangle,
-  Mail,
-  ChevronDown,
-  ExternalLink,
-  Volume2,
-  VolumeOff,
-  Clock,
   RefreshCw,
   Minus,
   Plus,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "@/components/user-avatar";
+import { SellerView } from "@/components/seller-offers-popup";
 import { formatPrice, isEnded } from "@/components/item-card-shared";
 import { placeBid } from "@/lib/items";
-import { startConversation } from "@/lib/messages";
 import type { BidListResponse, BidResponse } from "@/lib/items";
 import { useOffersBids, INITIAL_LIMIT } from "@/hooks/use-offers-bids";
 
-// === Types ===
+// ─── Types ───────────────────────────────────────────────────────────
 
 interface OffersPopupProps {
   itemId: string;
   itemTitle: string;
-  itemImages?: { url: string }[];
+  itemImageUrl?: string;
   onClose: () => void;
 }
 
-// === Image gallery lightbox ===
+// ─── Client-side derived data ────────────────────────────────────────
 
-export function ImageGallery({ images, onClose }: { images: { url: string }[]; onClose: () => void }) {
-  const [index, setIndex] = useState(0);
+function useDerivedBidData(data: BidListResponse | null) {
+  return useMemo(() => {
+    // Only consider active bids for all calculations
+    const activeBids = data?.bids.filter((b) => b.status === "Active") ?? [];
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") setIndex((i) => Math.min(i + 1, images.length - 1));
-      if (e.key === "ArrowLeft") setIndex((i) => Math.max(i - 1, 0));
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [images.length, onClose]);
+    if (!data || activeBids.length === 0) {
+      return {
+        uniqueBidders: 0,
+        previousTopBid: null as number | null,
+        myBid: null as BidResponse | null,
+        myBidRank: null as number | null,
+        deltas: new Map<string, number>(),
+      };
+    }
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90" onClick={onClose}>
-      <div className="relative flex max-h-[90vh] max-w-[90vw] flex-col items-center" onClick={(e) => e.stopPropagation()}>
-        <img src={images[index].url} alt="" className="max-h-[80vh] max-w-[90vw] rounded-lg object-contain" />
-        {images.length > 1 && (
-          <div className="mt-3 flex items-center gap-4">
-            <button onClick={() => setIndex((i) => Math.max(i - 1, 0))} disabled={index === 0} className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:opacity-30">
-              <ChevronDown className="size-5 rotate-90" />
-            </button>
-            <span className="text-sm text-white/70 tabular-nums">{index + 1} / {images.length}</span>
-            <button onClick={() => setIndex((i) => Math.min(i + 1, images.length - 1))} disabled={index === images.length - 1} className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:opacity-30">
-              <ChevronDown className="size-5 -rotate-90" />
-            </button>
-          </div>
-        )}
-        <button onClick={onClose} className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
-          <X className="size-5" />
-        </button>
-      </div>
-    </div>
-  );
+    const bidderIds = new Set(activeBids.map((b) => b.bidderId));
+    const uniqueBidders = bidderIds.size;
+
+    const previousTopBid = activeBids.length > 1 ? activeBids[1].amount : null;
+
+    const myBidIndex = activeBids.findIndex((b) => b.isOwnBid);
+    const myBid = myBidIndex >= 0 ? activeBids[myBidIndex] : null;
+    const myBidRank = myBidIndex >= 0 ? myBidIndex + 1 : null;
+
+    // Check if user's bid was denied (not in active, but in full list)
+    const myDeniedBid = myBid == null
+      ? data.bids.find((b) => b.isOwnBid && b.status === "Denied") ?? null
+      : null;
+
+    const deltas = new Map<string, number>();
+    for (let i = 0; i < activeBids.length; i++) {
+      if (i < activeBids.length - 1) {
+        deltas.set(activeBids[i].id, activeBids[i].amount - activeBids[i + 1].amount);
+      }
+    }
+
+    return { uniqueBidders, previousTopBid, myBid, myBidRank, myDeniedBid, deltas };
+  }, [data]);
 }
 
-// === Helpers ===
+// ─── Time helpers ────────────────────────────────────────────────────
 
-export function timeAgoShort(dateStr: string): string {
+/** Human-readable "2 min ago" / "just now" / "3h ago" */
+function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (days > 0) return `${days}d`;
-  if (hours > 0) return `${hours}h`;
-  return `${Math.max(1, mins)}m`;
+  if (diff < 60_000) return "just now";
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
-export function BidRowSkeleton() {
+/** "ends in 4h 12m" — largest unit ≥ 1, two-part phrase */
+function formatEndsIn(endDate: string): string {
+  const diff = new Date(endDate).getTime() - Date.now();
+  if (diff <= 0) return "";
+  const d = Math.floor(diff / 86_400_000);
+  const h = Math.floor((diff % 86_400_000) / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1_000);
+  if (d >= 1) return `${d}d ${h}h`;
+  if (h >= 1) return `${h}h ${m}m`;
+  return `${m}m ${s}s`;
+}
+
+function formatEndTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+// ─── Urgency state ───────────────────────────────────────────────────
+
+type UrgencyState = "final-10m" | "final-minute" | "live" | "ended" | "sold";
+
+function getUrgencyState(data: BidListResponse | null, now: number): UrgencyState {
+  if (!data) return "live";
+  if (data.isSold) return "sold";
+  if (data.endDate && isEnded(data.endDate)) return "ended";
+  if (data.endDate) {
+    const diff = new Date(data.endDate).getTime() - now;
+    if (diff <= 60_000 && diff > 0) return "final-minute";
+    if (diff <= 600_000 && diff > 0) return "final-10m";
+  }
+  return "live";
+}
+
+// ─── Rolling digit ───────────────────────────────────────────────────
+
+function RollingDigit({ value }: { value: number }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-muted/30 px-3 py-2.5">
-      <div className="size-5 shrink-0 animate-pulse rounded-full bg-muted" />
-      <div className="size-6 shrink-0 animate-pulse rounded-full bg-muted" />
-      <div className="flex-1 space-y-1.5"><div className="h-3 w-24 animate-pulse rounded bg-muted" /></div>
-      <div className="space-y-1.5 text-right">
-        <div className="h-3.5 w-14 animate-pulse rounded bg-muted" />
-        <div className="h-2 w-8 animate-pulse rounded bg-muted ml-auto" />
-      </div>
-    </div>
+    <span className="tx-rd">
+      <span
+        className="tx-rdcol"
+        style={{ transform: `translateY(-${value}em)` }}
+      >
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+          <span key={d} className="tx-rdcell">
+            {d}
+          </span>
+        ))}
+      </span>
+    </span>
   );
 }
 
-// === Live ticking countdown ===
+// ─── 6. Header ───────────────────────────────────────────────────────
 
-function LiveCountdown({ end, t }: { end: string; t: (key: string) => string }) {
-  const [now, setNow] = useState(Date.now());
-  const endTime = new Date(end).getTime();
-  const diff = endTime - now;
-  const isUnder1h = diff < 3600000;
-
-  useEffect(() => {
-    const interval = isUnder1h ? 1000 : 30000;
-    const timer = setInterval(() => setNow(Date.now()), interval);
-    return () => clearInterval(timer);
-  }, [isUnder1h]);
-
-  if (diff <= 0) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg bg-orange-500/10 px-3 py-2 text-xs font-medium text-orange-400">
-        <AlertTriangle className="size-3.5 shrink-0" />
-        {t("biddingEnded")}
-      </div>
-    );
-  }
-
-  const days = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  const minutes = Math.floor((diff % 3600000) / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-
-  let timeText: string;
-  if (days > 0) timeText = `${days}d ${hours}h ${minutes}m`;
-  else if (!isUnder1h) timeText = `${hours}h ${minutes}m`;
-  else timeText = `${minutes}m ${seconds}s`;
-
-  const colorClass = isUnder1h
-    ? "bg-red-500/10 text-red-400"
-    : diff < 86400000
-      ? "bg-orange-500/10 text-orange-400"
-      : "bg-muted/50 text-muted-foreground";
-
-  return (
-    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${colorClass}`}>
-      <Clock className="size-3.5 shrink-0" />
-      {t("biddingEndsIn")} {timeText}
-    </div>
-  );
-}
-
-// === Status Banner ===
-
-export function StatusBanner({ data, t }: { data: BidListResponse; t: (key: string, values?: Record<string, string | number>) => string }) {
-  if (data.isSold) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400">
-        <Check className="size-3.5 shrink-0" />
-        {t("sold")}
-      </div>
-    );
-  }
-  if (data.endDate) return <LiveCountdown end={data.endDate as string} t={t} />;
-  return null;
-}
-
-// === Bid Row ===
-
-export function BidRow({
-  bid, rank, isTop, flash, isNew, isOwner, onMessage, t,
+function TickerHeader({
+  itemTitle,
+  manualRefreshing,
+  connectionLost,
+  urgency,
+  onRefresh,
+  onClose,
+  t,
 }: {
-  bid: BidResponse;
-  rank: number;
-  isTop: boolean;
-  flash?: boolean;
-  isNew?: boolean;
-  isOwner: boolean;
-  onMessage?: (bidderId: string) => void;
-  t: (key: string, values?: Record<string, string | number>) => string;
+  itemTitle: string;
+  manualRefreshing: boolean;
+  connectionLost: boolean;
+  urgency: UrgencyState;
+  onRefresh: () => void;
+  onClose: () => void;
+  t: (key: string) => string;
 }) {
-  return (
-    <div className={cn(
-      "rounded-lg px-3 py-3 transition-colors duration-700",
-      isTop && "bg-emerald-500/5 border-l-4 border-emerald-500/40",
-      !isTop && "bg-muted/30",
-      flash && "!bg-emerald-500/20",
-      isNew && "bid-slide-in"
-    )}>
-      <div className="flex items-center gap-2.5">
-        <span className={cn("w-7 shrink-0 text-right text-xs font-medium tabular-nums", isTop ? "text-emerald-400" : "text-muted-foreground/60")}>
-          #{rank}
-        </span>
-        <UserAvatar displayName={bid.bidderName} avatarUrl={bid.bidderAvatarUrl} size="base" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-medium truncate">{bid.bidderName}</span>
-            {bid.isOwnBid && (
-              <span className="shrink-0 rounded-full bg-primary/20 px-1.5 py-0.5 text-[0.6rem] font-semibold text-primary">{t("you")}</span>
-            )}
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <span className="text-base font-bold text-emerald-400">{formatPrice(bid.amount)}</span>
-          <p className="text-xs text-muted-foreground">{timeAgoShort(bid.createdAt)}</p>
-        </div>
+  const isLive = urgency === "live" || urgency === "final-10m" || urgency === "final-minute";
+
+  // Connection lost — special header
+  if (connectionLost) {
+    return (
+      <div className="flex flex-none items-center gap-3 border-b border-ticker-line px-4 pb-3 pt-3.5">
+        <span className="inline-block size-2 shrink-0 rounded-full bg-ticker-red shadow-[0_0_0_4px_oklch(0.68_0.22_25/0.22)]" />
+        <span className="flex-1 text-sm font-medium text-ticker-red">{t("connectionLost")}</span>
+        <button
+          onClick={onRefresh}
+          className={cn(
+            "flex size-10 items-center justify-center rounded-[10px] text-ticker-red transition-colors hover:bg-ticker-red/10 md:size-9",
+            manualRefreshing && "is-spinning"
+          )}
+          title={t("refresh")}
+        >
+          <RefreshCw className="size-[18px]" />
+        </button>
+        <DialogPrimitive.Close
+          className="flex size-10 items-center justify-center rounded-[10px] text-ticker-mid transition-colors hover:bg-ticker-bg-2 hover:text-ticker-text md:size-9"
+          aria-label="Close"
+        >
+          <X className="size-5 md:size-[20px]" />
+        </DialogPrimitive.Close>
       </div>
-      {isOwner && !bid.isOwnBid && onMessage && (
-        <div className="mt-2">
-          <button onClick={() => onMessage(bid.bidderId)} className="rounded-md bg-primary/15 px-2 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25">
-            <Mail className="mr-1 inline size-3" />
-            {t("messageBidder")}
-          </button>
-        </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-none items-center gap-3 border-b border-ticker-line px-4 pb-3 pt-3.5">
+      {/* Live dot */}
+      {isLive && (
+        <span
+          className={cn(
+            "inline-block size-2 shrink-0 rounded-full bg-ticker-emer shadow-[0_0_0_4px_oklch(0.78_0.18_165/0.18)]",
+            (urgency === "final-10m" || urgency === "final-minute") && "ticker-pulse"
+          )}
+        />
       )}
+
+      {/* Title */}
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-ticker-mid" title={itemTitle}>
+        {itemTitle}
+      </span>
+
+      {/* Action cluster */}
+      <div className="flex flex-none items-center gap-0.5">
+        {/* Refresh — always available (audit T8) */}
+        <button
+          onClick={onRefresh}
+          className={cn(
+            "flex size-10 items-center justify-center rounded-[10px] text-ticker-mid transition-colors hover:bg-ticker-bg-2 hover:text-ticker-text md:size-9",
+            manualRefreshing && "is-spinning"
+          )}
+          title={t("refresh")}
+        >
+          <RefreshCw className="size-[18px]" />
+        </button>
+
+        {/* Close */}
+        <DialogPrimitive.Close
+          className="ml-1 flex size-10 items-center justify-center rounded-[10px] text-ticker-mid transition-colors hover:bg-ticker-bg-2 hover:text-ticker-text md:size-9"
+          aria-label="Close"
+        >
+          <X className="size-[22px] md:size-5" />
+        </DialogPrimitive.Close>
+      </div>
     </div>
   );
 }
 
-// === Place Bid Form ===
+// ─── 7. Hero with rolling digits ─────────────────────────────────────
 
-export function PlaceBidForm({
-  data, itemId, t, onBidPlaced, inputFocusedRef,
+function TickerHero({
+  data,
+  derived,
+  topBidFlash,
+  deltaBadge,
+  isFinal10Min,
+  isFinalMinute,
+  t,
 }: {
   data: BidListResponse;
+  derived: ReturnType<typeof useDerivedBidData>;
+  topBidFlash: boolean;
+  deltaBadge: number | null;
+  isFinal10Min: boolean;
+  isFinalMinute: boolean;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const topBid = data.highestBid;
+  const isEmpty = data.totalBids === 0;
+  const topBidder = data.bids[0];
+
+  // Split price for rolling digits
+  const whole = topBid != null ? Math.floor(topBid) : 0;
+  const frac = topBid != null ? (topBid % 1).toFixed(2).slice(2) : "00";
+  const digits = String(whole).split("").map(Number);
+
+  return (
+    <div
+      className={cn(
+        "tx-hero relative flex-none overflow-visible px-7 pb-7 pt-9 text-center",
+        topBidFlash && "is-flash"
+      )}
+    >
+      {/* Heartbeat pulse aura — final 10 minutes */}
+      {isFinal10Min && (
+        <span
+          className={cn("tx-pulse-aura", isFinalMinute && "is-final-minute")}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Label */}
+      <div className="relative z-[1] mb-4 font-[family-name:var(--font-ticker)] text-[11px] uppercase tracking-[0.22em] text-ticker-dim">
+        {t("topOffer").toUpperCase()}
+      </div>
+
+      {/* Delta badge */}
+      {deltaBadge != null && (
+        <div className="tx-deltabadge absolute left-1/2 top-[26px] z-[2] -translate-x-1/2 rounded-full bg-ticker-emer px-3 py-[5px] font-[family-name:var(--font-ticker)] text-xs font-bold tracking-[0.04em] text-[oklch(0.15_0_0)] shadow-[0_6px_24px_oklch(0.78_0.18_165/0.35)]">
+          ▲&nbsp;+€{deltaBadge.toFixed(0)}
+        </div>
+      )}
+
+      {/* Hero number */}
+      {isEmpty ? (
+        <div className="relative z-[1] font-[family-name:var(--font-ticker)] text-[68px] font-bold leading-[0.95] tracking-[-0.025em] text-ticker-dim/60 tabular-nums md:text-[76px]">
+          —.—
+        </div>
+      ) : (
+        <div className="relative z-[1] font-[family-name:var(--font-ticker)] text-[68px] font-bold leading-[0.95] tracking-[-0.025em] tabular-nums text-ticker-text md:text-[76px]">
+          <span className="mr-0.5 align-[22px] text-[36px] font-medium text-ticker-mid">€</span>
+          {digits.map((d, i) => (
+            <RollingDigit key={i} value={d} />
+          ))}
+          <span className="text-[36px] font-medium text-ticker-mid">.{frac}</span>
+        </div>
+      )}
+
+      {/* From line */}
+      <div className="relative z-[1] mt-3.5">
+        {isEmpty ? (
+          <span className="text-[13.5px] text-ticker-mid">{t("noBidsYet")}</span>
+        ) : topBidder ? (
+          <span
+            key={topBidder.bidderId + topBidder.amount}
+            className="tx-from-anim inline-block text-[13.5px] text-ticker-mid"
+          >
+            from {topBidder.bidderName} · {timeAgo(topBidder.createdAt)}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ─── 8. Your bid card ────────────────────────────────────────────────
+
+function TickerYourBid({
+  data,
+  derived,
+  t,
+}: {
+  data: BidListResponse;
+  derived: ReturnType<typeof useDerivedBidData>;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const { myBid, myBidRank, myDeniedBid } = derived;
+
+  // Show denied state
+  if (myDeniedBid) {
+    return (
+      <div className="mx-4 mb-4 flex-none rounded-xl border border-ticker-red/[0.22] bg-ticker-red/[0.06] p-[14px_16px]">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="font-[family-name:var(--font-ticker)] text-[10px] font-medium uppercase tracking-[0.18em] text-ticker-red">
+            {t("yourOffer").toUpperCase()}
+          </span>
+          <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-red">
+            {t("deny")}
+          </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-[family-name:var(--font-ticker)] text-[22px] font-bold tracking-[-0.01em] tabular-nums text-ticker-dim line-through">
+            €{myDeniedBid.amount.toFixed(2)}
+          </span>
+          {myDeniedBid.denyReason && (
+            <span className="text-[12px] text-ticker-red/70">
+              {t(`denyReason_${myDeniedBid.denyReason}` as Parameters<typeof t>[0])}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!myBid || myBidRank == null) return null;
+
+  const deltaBelow =
+    data.highestBid != null ? data.highestBid - myBid.amount : 0;
+
+  return (
+    <div className="mx-4 mb-4 flex-none rounded-xl border border-ticker-emer/[0.22] bg-ticker-bg-2 p-[14px_16px]">
+      {/* Top row */}
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="font-[family-name:var(--font-ticker)] text-[10px] font-medium uppercase tracking-[0.18em] text-ticker-emer">
+          {t("yourOffer").toUpperCase()}
+        </span>
+        <span className="text-xs text-ticker-dim">
+          {t("rankOfTotal", { rank: myBidRank, total: data.totalBids })}
+        </span>
+      </div>
+      {/* Bottom row */}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-[family-name:var(--font-ticker)] text-[22px] font-bold tracking-[-0.01em] tabular-nums">
+          €{myBid.amount.toFixed(2)}
+        </span>
+        {deltaBelow > 0 && (
+          <span className="text-[12.5px] text-ticker-mid">
+            {t("belowTop", { delta: deltaBelow.toFixed(2) })}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── 9. Time strip / Promoted countdown ──────────────────────────────
+
+function TickerTimeStrip({
+  data,
+  urgency,
+  now,
+  t,
+}: {
+  data: BidListResponse;
+  urgency: UrgencyState;
+  now: number;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  // Sold/ended — status banner
+  if (urgency === "sold" || urgency === "ended") {
+    const endedTime = data.endDate ? formatEndTime(data.endDate) : "";
+    const label = urgency === "sold" ? t("sold") : t("biddingEnded");
+    return (
+      <div className="mx-4 mb-4 flex-none rounded-xl bg-ticker-emer/[0.10] py-3 text-center font-[family-name:var(--font-ticker)] text-sm font-bold uppercase tracking-[0.08em] text-ticker-emer">
+        {label}
+        {endedTime ? ` · ${endedTime}` : ""}
+      </div>
+    );
+  }
+
+  // No end date — "Open for offers"
+  if (!data.endDate) {
+    return (
+      <div className="flex flex-none items-center gap-3.5 px-7 pb-5 pt-2">
+        <span className="h-px flex-1 bg-ticker-line" />
+        <span className="text-[12.5px] tracking-[0.02em] text-ticker-dim">
+          {t("openForOffersBuyer")}
+        </span>
+        <span className="h-px flex-1 bg-ticker-line" />
+      </div>
+    );
+  }
+
+  const diff = new Date(data.endDate).getTime() - now;
+  if (diff <= 0) return null;
+
+  // Final 10 minutes — promoted countdown
+  if (urgency === "final-10m" || urgency === "final-minute") {
+    const mm = Math.floor(diff / 60_000)
+      .toString()
+      .padStart(2, "0");
+    const ss = Math.floor((diff % 60_000) / 1_000)
+      .toString()
+      .padStart(2, "0");
+    const isRed = urgency === "final-minute";
+
+    return (
+      <div
+        className={cn(
+          "mx-4 mb-4 flex flex-none items-baseline justify-between rounded-xl border px-[18px] py-3",
+          isRed
+            ? "border-ticker-red/[0.35] bg-ticker-red/[0.08]"
+            : "border-ticker-amber/30 bg-ticker-amber/[0.06]"
+        )}
+      >
+        <span
+          className={cn(
+            "font-[family-name:var(--font-ticker)] text-[13px] font-medium uppercase tracking-[0.14em]",
+            isRed ? "text-ticker-red/85" : "text-ticker-amber/85"
+          )}
+        >
+          {isRed ? t("finalMinute").toUpperCase() : t("finalEndsIn").toUpperCase()}
+        </span>
+        <span
+          className={cn(
+            "font-[family-name:var(--font-ticker)] text-[30px] font-bold leading-none tabular-nums",
+            isRed ? "text-ticker-red" : "text-ticker-amber"
+          )}
+        >
+          {mm}:{ss}
+        </span>
+      </div>
+    );
+  }
+
+  // Normal — "ends in 4h 12m"
+  return (
+    <div className="flex flex-none items-center gap-3.5 px-7 pb-5 pt-2">
+      <span className="h-px flex-1 bg-ticker-line" />
+      <span className="text-[12.5px] tracking-[0.02em] text-ticker-dim">
+        {t("endsInPhrase", { value: formatEndsIn(data.endDate) })}
+      </span>
+      <span className="h-px flex-1 bg-ticker-line" />
+    </div>
+  );
+}
+
+// ─── 11. Bid form ────────────────────────────────────────────────────
+
+function TickerBidForm({
+  data,
+  derived,
+  itemId,
+  t,
+  onBidPlaced,
+  inputFocusedRef,
+}: {
+  data: BidListResponse;
+  derived: ReturnType<typeof useDerivedBidData>;
   itemId: string;
   t: (key: string, values?: Record<string, string | number>) => string;
   onBidPlaced: () => void;
@@ -234,21 +508,36 @@ export function PlaceBidForm({
   const [confirming, setConfirming] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const hasBid = derived.myBid != null;
+
   useEffect(() => {
     if (data.minNextBid != null) setAmount(data.minNextBid.toFixed(2));
   }, [data.minNextBid]);
 
+  // Not logged in
   if (!isLoggedIn) {
     return (
-      <button onClick={openLoginDialog} className="w-full rounded-md bg-primary/15 px-3 py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/25">
-        {t("loginToOffer")}
-      </button>
+      <div className="flex-none border-t border-ticker-line px-4 pb-4 pt-3.5">
+        <button
+          onClick={openLoginDialog}
+          className="flex h-13 w-full items-center justify-center rounded-xl border border-ticker-emer font-semibold text-[15px] text-ticker-emer transition-colors hover:bg-ticker-emer/10"
+        >
+          {t("loginToPlaceOffer")}
+        </button>
+      </div>
     );
   }
 
-  if (data.isOwner) return <p className="text-center text-xs text-muted-foreground py-2">{t("cannotBidOwn")}</p>;
-  if (data.isSold) return <p className="text-center text-xs text-muted-foreground py-2">{t("itemSold")}</p>;
-  if (data.endDate && isEnded(data.endDate as string)) return <p className="text-center text-xs text-muted-foreground py-2">{t("biddingEnded")}</p>;
+  // Owner
+  if (data.isOwner) {
+    return (
+      <div className="flex-none border-t border-ticker-line px-4 py-3">
+        <p className="text-center font-[family-name:var(--font-ticker)] text-[11px] text-ticker-dim">
+          {t("cannotBidOwn")}
+        </p>
+      </div>
+    );
+  }
 
   const minBid = data.minNextBid ?? 0.01;
   const step = data.offerStep ?? 0.01;
@@ -256,18 +545,28 @@ export function PlaceBidForm({
   const adjustAmount = (dir: 1 | -1) => {
     const current = parseFloat(amount) || 0;
     const next = Math.round((current + dir * step) * 100) / 100;
-    if (next >= minBid) { setAmount(next.toFixed(2)); resetConfirm(); }
+    if (next >= minBid) {
+      setAmount(next.toFixed(2));
+      resetConfirm();
+    }
   };
 
   const resetConfirm = () => {
     setConfirming(false);
-    if (confirmTimerRef.current) { clearTimeout(confirmTimerRef.current); confirmTimerRef.current = null; }
+    if (confirmTimerRef.current) {
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
   };
 
   const handleSubmit = async () => {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
-    if (numAmount < minBid) { setError(t("error_BID_TOO_LOW")); setAmount(minBid.toFixed(2)); return; }
+    if (numAmount < minBid) {
+      setError(t("error_BID_TOO_LOW"));
+      setAmount(minBid.toFixed(2));
+      return;
+    }
 
     if (!confirming) {
       setConfirming(true);
@@ -293,323 +592,431 @@ export function PlaceBidForm({
   };
 
   return (
-    <div className="space-y-2">
-      {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-      {success && <p className="text-sm font-medium text-emerald-400">{success}</p>}
-      <div className="flex gap-2">
-        <button type="button" onClick={() => adjustAmount(-1)} disabled={parseFloat(amount) <= minBid} className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:opacity-30">
-          <Minus className="size-5" />
-        </button>
-        <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
-          <input
-            type="number"
-            step={step}
-            min={minBid}
-            value={amount}
-            onChange={(e) => { setAmount(e.target.value); setError(""); resetConfirm(); }}
-            onFocus={() => { inputFocusedRef.current = true; }}
-            onBlur={() => { inputFocusedRef.current = false; }}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-            placeholder={minBid.toFixed(2)}
-            className="no-spinner w-full rounded-md border border-border bg-input pl-7 pr-3 py-2.5 text-center text-base outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
-          />
-        </div>
-        <button type="button" onClick={() => adjustAmount(1)} className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
-          <Plus className="size-5" />
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !amount}
-          className={cn("shrink-0 rounded-md px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50", confirming ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-emerald-500 text-white hover:bg-emerald-600")}
-        >
-          {loading ? <Loader2 className="size-4 animate-spin" /> : confirming ? `${t("confirm")} €${parseFloat(amount).toFixed(2)}?` : t("placeBid")}
-        </button>
+    <div className="flex-none border-t border-ticker-line px-4 pb-4 pt-3.5">
+      {/* Feedback */}
+      {error && (
+        <p className="mb-2 text-xs font-medium text-ticker-red">{error}</p>
+      )}
+      {success && (
+        <p className="mb-2 text-xs font-medium text-ticker-emer">{success}</p>
+      )}
+
+      {/* Label above input (audit T9) */}
+      <div className="mb-2.5 text-xs tracking-[0.02em] text-ticker-dim">
+        {hasBid ? t("raiseYourOffer") : t("placeAnOffer")}
       </div>
-      <div className="flex items-center justify-end">
-        <span className="text-[0.65rem] text-muted-foreground">{t("minBid", { amount: formatPrice(minBid) })}</span>
+
+      {/* Controls row — stepper + input + submit, OR cancel + confirm */}
+      {confirming ? (
+        <div className="flex gap-2">
+          <button
+            onClick={resetConfirm}
+            className="flex h-13 flex-1 items-center justify-center rounded-xl border border-ticker-line text-[15px] font-semibold text-ticker-mid transition-colors hover:bg-ticker-bg-2"
+          >
+            {t("cancel")}
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex h-13 flex-1 items-center justify-center rounded-xl bg-ticker-amber text-[15px] font-semibold text-[oklch(0.15_0_0)] transition-colors hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              t("confirmAmount", {
+                amount: parseFloat(amount).toFixed(2),
+              })
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          {/* Decrease */}
+          <button
+            type="button"
+            onClick={() => adjustAmount(-1)}
+            disabled={parseFloat(amount) <= minBid}
+            className="flex h-13 w-11 shrink-0 items-center justify-center rounded-xl border border-ticker-line text-ticker-mid transition-colors hover:bg-ticker-bg-2 hover:text-ticker-text disabled:opacity-30 md:w-12"
+          >
+            <Minus className="size-4" />
+          </button>
+
+          {/* Input */}
+          <div className="relative flex-1">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-[family-name:var(--font-ticker)] text-base font-medium text-ticker-mid">
+              €
+            </span>
+            <input
+              type="number"
+              step={step}
+              min={minBid}
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setError("");
+                resetConfirm();
+              }}
+              onFocus={() => {
+                inputFocusedRef.current = true;
+              }}
+              onBlur={() => {
+                inputFocusedRef.current = false;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubmit();
+              }}
+              placeholder={minBid.toFixed(2)}
+              className="no-spinner h-13 w-full rounded-xl border border-ticker-line bg-ticker-bg-2 pl-8 pr-3 text-center font-[family-name:var(--font-ticker)] text-[22px] font-bold tabular-nums text-ticker-text outline-none focus:border-ticker-emer focus:ring-1 focus:ring-ticker-emer/30"
+            />
+          </div>
+
+          {/* Increase */}
+          <button
+            type="button"
+            onClick={() => adjustAmount(1)}
+            className="flex h-13 w-11 shrink-0 items-center justify-center rounded-xl border border-ticker-line text-ticker-mid transition-colors hover:bg-ticker-bg-2 hover:text-ticker-text md:w-12"
+          >
+            <Plus className="size-4" />
+          </button>
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !amount}
+            className="flex h-13 shrink-0 items-center justify-center rounded-xl bg-ticker-emer px-[22px] text-[15px] font-semibold text-[oklch(0.15_0_0)] transition-colors hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              t("placeOfferCta")
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Hint below */}
+      <div className="mt-2 text-[11.5px] text-ticker-dim">
+        {t("minimumOffer", { amount: minBid.toFixed(2) })}
       </div>
     </div>
   );
 }
 
-// === Freshness indicator ===
+// ─── 12. Show-all expand ─────────────────────────────────────────────
 
-export function FreshnessIndicator({
-  lastUpdatedAt, staleWarningMs, connectionLost, onRefresh, t,
+function TickerExpandedBids({
+  data,
+  expanded,
+  hasMore,
+  onLoadMore,
+  onCollapse,
+  onUserClick,
+  t,
 }: {
-  lastUpdatedAt: number | null;
-  staleWarningMs: number;
-  staleDangerMs?: number;
-  connectionLost: boolean;
-  onRefresh: () => void;
-  t: (key: string, values?: Record<string, string | number>) => string;
-}) {
-  const [isStale, setIsStale] = useState(false);
-
-  useEffect(() => {
-    const check = () => {
-      if (!lastUpdatedAt) { setIsStale(false); return; }
-      setIsStale(Date.now() - lastUpdatedAt > staleWarningMs);
-    };
-    check();
-    const timer = setInterval(check, 5000);
-    return () => clearInterval(timer);
-  }, [lastUpdatedAt, staleWarningMs]);
-
-  if (!connectionLost && !isStale) return null;
-
-  return (
-    <button onClick={onRefresh} className="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-semibold text-amber-400 animate-pulse transition-colors hover:bg-amber-500/20">
-      <AlertTriangle className="size-4 shrink-0" />
-      {t("dataStale")}
-    </button>
-  );
-}
-
-// === Summary bar ===
-
-export function BidsSummaryBar({
-  data, lastUpdatedAt, staleWarningMs, staleDangerMs, connectionLost, onRefresh, t,
-}: {
-  data: BidListResponse | null;
-  lastUpdatedAt?: number | null;
-  staleWarningMs?: number;
-  staleDangerMs?: number;
-  connectionLost?: boolean;
-  onRefresh?: () => void;
-  t: (key: string, values?: Record<string, string | number>) => string;
-}) {
-  if (!data) {
-    return (
-      <>
-        <div className="h-8 animate-pulse rounded-lg bg-muted" />
-        <div className="flex items-center justify-between">
-          <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-          <div className="h-3 w-14 animate-pulse rounded bg-muted" />
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <StatusBanner data={data} t={t} />
-      {onRefresh && (
-        <FreshnessIndicator
-          lastUpdatedAt={lastUpdatedAt ?? null}
-          staleWarningMs={staleWarningMs ?? 30000}
-          staleDangerMs={staleDangerMs ?? 60000}
-          connectionLost={connectionLost ?? false}
-          onRefresh={onRefresh}
-          t={t}
-        />
-      )}
-    </>
-  );
-}
-
-// === Bid list body ===
-
-export function BidListBody({
-  data, loading, error, topBidFlash, newBidIds, manualRefreshing, hasMore, expanded, t, onShowAll, onShowLess, onMessage,
-}: {
-  data: BidListResponse | null;
-  loading: boolean;
-  error: string;
-  topBidFlash: boolean;
-  newBidIds?: Set<string>;
-  manualRefreshing?: boolean;
-  hasMore: boolean;
+  data: BidListResponse;
   expanded: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+  onCollapse: () => void;
+  onUserClick: (displayName: string) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
-  onShowAll: () => void;
-  onShowLess: () => void;
-  onMessage?: (bidderId: string) => void;
 }) {
-  if (loading) {
-    return (
-      <div className="space-y-1.5">
-        {Array.from({ length: 3 }).map((_, i) => <BidRowSkeleton key={i} />)}
-      </div>
-    );
-  }
+  if (data.totalBids === 0 && data.bids.filter(b => b.status === "Denied").length === 0) return null;
 
-  if (error && !data) {
-    return <p className="py-12 text-center text-sm text-destructive">{error}</p>;
-  }
-
-  if (!data || data.bids.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-        <HandCoins className="size-10 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">{t("noBidsYet")}</p>
-      </div>
-    );
-  }
+  const activeBids = data.bids.filter(b => b.status === "Active");
+  const deniedBids = data.bids.filter(b => b.status === "Denied");
 
   return (
-    <div className={cn("space-y-1.5 transition-all duration-200", manualRefreshing ? "opacity-0 scale-[0.98]" : "opacity-100 scale-100")}>
-      {data.bids.map((bid, index) => (
-        <BidRow
-          key={bid.id}
-          bid={bid}
-          rank={data.totalBids - index}
-          isTop={index === 0}
-          flash={index === 0 && topBidFlash}
-          isNew={newBidIds?.has(bid.id)}
-          isOwner={data.isOwner}
-          onMessage={onMessage}
-          t={t}
-        />
-      ))}
+    <div className="flex-none">
+      {/* Bid rows — shown when expanded */}
+      {expanded && (
+          <div className="border-t border-ticker-line">
+            {activeBids.map((bid, index) => (
+                <div
+                  key={bid.id}
+                  className="grid grid-cols-[28px_1fr_auto] items-center gap-3 px-4 py-2.5"
+                >
+                  <span className="text-xs tabular-nums text-ticker-dim">
+                    #{index + 1}
+                  </span>
+                  <button
+                    onClick={() => onUserClick(bid.bidderName)}
+                    className="flex min-w-0 cursor-pointer items-center gap-2"
+                  >
+                    <UserAvatar
+                      displayName={bid.bidderName}
+                      avatarUrl={bid.bidderAvatarUrl}
+                      size="xs"
+                    />
+                    <span className="truncate text-sm font-medium text-ticker-text">
+                      {bid.bidderName}
+                    </span>
+                    {bid.isOwnBid && (
+                      <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-ticker-emer">
+                        {t("you").toLowerCase()}
+                      </span>
+                    )}
+                  </button>
+                  <span className="font-[family-name:var(--font-ticker)] font-bold tabular-nums">
+                    {formatPrice(bid.amount)}
+                  </span>
+                </div>
+            ))}
 
-      {hasMore && (
-        <button onClick={onShowAll} className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-          <ChevronDown className="size-3.5" />
-          {t("showAllBids", { count: data.totalBids })}
-        </button>
-      )}
-      {expanded && !hasMore && data.totalBids > INITIAL_LIMIT && (
-        <button onClick={onShowLess} className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-          {t("showLess")}
-        </button>
+            {/* Denied bids — faded, at the bottom */}
+            {deniedBids.map((bid) => (
+              <div
+                key={bid.id}
+                className="grid grid-cols-[28px_1fr_auto] items-center gap-3 px-4 py-2.5 opacity-50"
+              >
+                <span className="text-xs text-ticker-dim">—</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <UserAvatar
+                    displayName={bid.bidderName}
+                    avatarUrl={bid.bidderAvatarUrl}
+                    size="xs"
+                  />
+                  <span className="truncate text-sm text-ticker-dim">
+                    {bid.bidderName}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-ticker-red">
+                    {t("deny")}
+                  </span>
+                  {bid.isOwnBid && (
+                    <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-ticker-emer">
+                      {t("you").toLowerCase()}
+                    </span>
+                  )}
+                </div>
+                <span className="font-[family-name:var(--font-ticker)] tabular-nums text-ticker-dim line-through">
+                  {formatPrice(bid.amount)}
+                </span>
+              </div>
+            ))}
+          {/* Load more — if there are still more bids on the server */}
+          {hasMore && (
+            <button
+              onClick={onLoadMore}
+              className="flex w-full items-center justify-center gap-1.5 py-2.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
+            >
+              {t("loadMoreOffers", { count: data.totalBids - data.bids.length })}
+              <ChevronDown className="size-3" />
+            </button>
+          )}
+          {/* Collapse */}
+          <button
+            onClick={onCollapse}
+            className="flex w-full items-center justify-center gap-1.5 py-2.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
+          >
+            {t("showLess")}
+          </button>
+        </div>
       )}
 
-      {error && data && (
-        <p className="mt-2 text-center text-xs text-destructive">{error}</p>
+      {/* "Show all offers" link — collapsed state */}
+      {!expanded && data.totalBids > 1 && (
+        <button
+          onClick={onLoadMore}
+          className="flex w-full items-center justify-center gap-1.5 py-3.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
+        >
+          {t("showAllOffers")}
+          <ChevronDown className="size-3" />
+        </button>
       )}
     </div>
   );
 }
 
-// === Main OffersPopup ===
+// ─── Main OffersPopup ────────────────────────────────────────────────
 
-export function OffersPopup({ itemId, itemTitle, itemImages, onClose }: OffersPopupProps) {
+export function OffersPopup({
+  itemId,
+  itemTitle,
+  itemImageUrl,
+  onClose,
+}: OffersPopupProps) {
   const t = useTranslations("offers");
   const router = useRouter();
-  const [showGallery, setShowGallery] = useState(false);
 
+  // Clock — ticks for countdown/time displays
+  const [now, setNow] = useState(Date.now());
+
+  // Delta badge state
+  const prevTopRef = useRef<number | null>(null);
+  const [deltaBadge, setDeltaBadge] = useState<number | null>(null);
+
+  const bids = useOffersBids({
+    itemId,
+    onNewExternalBid: (topBid) => {
+      if (prevTopRef.current != null) {
+        const delta = topBid.amount - prevTopRef.current;
+        if (delta > 0) {
+          setDeltaBadge(delta);
+          setTimeout(() => setDeltaBadge(null), 1800);
+        }
+      }
+      prevTopRef.current = topBid.amount;
+    },
+  });
+
+  const derived = useDerivedBidData(bids.data);
+  const urgency = getUrgencyState(bids.data, now);
+  const auctionEnded = urgency === "sold" || urgency === "ended";
+  const isFinal10Min =
+    urgency === "final-10m" || urgency === "final-minute";
+  const isFinalMinute = urgency === "final-minute";
+
+  // Set prevTopRef on first load
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  const bids = useOffersBids({ itemId });
-
-  // Show message buttons: timed items → only after ended, non-timed → always
-  const biddingEnded = bids.data?.endDate ? isEnded(bids.data.endDate as string) : true;
-  const canMessage = bids.data?.isOwner && biddingEnded;
-
-  const handleMessage = async (bidderId: string) => {
-    try {
-      const conv = await startConversation(bidderId);
-      onClose();
-      router.push(`/messages/${conv.id}`);
-    } catch {
-      bids.setError("error_message_failed");
+    if (bids.data?.highestBid != null && prevTopRef.current === null) {
+      prevTopRef.current = bids.data.highestBid;
     }
+  }, [bids.data?.highestBid]);
+
+  // Clock tick — 1s when <1h, 5s when <10min, 30s otherwise
+  useEffect(() => {
+    if (!bids.data?.endDate) return;
+    const diff = new Date(bids.data.endDate).getTime() - Date.now();
+    const interval =
+      diff <= 600_000 ? 1_000 : diff <= 3_600_000 ? 5_000 : 30_000;
+    const timer = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(timer);
+  }, [bids.data?.endDate, urgency]);
+
+  const handleUserClick = (displayName: string) => {
+    router.push(`/user/${encodeURIComponent(displayName)}`);
+    onClose();
   };
 
+
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogPrimitive.Portal>
+        {/* Backdrop */}
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
 
-      {/* Bottom sheet (mobile) / Centered modal (desktop) */}
-      <div className={cn(
-        "fixed z-51 flex flex-col overflow-hidden border border-border bg-card shadow-2xl",
-        "inset-x-0 bottom-0 h-[75vh] rounded-t-2xl",
-        "md:inset-auto md:left-1/2 md:top-1/2 md:h-[70vh] md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl"
-      )}>
-        {/* Drag handle (mobile) */}
-        <div className="flex justify-center py-2 md:hidden">
-          <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
-        </div>
+        {/* Dialog popup — base-ui provides focus trap, ESC, focus return */}
+        <DialogPrimitive.Popup
+          className={cn(
+            "dark",
+            "fixed z-[51] flex flex-col overflow-hidden border border-ticker-line bg-ticker-bg text-ticker-text shadow-2xl outline-none",
+            // Mobile: bottom sheet
+            "inset-x-0 bottom-0 h-[85vh] rounded-t-2xl",
+            // Desktop: centered modal
+            "md:inset-auto md:left-1/2 md:top-1/2 md:h-auto md:max-h-[85vh] md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl"
+          )}
+        >
+          {/* Accessible title — sr-only */}
+          <DialogPrimitive.Title className="sr-only">
+            {itemTitle} — {t("title")}
+          </DialogPrimitive.Title>
 
-        {showGallery && itemImages && itemImages.length > 0 && (
-          <ImageGallery images={itemImages} onClose={() => setShowGallery(false)} />
-        )}
-
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
-          <div className="flex items-center gap-3 min-w-0">
-            {itemImages && itemImages[0] && (
-              <button onClick={() => setShowGallery(true)} className="shrink-0 overflow-hidden rounded-lg transition-opacity hover:opacity-80">
-                <img src={itemImages[0].url} alt="" className="size-14 object-cover" />
-              </button>
-            )}
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{t("title")}</h2>
-              <p className="text-xs text-muted-foreground truncate">{itemTitle}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={bids.toggleSound}
-              className={`flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-muted ${bids.soundEnabled ? "text-emerald-400" : "text-muted-foreground"}`}
-              title={bids.soundEnabled ? t("soundEnabled") : t("soundDisabled")}
-            >
-              {bids.soundEnabled ? <Volume2 className="size-5" /> : <VolumeOff className="size-5" />}
-            </button>
-            <button onClick={bids.manualRefresh} disabled={bids.manualRefreshing} className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Refresh">
-              <RefreshCw className={cn("size-5 transition-transform", bids.manualRefreshing && "animate-spin")} />
-            </button>
-            <a href={`/items/${itemId}/offers`} target="_blank" rel="noopener noreferrer" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" title="Open in new tab">
-              <ExternalLink className="size-5" />
-            </a>
-            <button onClick={onClose} className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-              <X className="size-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Status banner */}
-        <div className="shrink-0 space-y-2 border-b border-border px-4 py-3 md:px-6">
-          <BidsSummaryBar
-            data={bids.data}
-            lastUpdatedAt={bids.lastUpdatedAt}
-            staleWarningMs={bids.staleWarningMs}
-            staleDangerMs={bids.staleDangerMs}
-            connectionLost={bids.connectionLost}
-            onRefresh={bids.manualRefresh}
-            t={t}
-          />
-        </div>
-
-        {/* Bid list (scrollable) */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 md:px-6">
-          <BidListBody
-            data={bids.data}
-            loading={bids.loading}
-            error={bids.error ? t(`error_${bids.error}`) : ""}
-            topBidFlash={bids.topBidFlash}
-            newBidIds={bids.newBidIds}
+          {/* Header */}
+          <TickerHeader
+            itemTitle={itemTitle}
             manualRefreshing={bids.manualRefreshing}
-            hasMore={bids.hasMore}
-            expanded={bids.expanded}
-            t={t}
-            onShowAll={() => bids.setExpanded(true)}
-            onShowLess={() => bids.setExpanded(false)}
-            onMessage={canMessage ? handleMessage : undefined}
-          />
-        </div>
+            connectionLost={bids.connectionLost}
+            urgency={urgency}
 
-        {/* Bottom: Place Bid form */}
-        <div className="shrink-0 border-t border-border px-4 py-3 md:px-6">
-          {bids.data ? (
-            <PlaceBidForm data={bids.data} itemId={itemId} t={t} onBidPlaced={() => bids.loadBids(bids.currentLimit)} inputFocusedRef={bids.inputFocusedRef} />
-          ) : (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <div className="h-10 flex-1 animate-pulse rounded-md bg-muted" />
-                <div className="h-10 w-28 animate-pulse rounded-md bg-muted" />
+            onRefresh={bids.manualRefresh}
+
+            onClose={onClose}
+            t={t}
+          />
+
+          {/* Body — loading / seller / buyer / error */}
+          {bids.loading && !bids.data ? (
+            <div className="flex flex-1 items-center justify-center">
+              <Loader2 className="size-6 animate-spin text-ticker-dim" />
+            </div>
+          ) : bids.data ? (
+            bids.data.isOwner ? (
+              /* ── Seller view ── */
+              <SellerView
+                data={bids.data}
+                itemId={itemId}
+                now={now}
+                urgency={urgency}
+                bids={bids}
+                onUserClick={handleUserClick}
+                t={t}
+              />
+            ) : (
+              /* ── Buyer view ── */
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                {/* Hero */}
+                <TickerHero
+                  data={bids.data}
+                  derived={derived}
+                  topBidFlash={bids.topBidFlash}
+                  deltaBadge={deltaBadge}
+                  isFinal10Min={isFinal10Min}
+                  isFinalMinute={isFinalMinute}
+                  t={t}
+                />
+
+                {/* Your bid card */}
+                <TickerYourBid
+                  data={bids.data}
+                  derived={derived}
+                  t={t}
+                />
+
+                {/* Time strip / promoted countdown */}
+                <TickerTimeStrip
+                  data={bids.data}
+                  urgency={urgency}
+                  now={now}
+                  t={t}
+                />
+
+                {/* Spacer — pushes form + show-all to the bottom */}
+                <div className="flex-1" />
+
+                {/* Bid form — hidden when auction ended */}
+                {!auctionEnded && (
+                  <TickerBidForm
+                    data={bids.data}
+                    derived={derived}
+                    itemId={itemId}
+                    t={t}
+                    onBidPlaced={() => bids.loadBids(bids.currentLimit)}
+                    inputFocusedRef={bids.inputFocusedRef}
+                  />
+                )}
+
+                {/* Show all / expanded list */}
+                <TickerExpandedBids
+                  data={bids.data}
+                  expanded={bids.expanded}
+                  hasMore={bids.hasMore}
+                  onLoadMore={bids.loadMore}
+                  onCollapse={bids.collapseAll}
+                  onUserClick={handleUserClick}
+                  t={t}
+                />
               </div>
+            )
+          ) : (
+            /* Error state */
+            <div className="flex flex-1 items-center justify-center">
+              <span className="text-xs text-ticker-red">
+                {bids.error
+                  ? t(`error_${bids.error}`)
+                  : t("error_bids_fetch_failed")}
+              </span>
             </div>
           )}
-        </div>
-      </div>
-    </>
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
+
+// Re-export for backward compat
+export { INITIAL_LIMIT };

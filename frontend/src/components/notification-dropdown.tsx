@@ -53,6 +53,8 @@ export function NotificationDropdown({ count, onRead }: NotificationDropdownProp
         return t("auctionEnded", { itemTitle: n.itemTitle ?? "" });
       case "BidAccepted":
         return t("bidAccepted", { itemTitle: n.itemTitle ?? "" });
+      case "BidDenied":
+        return t("bidDenied", { amount: n.bidAmount ?? 0, itemTitle: n.itemTitle ?? "" });
       case "NewItemFromFollowed":
         return n.groupCount > 1
           ? t("newItems", { actor: n.actorDisplayName ?? "?", count: n.groupCount })
@@ -67,6 +69,7 @@ export function NotificationDropdown({ count, onRead }: NotificationDropdownProp
       case "NewBid":
       case "AuctionEnded":
       case "BidAccepted":
+      case "BidDenied":
         return n.itemId ? `/items/${n.itemId}` : "/notifications";
       case "NewItemFromFollowed":
         if (n.groupCount > 1 && n.actorDisplayName)
@@ -120,9 +123,11 @@ export function NotificationDropdown({ count, onRead }: NotificationDropdownProp
           {notifications.map((n) => (
             <button
               key={n.id}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                const link = getNotificationLink(n);
                 setOpen(false);
-                router.push(getNotificationLink(n));
+                setTimeout(() => router.push(link), 0);
               }}
               className={cn(
                 "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
@@ -145,7 +150,14 @@ export function NotificationDropdown({ count, onRead }: NotificationDropdownProp
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm leading-snug">{getNotificationText(n)}</p>
-                <span className="text-xs text-muted-foreground">{formatTime(n.createdAt)}</span>
+                {n.type === "BidDenied" && n.denyReason && (
+                  <span className="mt-0.5 block text-[11px] text-red-400/80">
+                    {n.denyDetail
+                      ? t("bidDeniedReason", { reason: n.denyDetail })
+                      : t("bidDeniedReason", { reason: t(`denyReason_${n.denyReason}` as Parameters<typeof t>[0]) })}
+                  </span>
+                )}
+                <span className="block text-xs text-muted-foreground">{formatTime(n.createdAt)}</span>
               </div>
             </button>
           ))}

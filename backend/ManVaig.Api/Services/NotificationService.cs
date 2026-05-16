@@ -121,6 +121,23 @@ public class NotificationService : INotificationService
         }
     }
 
+    public async Task NotifyBidDenied(Guid bidderId, Guid itemId, Guid bidId, string reason)
+    {
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = bidderId,
+            Type = NotificationType.BidDenied,
+            ItemId = itemId,
+            BidId = bidId,
+            DenyReason = reason,
+        };
+
+        _db.Notifications.Add(notification);
+        await _db.SaveChangesAsync();
+        await SendNotificationCount(bidderId);
+    }
+
     private async Task SendNotificationCount(Guid userId)
     {
         var count = await _db.Notifications.CountAsync(n =>
