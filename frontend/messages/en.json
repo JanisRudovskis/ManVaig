@@ -792,6 +792,8 @@
     "showMoreBidders": "Show {count} more bidders",
     "seeMore": "see more",
     "seeLess": "see less",
+    "subscribed": "Notifications on",
+    "unsubscribed": "Notifications off",
 
     "contactRevealed": "Contact info",
     "bidderEmail": "Bidder",
@@ -1006,6 +1008,8 @@
     "loading": "Loading...",
     "bidDenied": "Your €{amount} offer on {itemTitle} was declined",
     "bidDeniedReason": "Reason · {reason}",
+    "bidWon": "Your bid won on {itemTitle}!",
+    "itemDeleted": "{itemTitle} was removed by the seller",
     "yourOfferDeclined": "Your offer was declined",
     "viewItem": "View item",
     "placeAnotherOffer": "Place another offer",

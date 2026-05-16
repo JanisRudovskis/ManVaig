@@ -7,4 +7,6 @@ public enum NotificationType
     BidAccepted = 2,
     NewItemFromFollowed = 3,
     BidDenied = 4,
+    ItemDeleted = 5,
+    BidWon = 6,
 }

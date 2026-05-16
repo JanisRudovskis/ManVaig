@@ -4,7 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5100";
 
 export interface NotificationItem {
   id: string;
-  type: "NewBid" | "AuctionEnded" | "BidAccepted" | "NewItemFromFollowed" | "BidDenied";
+  type: "NewBid" | "AuctionEnded" | "BidAccepted" | "NewItemFromFollowed" | "BidDenied" | "ItemDeleted" | "BidWon";
   actorDisplayName: string | null;
   actorAvatarUrl: string | null;
   itemId: string | null;

@@ -792,6 +792,8 @@
     "showMoreBidders": "Rādīt vēl {count} solītājus",
     "seeMore": "rādīt vairāk",
     "seeLess": "rādīt mazāk",
+    "subscribed": "Paziņojumi ieslēgti",
+    "unsubscribed": "Paziņojumi izslēgti",
 
     "contactRevealed": "Kontaktinformācija",
     "bidderEmail": "Solītājs",
@@ -1006,6 +1008,8 @@
     "loading": "Ielādē...",
     "bidDenied": "Jūsu €{amount} piedāvājums par {itemTitle} tika noraidīts",
     "bidDeniedReason": "Iemesls · {reason}",
+    "bidWon": "Jūsu piedāvājums uzvarēja: {itemTitle}!",
+    "itemDeleted": "{itemTitle} tika noņemts",
     "yourOfferDeclined": "Jūsu piedāvājums tika noraidīts",
     "viewItem": "Skatīt sludinājumu",
     "placeAnotherOffer": "Iesniegt jaunu piedāvājumu",

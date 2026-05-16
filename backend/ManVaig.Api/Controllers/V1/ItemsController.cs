@@ -346,7 +346,10 @@ public class ItemsController : ControllerBase
         if (lockError != null)
             return StatusCode(403, new { error = lockError });
 
-        _db.Items.Remove(item); // Cascade deletes images and item-tags
+        // Notify subscribers before deleting (item title will be lost after cascade)
+        await _notificationService.NotifyItemDeleted(item.Id, item.UserId, item.Title);
+
+        _db.Items.Remove(item); // Cascade deletes images, item-tags, subscriptions
         await _db.SaveChangesAsync();
 
         return NoContent();

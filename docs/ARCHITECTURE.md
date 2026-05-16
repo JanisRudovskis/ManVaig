@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-16 (Ticker v2 buyer + seller popup: offers-popup.tsx (buyer) + seller-offers-popup.tsx (seller). Buyer: dark trading-terminal with rolling digits, heartbeat pulse, delta badge, base-ui Dialog, paginated bids, two-tap confirm. Seller: bidder cards with crown icon for top, deny flow with reason modal, BidDenied notification type. Denied bids visible to all (faded, strikethrough, reason). Previous: bid system simplification.)
+> Last updated: 2026-05-16 (Item subscription system: bell icon in offers popup for notification opt-in/out, auto-subscribe on bid, seller subscribed by default. New notification types: ItemDeleted(5), BidWon(6). Subscriber fan-out for new bids, auction end, item deletion. Buyer popup redesign: removed hero/your-bid/time-strip, kept bid form + card-style bid list matching seller view. Denied bids always visible. Previous: Ticker v2 buyer + seller popup.)
 
 ---
 
@@ -218,15 +218,22 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 
 **Model: `Models/Notification.cs`** — UserId, Type (NotificationType enum), ActorId? (nullable FK → User, SetNull), ItemId? (nullable FK → Item, SetNull), BidId? (nullable FK → Bid, SetNull), IsRead, GroupCount, CreatedAt. SetNull FKs preserve notifications even when actor/item/bid is deleted.
 
-**NotificationType Enum** (`Models/Enums/NotificationType.cs`): NewBid(0), AuctionEnded(1), BidAccepted(2), NewItemFromFollowed(3).
+**NotificationType Enum** (`Models/Enums/NotificationType.cs`): NewBid(0), AuctionEnded(1), BidAccepted(2), NewItemFromFollowed(3), BidDenied(4), ItemDeleted(5), BidWon(6).
 
-**Service: `Services/NotificationService.cs`** — Scoped service implementing `INotificationService`. 4 methods:
-- `NotifyNewBid(sellerId, bidderId, itemId, bidId)` — called from BidsController.PlaceBid
-- `NotifyAuctionEnded(sellerId, itemId)` — called from AuctionEndedService
-- `NotifyBidAccepted(bidderId, itemId, bidId)` — called from BidsController.AcceptBid
+**Model: `Models/ItemSubscription.cs`** — Id, ItemId (FK → Item, Cascade), UserId (FK → User, Cascade), IsActive (bool, default true), CreatedAt. Unique index on (ItemId, UserId). Tracks notification opt-in/out per user per item. Owners subscribed by default (no row = subscribed). Unsubscribe sets IsActive=false (keeps row to distinguish "never subscribed" from "explicitly unsubscribed").
+
+**Service: `Services/NotificationService.cs`** — Scoped service implementing `INotificationService`. Methods:
+- `NotifyNewBid(sellerId, bidderId, itemId, bidId)` — direct seller notification
+- `NotifyNewBidToSubscribers(sellerId, bidderId, itemId, bidId)` — fan-out: notifies active subscribers + seller (if no explicit opt-out). Excludes bidder.
+- `NotifyAuctionEnded(sellerId, itemId)` — direct seller notification
+- `NotifyAuctionEndedToSubscribers(itemId, sellerId)` — fan-out: notifies active subscribers + seller (if no explicit opt-out)
+- `NotifyBidAccepted(bidderId, itemId, bidId)` — legacy winner notification
+- `NotifyBidWon(winnerId, itemId, bidId)` — new: winning bidder notification (BidWon type)
 - `NotifyNewItemFromFollowed(sellerId, itemId)` — queries UserFollows for followers, **throttle check**: unread + same actor + within 1 hour → increment GroupCount instead of creating new notification. Broadcasts `NotificationCountChanged` via SignalR per follower.
+- `NotifyBidDenied(bidderId, itemId, bidId, reason)` — denied bidder notification
+- `NotifyItemDeleted(itemId, sellerId, itemTitle)` — notifies active subscribers (excl seller). Stores item title in DenyReason field since item FK will be nulled by cascade.
 
-**BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Creates notification + broadcasts. Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
+**BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Uses subscriber fan-out (NotifyAuctionEndedToSubscribers) + NotifyBidWon for winning bidder. Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
 
 **BackgroundService: `Services/NotificationCleanupService.cs`** — Runs every 24h. Deletes notifications older than 90 days using EF Core LINQ (RemoveRange + SaveChanges in batches of 1000).
 
@@ -581,10 +588,10 @@ Composable pricing rules:
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
 - **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
-- **Phase 5** (Bidding): Simplified — public offers popup (bottom sheet/modal), real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators. Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers. Timed auctions auto-sell. Seller contacts bidders via messaging.
+- **Phase 5** (Bidding): Simplified — public offers popup (bottom sheet/modal), real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators. Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers. Timed auctions auto-sell. Seller contacts bidders via messaging. Item subscription system: bell icon toggle in offers popup, auto-subscribe on bid, seller default-subscribed, subscriber fan-out for new bids/auction end/item deletion. Buyer popup simplified: form + card-style bid list (matching seller view), denied bids always visible.
 - **Phase 7** (Browse): Homepage feed with category chips + infinite scroll, public item detail page, **unified `/search` page** with Items|Stalls tabs and `?q=` text search (server-side ILIKE on title + description + tag name + stall name + owner display name, Postgres `unaccent` extension for diacritic folding so `riga` matches `Rīga`), debounced 300ms input with min 2 chars, hint chips, Load more pagination. Lighthouse mobile a11y/best-practices/agentic 100/100/100. Remaining: standalone browse-all-items page, category/tag filters as facets, public stall detail page (`/search` stall card currently links to `/user/{displayName}` profile)
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
-- **Phase 6** (Notifications): In-app notifications done — Notification model (4 event types), NotificationService with follower throttling, AuctionEndedService (60s polling), NotificationCleanupService (90-day retention), AppHub (consolidated from ChatHub), bell icon + dropdown + full page with load-more pagination. Remaining: email notification on new offer (Resend)
+- **Phase 6** (Notifications): In-app notifications done — Notification model (7 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed, BidDenied, ItemDeleted, BidWon), NotificationService with follower throttling + subscriber fan-out, AuctionEndedService (60s polling), NotificationCleanupService (90-day retention), AppHub (consolidated from ChatHub), bell icon + dropdown + full page with load-more pagination, ItemSubscription model for opt-in/out. Remaining: email notification on new offer (Resend)
 
 ## What's Next
 

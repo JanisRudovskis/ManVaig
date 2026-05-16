@@ -302,11 +302,71 @@
 - [ ] Full notifications page: same rendering
 - [ ] Reason labels localized (EN + LV) in notifications namespace
 
+## Item Subscriptions (Bell Icon)
+
+### Subscription Model
+- [ ] ItemSubscription table: Id, ItemId, UserId, IsActive, CreatedAt
+- [ ] Unique index on (ItemId, UserId) — one subscription per user per item
+- [ ] Cascade delete when item or user deleted
+
+### Bell Icon in Offers Popup
+- [ ] Bell visible for logged-in users in popup header (between title and refresh)
+- [ ] Bell green (BellOn SVG with side arcs) when subscribed
+- [ ] Bell dimmed (BellOff SVG) when unsubscribed
+- [ ] Bell not visible for unauthenticated users
+- [ ] Clicking toggles subscription state (optimistic UI update)
+- [ ] Tooltip: "Notifications on" / "Notifications off"
+
+### Subscription Defaults
+- [ ] Seller: subscribed by default (no row = subscribed, bell shows green)
+- [ ] Buyer with active bid: auto-subscribed on bid placement
+- [ ] Buyer without bid: unsubscribed (no row = not subscribed)
+- [ ] Seller can unsubscribe — creates row with IsActive=false
+- [ ] Seller unsubscribed — no longer receives new bid notifications
+
+### Subscribe/Unsubscribe API
+- [ ] POST /api/v1/items/{itemId}/subscribe — upserts subscription with IsActive=true
+- [ ] DELETE /api/v1/items/{itemId}/subscribe — sets IsActive=false (keeps row)
+- [ ] Both require auth (401 if not authenticated)
+- [ ] Both return { subscribed: bool }
+- [ ] GET /api/v1/items/{itemId}/bids returns isSubscribed field
+
+### Notification Fan-Out
+- [ ] New bid: notifies active subscribers + seller (if no explicit opt-out), excludes bidder
+- [ ] Auction ended: notifies active subscribers + seller (if no explicit opt-out)
+- [ ] Item deleted: notifies active subscribers (excludes seller — they're deleting)
+- [ ] Bid won: notifies winning bidder (BidWon type=6)
+
+### New Notification Types
+- [ ] ItemDeleted (type=5): "{itemTitle} was removed by the seller"
+- [ ] BidWon (type=6): "Your bid won on {itemTitle}!"
+- [ ] Both rendered in notification dropdown + full page
+- [ ] ItemDeleted: click goes to /notifications (item no longer exists)
+- [ ] BidWon: click goes to /items/{itemId}
+- [ ] Both localized (EN + LV)
+
+## Buyer Popup Layout (Simplified)
+
+### Content (no hero/your-bid/time-strip)
+- [ ] Bid form at top (stepper + input + Place offer button)
+- [ ] User's active bid card always visible (card style matching seller view)
+- [ ] Crown icon on #1 ranked bid card
+- [ ] "you" pill on own bid card
+- [ ] Expandable active bid list (card style, not rows)
+- [ ] Denied bid cards always visible at bottom (faded, strikethrough, deny reason)
+- [ ] Custom deny reason expandable via "see more" / "see less"
+- [ ] Empty state (no bids): "No offers yet. Be the first!"
+
+### minNextBid Calculation
+- [ ] Always uses offerStep (no special +0.01 for highest bidder)
+- [ ] minNextBid = highestBid + offerStep (or minOfferPrice if no bids)
+
 ## Edge Cases
 
 - [ ] Very large bid amounts render correctly (tabular-nums formatting)
 - [ ] Rapid bid placement by multiple users doesn't cause race conditions (DB-level check)
 - [ ] Item deleted while offers popup open — graceful handling
+- [ ] Item deleted — subscribers notified with item title preserved
 - [ ] Network disconnect during bid placement — error shown, no duplicate bids
 - [ ] Browser back button from offers page navigates correctly
 - [ ] Multiple browser tabs with same offers page — all receive updates independently
@@ -314,4 +374,6 @@
 - [ ] Deny → re-bid → deny again — each denial creates separate denied entry
 - [ ] Deny all bidders — summary shows "No active offers", no price
 - [ ] Long custom deny reason text wraps correctly (break-all)
-- [ ] Notification for deleted item — navigates to item page which shows "not found"
+- [ ] Notification for deleted item — navigates to /notifications
+- [ ] Seller unsubscribes → new bid placed → seller gets no notification
+- [ ] Bidder auto-resubscribed on new bid placement (IsActive set back to true)

@@ -18,6 +18,7 @@ public class BidResponse
     public bool IsOwnBid { get; set; }
     public string Status { get; set; } = "Active";
     public string? DenyReason { get; set; }
+    public string? DenyDetail { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -36,6 +37,9 @@ public class BidListResponse
     public DateTime? EndDate { get; set; }
     public bool IsOwner { get; set; }
     public bool IsSold { get; set; }
+
+    // Subscription state (null if not authenticated)
+    public bool? IsSubscribed { get; set; }
 
     // Seller view: unique bidders with aggregated stats
     public List<UniqueBidderResponse>? UniqueBidders { get; set; }

@@ -26,6 +26,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<ItemSubscription> ItemSubscriptions => Set<ItemSubscription>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -302,6 +303,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
             entity.HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
             entity.HasIndex(n => new { n.UserId, n.Type, n.ActorId, n.IsRead });
+        });
+
+        // === ItemSubscription ===
+        builder.Entity<ItemSubscription>(entity =>
+        {
+            entity.HasOne(s => s.Item)
+                .WithMany()
+                .HasForeignKey(s => s.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(s => new { s.ItemId, s.UserId }).IsUnique();
+            entity.HasIndex(s => s.UserId);
         });
     }
 }

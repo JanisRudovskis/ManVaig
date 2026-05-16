@@ -343,6 +343,7 @@ export interface BidResponse {
   isOwnBid: boolean;
   status: "Active" | "Denied";
   denyReason: string | null;
+  denyDetail: string | null;
   createdAt: string;
 }
 
@@ -371,6 +372,7 @@ export interface BidListResponse {
   endDate: string | null;
   isOwner: boolean;
   isSold: boolean;
+  isSubscribed: boolean | null;
   uniqueBidders?: UniqueBidder[];
 }
 
@@ -395,6 +397,28 @@ export async function placeBid(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "bid_place_failed");
+  }
+  return res.json();
+}
+
+export async function subscribeToItem(itemId: string): Promise<{ subscribed: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/subscribe`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "subscribe_failed");
+  }
+  return res.json();
+}
+
+export async function unsubscribeFromItem(itemId: string): Promise<{ subscribed: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/subscribe`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "unsubscribe_failed");
   }
   return res.json();
 }

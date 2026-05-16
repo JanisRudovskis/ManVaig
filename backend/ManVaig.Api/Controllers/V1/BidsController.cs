@@ -68,16 +68,14 @@ public class BidsController : ControllerBase
 
         if (!item.IsSold)
         {
+            var step = item.OfferStep ?? 0.01m;
             if (highestBid.HasValue)
             {
-                if (viewerIsHighest)
-                    minNextBid = highestBid.Value + 0.01m;
-                else
-                    minNextBid = highestBid.Value + (item.OfferStep ?? 0.01m);
+                minNextBid = highestBid.Value + step;
             }
             else
             {
-                minNextBid = item.MinOfferPrice ?? item.OfferStep ?? 0.01m;
+                minNextBid = item.MinOfferPrice ?? step;
             }
             if (item.MinOfferPrice.HasValue && minNextBid < item.MinOfferPrice.Value)
                 minNextBid = item.MinOfferPrice.Value;
@@ -96,11 +94,22 @@ public class BidsController : ControllerBase
             IsOwnBid = currentUserId.HasValue && b.UserId == currentUserId.Value,
             Status = b.Status.ToString(),
             DenyReason = b.DenyReason,
+            DenyDetail = b.DenyDetail,
             CreatedAt = b.CreatedAt,
         };
 
         var bidResponses = limitedActive.Select(MapBid).ToList();
         bidResponses.AddRange(deniedBids.Select(MapBid));
+
+        // Check subscription state
+        bool? isSubscribed = null;
+        if (currentUserId.HasValue)
+        {
+            var sub = await _db.ItemSubscriptions
+                .FirstOrDefaultAsync(s => s.ItemId == itemId && s.UserId == currentUserId.Value);
+            // Owner: default subscribed (no row = true). Non-owner: default not subscribed (no row = false).
+            isSubscribed = sub != null ? sub.IsActive : isOwner;
+        }
 
         var response = new BidListResponse
         {
@@ -114,6 +123,7 @@ public class BidsController : ControllerBase
             EndDate = item.EndDate,
             IsOwner = isOwner,
             IsSold = item.IsSold,
+            IsSubscribed = isSubscribed,
             Bids = bidResponses,
         };
 
@@ -263,10 +273,28 @@ public class BidsController : ControllerBase
             }
         }
 
+        // Auto-subscribe bidder (idempotent — reactivate if previously unsubscribed)
+        var bidderSub = await _db.ItemSubscriptions
+            .FirstOrDefaultAsync(s => s.ItemId == itemId && s.UserId == userId.Value);
+        if (bidderSub == null)
+        {
+            _db.ItemSubscriptions.Add(new ItemSubscription
+            {
+                Id = Guid.NewGuid(),
+                ItemId = itemId,
+                UserId = userId.Value,
+                IsActive = true,
+            });
+        }
+        else if (!bidderSub.IsActive)
+        {
+            bidderSub.IsActive = true;
+        }
+
         await _db.SaveChangesAsync();
 
-        // Notify seller about new bid
-        await _notificationService.NotifyNewBid(item.UserId, userId.Value, itemId, bid.Id);
+        // Notify seller + subscribers about new bid
+        await _notificationService.NotifyNewBidToSubscribers(item.UserId, userId.Value, itemId, bid.Id);
 
         return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe, updated = canUpdate });
     }
@@ -319,6 +347,76 @@ public class BidsController : ControllerBase
         await _notificationService.NotifyBidDenied(bidderId, itemId, highestDeniedBid.Id, request.Reason);
 
         return Ok(new { denied = bidderBids.Count });
+    }
+
+    /// <summary>
+    /// Subscribe to notifications for this item's bidding activity.
+    /// </summary>
+    [HttpPost("~/api/v1/items/{itemId:guid}/subscribe")]
+    [Authorize]
+    public async Task<IActionResult> Subscribe(Guid itemId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        var sub = await _db.ItemSubscriptions
+            .FirstOrDefaultAsync(s => s.ItemId == itemId && s.UserId == userId.Value);
+
+        if (sub == null)
+        {
+            _db.ItemSubscriptions.Add(new ItemSubscription
+            {
+                Id = Guid.NewGuid(),
+                ItemId = itemId,
+                UserId = userId.Value,
+                IsActive = true,
+            });
+        }
+        else if (!sub.IsActive)
+        {
+            sub.IsActive = true;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { subscribed = true });
+    }
+
+    /// <summary>
+    /// Unsubscribe from notifications for this item's bidding activity.
+    /// </summary>
+    [HttpDelete("~/api/v1/items/{itemId:guid}/subscribe")]
+    [Authorize]
+    public async Task<IActionResult> Unsubscribe(Guid itemId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var sub = await _db.ItemSubscriptions
+            .FirstOrDefaultAsync(s => s.ItemId == itemId && s.UserId == userId.Value);
+
+        if (sub != null)
+        {
+            // Keep the row but mark inactive (so we know they explicitly unsubscribed)
+            sub.IsActive = false;
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            // No row existed — create one as inactive (explicit opt-out)
+            _db.ItemSubscriptions.Add(new ItemSubscription
+            {
+                Id = Guid.NewGuid(),
+                ItemId = itemId,
+                UserId = userId.Value,
+                IsActive = false,
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new { subscribed = false });
     }
 
     private Guid? GetCurrentUserId()

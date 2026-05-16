@@ -50,8 +50,8 @@ public class AuctionEndedService : BackgroundService
 
                 foreach (var item in endedItems)
                 {
-                    // Notify seller
-                    await notificationService.NotifyAuctionEnded(item.UserId, item.Id);
+                    // Notify seller + all subscribers that auction ended
+                    await notificationService.NotifyAuctionEndedToSubscribers(item.Id, item.UserId);
 
                     // Find winning bid (highest active)
                     var winningBid = await db.Bids
@@ -69,8 +69,8 @@ public class AuctionEndedService : BackgroundService
                             await db.SaveChangesAsync(stoppingToken);
                         }
 
-                        // Notify winner (BidAccepted notification — their bid won)
-                        await notificationService.NotifyBidAccepted(winningBid.UserId, item.Id, winningBid.Id);
+                        // Notify winner that their bid won
+                        await notificationService.NotifyBidWon(winningBid.UserId, item.Id, winningBid.Id);
                     }
                 }
 

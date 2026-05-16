@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchPublicBids } from "@/lib/items";
+import { fetchPublicBids, subscribeToItem, unsubscribeFromItem } from "@/lib/items";
 import type { BidListResponse } from "@/lib/items";
 
 const INITIAL_LIMIT = 5;
@@ -42,6 +42,7 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const [connectionLost, setConnectionLost] = useState(false);
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
   const inputFocusedRef = useRef(false);
   const prevHighestRef = useRef<{ amount: number; id: string } | null>(null);
@@ -141,6 +142,10 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     setConsecutiveFailures(0);
     consecutiveFailuresRef.current = 0;
     setConnectionLost(false);
+    // Sync subscription state from API (only on first load, not polling — user toggle is optimistic)
+    if (!isPolling && newData.isSubscribed != null) {
+      setSubscribed(newData.isSubscribed);
+    }
     setData(newData);
   }, [playDing]);
 
@@ -263,5 +268,19 @@ export function useOffersBids({ itemId, onNewExternalBid, soundDefaultOff }: Use
     },
     setError,
     loadBids,
+    subscribed,
+    toggleSubscription: async () => {
+      const next = !subscribed;
+      setSubscribed(next); // optimistic
+      try {
+        if (next) {
+          await subscribeToItem(itemId);
+        } else {
+          await unsubscribeFromItem(itemId);
+        }
+      } catch {
+        setSubscribed(!next); // revert on failure
+      }
+    },
   };
 }

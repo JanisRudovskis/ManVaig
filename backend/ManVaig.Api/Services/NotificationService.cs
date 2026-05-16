@@ -35,6 +35,43 @@ public class NotificationService : INotificationService
         await SendNotificationCount(sellerId);
     }
 
+    public async Task NotifyNewBidToSubscribers(Guid sellerId, Guid bidderId, Guid itemId, Guid bidId)
+    {
+        // Get explicitly subscribed users (IsActive = true), excluding the bidder
+        var subscriberIds = await _db.ItemSubscriptions
+            .Where(s => s.ItemId == itemId && s.IsActive && s.UserId != bidderId)
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        // Seller is subscribed by default (if no row exists, they haven't explicitly opted out)
+        var sellerHasRow = await _db.ItemSubscriptions
+            .AnyAsync(s => s.ItemId == itemId && s.UserId == sellerId);
+        if (!sellerHasRow && sellerId != bidderId)
+        {
+            subscriberIds.Add(sellerId);
+        }
+
+        foreach (var subscriberId in subscriberIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = subscriberId,
+                Type = NotificationType.NewBid,
+                ActorId = bidderId,
+                ItemId = itemId,
+                BidId = bidId,
+            });
+        }
+
+        if (subscriberIds.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+            foreach (var subscriberId in subscriberIds)
+                await SendNotificationCount(subscriberId);
+        }
+    }
+
     public async Task NotifyAuctionEnded(Guid sellerId, Guid itemId)
     {
         var notification = new Notification
@@ -118,6 +155,88 @@ public class NotificationService : INotificationService
         foreach (var followerId in followerIds)
         {
             await SendNotificationCount(followerId);
+        }
+    }
+
+    public async Task NotifyAuctionEndedToSubscribers(Guid itemId, Guid sellerId)
+    {
+        // Get explicitly subscribed users (IsActive = true)
+        var subscriberIds = await _db.ItemSubscriptions
+            .Where(s => s.ItemId == itemId && s.IsActive)
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        // Seller is subscribed by default (if no row exists)
+        var sellerHasRow = await _db.ItemSubscriptions
+            .AnyAsync(s => s.ItemId == itemId && s.UserId == sellerId);
+        if (!sellerHasRow && !subscriberIds.Contains(sellerId))
+        {
+            subscriberIds.Add(sellerId);
+        }
+
+        foreach (var subscriberId in subscriberIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = subscriberId,
+                Type = NotificationType.AuctionEnded,
+                ItemId = itemId,
+            });
+        }
+
+        if (subscriberIds.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+            foreach (var subscriberId in subscriberIds)
+                await SendNotificationCount(subscriberId);
+        }
+    }
+
+    public async Task NotifyBidWon(Guid winnerId, Guid itemId, Guid bidId)
+    {
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = winnerId,
+            Type = NotificationType.BidWon,
+            ItemId = itemId,
+            BidId = bidId,
+        };
+
+        _db.Notifications.Add(notification);
+        await _db.SaveChangesAsync();
+        await SendNotificationCount(winnerId);
+    }
+
+    public async Task NotifyItemDeleted(Guid itemId, Guid sellerId, string itemTitle)
+    {
+        // Notify active subscribers (excluding seller — they're the one deleting)
+        var subscriberIds = await _db.ItemSubscriptions
+            .Where(s => s.ItemId == itemId && s.IsActive && s.UserId != sellerId)
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        foreach (var subscriberId in subscriberIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = subscriberId,
+                Type = NotificationType.ItemDeleted,
+                ItemId = itemId,
+                // ActorId = sellerId — item will be deleted, so ItemId FK will be null via cascade
+                // We store the title in DenyReason field as a generic "detail" field
+                // (alternatively we could add a dedicated field, but this works for now)
+                DenyReason = itemTitle,
+            });
+        }
+
+        if (subscriberIds.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+            foreach (var subscriberId in subscriberIds)
+                await SendNotificationCount(subscriberId);
         }
     }
 
