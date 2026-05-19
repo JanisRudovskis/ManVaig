@@ -13,4 +13,9 @@ public interface INotificationService
     Task NotifyNewItemFromFollowed(Guid sellerId, Guid itemId);
     Task NotifyBidDenied(Guid bidderId, Guid itemId, Guid bidId, string reason);
     Task NotifyItemDeleted(Guid itemId, Guid sellerId, string itemTitle);
+    Task NotifyInstantBuyRequested(Guid sellerId, Guid buyerId, Guid itemId);
+    Task NotifyInstantBuyAccepted(Guid buyerId, Guid itemId);
+    Task NotifyInstantBuyDeclined(Guid buyerId, Guid itemId);
+    Task NotifyAuctionReopenedToSubscribers(Guid itemId, Guid sellerId);
+    Task NotifyAuctionClosedToSubscribers(Guid itemId, Guid sellerId);
 }

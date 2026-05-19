@@ -257,6 +257,103 @@ public class NotificationService : INotificationService
         await SendNotificationCount(bidderId);
     }
 
+    public async Task NotifyInstantBuyRequested(Guid sellerId, Guid buyerId, Guid itemId)
+    {
+        _db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = sellerId,
+            Type = NotificationType.InstantBuyRequested,
+            ActorId = buyerId,
+            ItemId = itemId,
+        });
+        await _db.SaveChangesAsync();
+        await SendNotificationCount(sellerId);
+    }
+
+    public async Task NotifyInstantBuyAccepted(Guid buyerId, Guid itemId)
+    {
+        _db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = buyerId,
+            Type = NotificationType.InstantBuyAccepted,
+            ItemId = itemId,
+        });
+        await _db.SaveChangesAsync();
+        await SendNotificationCount(buyerId);
+    }
+
+    public async Task NotifyAuctionReopenedToSubscribers(Guid itemId, Guid sellerId)
+    {
+        var subscriberIds = await _db.ItemSubscriptions
+            .Where(s => s.ItemId == itemId && s.IsActive && s.UserId != sellerId)
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        // Seller is subscribed by default
+        var sellerHasRow = await _db.ItemSubscriptions
+            .AnyAsync(s => s.ItemId == itemId && s.UserId == sellerId);
+        // Don't notify seller — they're the one reopening
+
+        foreach (var subscriberId in subscriberIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = subscriberId,
+                Type = NotificationType.AuctionReopened,
+                ItemId = itemId,
+            });
+        }
+
+        if (subscriberIds.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+            foreach (var subscriberId in subscriberIds)
+                await SendNotificationCount(subscriberId);
+        }
+    }
+
+    public async Task NotifyAuctionClosedToSubscribers(Guid itemId, Guid sellerId)
+    {
+        var subscriberIds = await _db.ItemSubscriptions
+            .Where(s => s.ItemId == itemId && s.IsActive && s.UserId != sellerId)
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        foreach (var subscriberId in subscriberIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = subscriberId,
+                Type = NotificationType.AuctionClosed,
+                ItemId = itemId,
+            });
+        }
+
+        if (subscriberIds.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+            foreach (var subscriberId in subscriberIds)
+                await SendNotificationCount(subscriberId);
+        }
+    }
+
+    public async Task NotifyInstantBuyDeclined(Guid buyerId, Guid itemId)
+    {
+        _db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = buyerId,
+            Type = NotificationType.InstantBuyDeclined,
+            ItemId = itemId,
+        });
+        await _db.SaveChangesAsync();
+        await SendNotificationCount(buyerId);
+    }
+
     private async Task SendNotificationCount(Guid userId)
     {
         var count = await _db.Notifications.CountAsync(n =>

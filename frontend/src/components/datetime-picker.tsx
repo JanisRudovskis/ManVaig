@@ -25,6 +25,7 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const fpRef = useRef<flatpickr.Instance | null>(null);
+  const lastDateStrRef = useRef(value?.toDateString() ?? "");
 
   useEffect(() => {
     if (!inputRef.current) return;
@@ -38,7 +39,15 @@ export function DateTimePicker({
       defaultDate: value,
       appendTo: document.body,
       onChange: (selectedDates) => {
-        onChange(selectedDates[0] ?? undefined);
+        const picked = selectedDates[0];
+        onChange(picked ?? undefined);
+
+        // Auto-close when a day cell was clicked (date changed), not on time-only adjustments
+        const pickedDateStr = picked?.toDateString() ?? "";
+        if (pickedDateStr && pickedDateStr !== lastDateStrRef.current) {
+          lastDateStrRef.current = pickedDateStr;
+          setTimeout(() => fpRef.current?.close(), 0);
+        }
       },
     });
 
@@ -57,8 +66,10 @@ export function DateTimePicker({
     if (!fpRef.current) return;
     if (value) {
       fpRef.current.setDate(value, false);
+      lastDateStrRef.current = value.toDateString();
     } else {
       fpRef.current.clear(false);
+      lastDateStrRef.current = "";
     }
   }, [value]);
 

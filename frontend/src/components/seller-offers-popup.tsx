@@ -6,8 +6,12 @@ import { X, Loader2, ChevronDown, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatPrice, isEnded } from "@/components/item-card-shared";
-import { denyBidder } from "@/lib/items";
+import { denyBidder, reopenItem, passToNextBidder, closeAuction } from "@/lib/items";
 import type { BidListResponse, UniqueBidder } from "@/lib/items";
+import { SellerInstantBuyCard } from "@/components/instant-buy/seller-instant-buy-card";
+import { SoldHero } from "@/components/sold-state/sold-hero";
+import { SoldActionArea } from "@/components/sold-state/sold-action-area";
+import { ManageSaleDrawer } from "@/components/sold-state/manage-sale-drawer";
 import { useOffersBids, INITIAL_LIMIT } from "@/hooks/use-offers-bids";
 
 // ─── Shared helpers (re-used from offers-popup) ──────────────────────
@@ -99,10 +103,14 @@ function SellerSummaryLine({
 function BidderCard({
   bidder,
   onDeny,
+  onUserClick,
+  hideDeny,
   t,
 }: {
   bidder: UniqueBidder;
   onDeny: () => void;
+  onUserClick: (displayName: string) => void;
+  hideDeny?: boolean;
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const isDenied = bidder.isDenied;
@@ -114,30 +122,38 @@ function BidderCard({
         "grid items-center gap-3.5 rounded-xl bg-ticker-bg-2 p-[12px_12px_12px_14px]",
         isDenied
           ? "grid-cols-[auto_1fr_auto] opacity-50"
-          : "grid-cols-[auto_1fr_auto_auto]",
+          : (hideDeny ? "grid-cols-[auto_1fr_auto]" : "grid-cols-[auto_1fr_auto_auto]"),
         bidder.isTop &&
           !isDenied &&
           "border border-ticker-emer/[0.22] bg-[oklch(0.78_0.18_165/0.08)]"
       )}
     >
-      {/* Avatar */}
-      <UserAvatar
-        displayName={bidder.bidderName}
-        avatarUrl={bidder.bidderAvatarUrl}
-        size="base"
-      />
+      {/* Avatar — clickable */}
+      <button
+        type="button"
+        onClick={() => onUserClick(bidder.bidderName)}
+        className="cursor-pointer"
+      >
+        <UserAvatar
+          displayName={bidder.bidderName}
+          avatarUrl={bidder.bidderAvatarUrl}
+          size="base"
+        />
+      </button>
 
       {/* Meta */}
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span
+          <button
+            type="button"
+            onClick={() => onUserClick(bidder.bidderName)}
             className={cn(
-              "truncate text-[14.5px] font-medium",
+              "cursor-pointer truncate text-[14.5px] font-medium hover:underline",
               isDenied ? "text-ticker-dim" : "text-ticker-text"
             )}
           >
             {bidder.bidderName}
-          </span>
+          </button>
           {isDenied && (
             <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-red">
               {t("deny")}
@@ -196,8 +212,8 @@ function BidderCard({
         {formatPrice(bidder.bestAmount)}
       </span>
 
-      {/* Deny button — hidden for already-denied bidders */}
-      {!isDenied && (
+      {/* Deny button — hidden for already-denied bidders and when sold */}
+      {!isDenied && !hideDeny && (
         <button
           onClick={onDeny}
           className="flex size-9 items-center justify-center rounded-[10px] text-[oklch(0.52_0.04_30)] transition-colors hover:bg-ticker-red/10 hover:text-ticker-red"
@@ -404,8 +420,10 @@ export function SellerView({
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const [denyTarget, setDenyTarget] = useState<UniqueBidder | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
   const uniqueBidders = data.uniqueBidders ?? [];
   const auctionEnded = urgency === "sold" || urgency === "ended";
+  const isSold = data.isSold && data.soldTo != null;
 
   const visibleBidders = bids.expanded
     ? uniqueBidders
@@ -413,10 +431,54 @@ export function SellerView({
   const hasMoreBidders =
     !bids.expanded && uniqueBidders.length > INITIAL_LIMIT;
 
+  const ibPending = data.pendingInstantBuy;
+
+  // Runners-up: active bidders excluding the winner
+  const runnersUp = uniqueBidders.filter(
+    (b) => !b.isDenied && b.bidderId !== data.soldTo?.buyerId
+  );
+  const nextRunner = runnersUp[0] ?? null;
+
+  const handleReopen = async () => {
+    await reopenItem(itemId);
+    setManageOpen(false);
+    bids.manualRefresh();
+  };
+
+  const handlePassTo = async (bidder: UniqueBidder) => {
+    await passToNextBidder(itemId, bidder.bidderId);
+    setManageOpen(false);
+    bids.manualRefresh();
+  };
+
+  const handleCloseAuction = async () => {
+    await closeAuction(itemId);
+    setManageOpen(false);
+    bids.manualRefresh();
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Summary line */}
-      <SellerSummaryLine data={data} t={t} />
+      {/* Instant buy card — seller needs to accept/decline */}
+      {ibPending && (
+        <SellerInstantBuyCard
+          itemId={itemId}
+          pending={ibPending}
+          onResolved={bids.manualRefresh}
+          onUserClick={onUserClick}
+        />
+      )}
+
+      {/* Sold hero — replaces summary line when sold */}
+      {isSold ? (
+        <SoldHero
+          amount={data.soldTo!.amount}
+          winnerDisplayName={data.soldTo!.buyerDisplayName}
+          onUserClick={onUserClick}
+        />
+      ) : (
+        <SellerSummaryLine data={data} t={t} />
+      )}
 
       {/* Empty state */}
       {uniqueBidders.length === 0 ? (
@@ -427,15 +489,23 @@ export function SellerView({
         </div>
       ) : (
         <>
-          {/* Bidder cards */}
+          {/* Bidder cards — dimmed when sold (except winner) */}
           <div className="space-y-2 px-3 py-3">
             {visibleBidders.map((bidder) => (
-              <BidderCard
+              <div
                 key={`${bidder.bidderId}-${bidder.isDenied ? "denied" : "active"}`}
-                bidder={bidder}
-                onDeny={() => setDenyTarget(bidder)}
-                t={t}
-              />
+                className={cn(
+                  isSold && bidder.bidderId !== data.soldTo?.buyerId && "opacity-50"
+                )}
+              >
+                <BidderCard
+                  bidder={bidder}
+                  onDeny={() => setDenyTarget(bidder)}
+                  onUserClick={onUserClick}
+                  hideDeny={auctionEnded}
+                  t={t}
+                />
+              </div>
             ))}
           </div>
 
@@ -453,6 +523,30 @@ export function SellerView({
           )}
         </>
       )}
+
+      {/* Sold action area: chat + manage/cancel */}
+      {isSold && (() => {
+        const endDatePassed = data.endDate != null && new Date(data.endDate).getTime() <= Date.now();
+        return (
+          <>
+            <SoldActionArea
+              buyerDisplayName={data.soldTo!.buyerDisplayName}
+              buyerId={data.soldTo!.buyerId}
+              endDatePassed={endDatePassed}
+              onOpenManage={() => setManageOpen((v) => !v)}
+              onCancelSale={handleReopen}
+            />
+            {manageOpen && endDatePassed && (
+              <ManageSaleDrawer
+                onPassTo={handlePassTo}
+                onClose={() => setManageOpen(false)}
+                onCloseAuction={handleCloseAuction}
+                nextBidder={nextRunner}
+              />
+            )}
+          </>
+        );
+      })()}
 
       {/* Deny modal */}
       {denyTarget && !auctionEnded && (

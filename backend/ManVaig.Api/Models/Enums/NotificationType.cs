@@ -9,4 +9,9 @@ public enum NotificationType
     BidDenied = 4,
     ItemDeleted = 5,
     BidWon = 6,
+    InstantBuyRequested = 7,
+    InstantBuyAccepted = 8,
+    InstantBuyDeclined = 9,
+    AuctionReopened = 10,
+    AuctionClosed = 11,
 }

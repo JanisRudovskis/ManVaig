@@ -169,6 +169,7 @@
   animation: tickerPulse 1.4s ease-in-out infinite;
 }
 
+
 /* Ticker hero emerald flash on new bid */
 .tx-hero { transition: background 0.5s ease-out; }
 .tx-hero.is-flash {

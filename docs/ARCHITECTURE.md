@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-16 (Item subscription system: bell icon in offers popup for notification opt-in/out, auto-subscribe on bid, seller subscribed by default. New notification types: ItemDeleted(5), BidWon(6). Subscriber fan-out for new bids, auction end, item deletion. Buyer popup redesign: removed hero/your-bid/time-strip, kept bid form + card-style bid list matching seller view. Denied bids always visible. Previous: Ticker v2 buyer + seller popup.)
+> Last updated: 2026-05-19 (Instant Buy system: buyers can buy at listed price via segmented switch, seller accepts/declines. Sold state management: SoldHero with SOLD stamp, manage drawer with pass-to-next + close auction for ended timed auctions, cancel deal for non-timed. 3 new endpoints (reopen, pass-to, close-auction). 5 new notification types. Bid step validation fix.)
 
 ---
 
@@ -160,23 +160,42 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 
 ### Bidding System
 
-**Model: `Models/Bid.cs`** — ItemId, UserId, Amount, Status (BidStatus.Active only), CreatedAt. All bidders are registered users (no anonymous bidding, no guest offers).
+**Model: `Models/Bid.cs`** — ItemId, UserId, Amount, Status (BidStatus enum: Active=0, Denied=1, InstantBuy=2), IsInstantBuy (bool, persists through status changes), DenyReason, DenyDetail, DeniedAt, CreatedAt. All bidders are registered users.
 
 **Controller: `Controllers/V1/BidsController.cs`**:
 
 | Endpoint | Auth | What it does |
 |----------|------|-------------|
-| `GET /api/v1/items/{itemId}/bids` | Public | Bid list ordered by amount desc. Shows bidder name, avatar, amount, time. `?limit=` param. |
-| `POST /api/v1/items/{itemId}/bids` | Bearer | Place bid. Update-in-place (1 active bid per user). Validates amount > highest, respects offerStep/minOfferPrice. Anti-snipe extends EndDate by 10 min. Rejects if IsSold or ended. |
+| `GET /items/{itemId}/bids` | Public | Bid list (active + instant buy + denied). Returns `soldTo`, `canReopen`, `instantBuyPrice`, `pendingInstantBuy`. |
+| `POST /items/{itemId}/bids` | Bearer | Place bid. Update-in-place (1 active per user). Validates step/min. Rejects if user has pending instant buy. |
+| `POST /items/{itemId}/instant-buy` | Bearer | Instant buy at item.Price. Creates bid with Status=InstantBuy. Rejects if already pending or bids exceed price. |
+| `POST /items/{itemId}/instant-buy/accept` | Bearer (seller) | Accepts instant buy → IsSold=true. Notifies buyer + all subscribers. |
+| `POST /items/{itemId}/instant-buy/decline` | Bearer (seller) | Denies instant buy bid → bidding continues. |
+| `POST /items/{itemId}/reopen` | Bearer (seller) | Cancel sale (instant buy failed). Denies winner bid, sets IsSold=false. Only for IB sales with time remaining. |
+| `POST /items/{itemId}/pass-to/{bidderId}` | Bearer (seller) | Pass sale to different bidder. Denies current winner, new bidder becomes top. |
+| `POST /items/{itemId}/close-auction` | Bearer (seller) | Close auction permanently. Denies all bids, sets AcceptOffers=false. Item becomes delete-only. |
+| `POST /items/{itemId}/bidders/{bidderId}/deny` | Bearer (seller) | Deny all active bids from a specific bidder (with reason). |
+| `POST /items/{itemId}/subscribe` | Bearer | Subscribe to bid notifications. |
+| `DELETE /items/{itemId}/subscribe` | Bearer | Unsubscribe. |
 
-**Removed endpoints** (simplified in 2026-05-15 redesign): accept, complete, fail, deny. No seller actions on bids — timed auctions auto-complete, non-timed items use messaging.
+**Instant Buy flow**:
+1. Buyer clicks "Buy Now" → InstantBuy bid created at item.Price → seller notified
+2. Bidding continues normally (not locked), Buy Now button disabled for everyone
+3. Seller accepts → IsSold=true, all subscribers notified
+4. Seller declines → bid denied, bidding continues, buyer notified
+5. Buy Now only available when: item has Price + AcceptOffers + highest bid < Price
+
+**Sold state management** (seller popup):
+- **No end date / time remaining** → "Cancel deal" button (calls reopen, denies winner, unsells)
+- **End date passed** → "Manage" drawer with: Pass to next bidder + Close auction
+- All actions notify subscribers (AuctionReopened / AuctionClosed notifications)
 
 **Item sold lifecycle**:
-- **Timed items**: `AuctionEndedService` detects EndDate passed → sets `IsSold=true` → notifies seller + winner (highest bidder)
-- **Non-timed items**: seller deletes item when done (no formal "sold" state)
-- **Offer lock**: sold items (`IsSold`) are locked (cannot edit). Timed items with active bids locked during auction + 48h grace.
+- **Timed items**: `AuctionEndedService` detects EndDate passed → sets `IsSold=true` → notifies seller + winner
+- **Instant buy**: buyer initiates, seller accepts → `IsSold=true`
+- **Sold items**: hidden from public feeds, seller sees SoldHero with SOLD stamp + winner info + manage actions
 
-**Seller ↔ bidder communication**: After bidding ends, seller sees "Message" button on each bid row → creates conversation via existing messaging system → navigates to `/messages/{id}`. For non-timed items, message buttons always visible.
+**Seller ↔ bidder communication**: Seller sees "Message" button on bid rows → creates conversation via messaging. After sale: "Chat with @winner" button in sold state action area.
 
 ### Follow System
 
@@ -218,7 +237,7 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 
 **Model: `Models/Notification.cs`** — UserId, Type (NotificationType enum), ActorId? (nullable FK → User, SetNull), ItemId? (nullable FK → Item, SetNull), BidId? (nullable FK → Bid, SetNull), IsRead, GroupCount, CreatedAt. SetNull FKs preserve notifications even when actor/item/bid is deleted.
 
-**NotificationType Enum** (`Models/Enums/NotificationType.cs`): NewBid(0), AuctionEnded(1), BidAccepted(2), NewItemFromFollowed(3), BidDenied(4), ItemDeleted(5), BidWon(6).
+**NotificationType Enum** (`Models/Enums/NotificationType.cs`): NewBid(0), AuctionEnded(1), BidAccepted(2), NewItemFromFollowed(3), BidDenied(4), ItemDeleted(5), BidWon(6), InstantBuyRequested(7), InstantBuyAccepted(8), InstantBuyDeclined(9), AuctionReopened(10), AuctionClosed(11).
 
 **Model: `Models/ItemSubscription.cs`** — Id, ItemId (FK → Item, Cascade), UserId (FK → User, Cascade), IsActive (bool, default true), CreatedAt. Unique index on (ItemId, UserId). Tracks notification opt-in/out per user per item. Owners subscribed by default (no row = subscribed). Unsubscribe sets IsActive=false (keeps row to distinguish "never subscribed" from "explicitly unsubscribed").
 
@@ -232,6 +251,11 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 - `NotifyNewItemFromFollowed(sellerId, itemId)` — queries UserFollows for followers, **throttle check**: unread + same actor + within 1 hour → increment GroupCount instead of creating new notification. Broadcasts `NotificationCountChanged` via SignalR per follower.
 - `NotifyBidDenied(bidderId, itemId, bidId, reason)` — denied bidder notification
 - `NotifyItemDeleted(itemId, sellerId, itemTitle)` — notifies active subscribers (excl seller). Stores item title in DenyReason field since item FK will be nulled by cascade.
+- `NotifyInstantBuyRequested(sellerId, buyerId, itemId)` — seller: someone wants to buy instantly
+- `NotifyInstantBuyAccepted(buyerId, itemId)` — buyer: your instant buy was accepted
+- `NotifyInstantBuyDeclined(buyerId, itemId)` — buyer: your instant buy was declined
+- `NotifyAuctionReopenedToSubscribers(itemId, sellerId)` — all subscribers: bidding is back
+- `NotifyAuctionClosedToSubscribers(itemId, sellerId)` — all subscribers: auction closed, no winner
 
 **BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Uses subscriber fan-out (NotifyAuctionEndedToSubscribers) + NotifyBidWon for winning bidder. Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
 
@@ -413,8 +437,12 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | ConfirmDialog | `components/confirm-dialog.tsx` | Generic confirmation dialog (title, message, confirm/cancel). |
 | ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, EndDateCountdown, timeAgo, isEnded. Field-based indicators (no TypeTag). |
 | ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
-| OffersPopup | `components/offers-popup.tsx` | Ticker v2 buyer popup + shared Dialog shell. base-ui Dialog (focus trap, ESC, focus return). Bottom sheet mobile / centered modal desktop. Branches on `data.isOwner` — buyer gets Ticker view, seller gets SellerView. Buyer components: TickerHeader (live dot, title, refresh with spin, close), TickerHero (76px rolling digits, emerald flash, "+€delta" badge, heartbeat pulse for final 10min, from-line fade-in), TickerYourBid (active: rank + delta below top; denied: red border + strikethrough + reason), TickerTimeStrip ("ends in Xh Ym" / PromotedCountdown amber→red / status banner), TickerBidForm (stepper, hidden input on confirm, 3s auto-reset), TickerExpandedBids (paginated load-more in batches of 5, denied bids shown faded at bottom with DENIED pill + strikethrough). Props: itemId, itemTitle, itemImageUrl?, onClose. |
-| SellerView | `components/seller-offers-popup.tsx` | Seller offers popup view — imported by OffersPopup when `isOwner`. Components: SellerSummaryLine (top amount + bidder count, or "No active offers"), BidderCard (avatar, name, crown icon for top bidder, "+N bids" hot pill, deny ⊘ button; denied cards: faded, DENIED pill, reason text, expandable detail for "other"), DenyReasonModal (nested Dialog: target row, 3 radio reasons, textarea for "other", cancel/deny footer), CrownIcon (filled SVG). |
+| OffersPopup | `components/offers-popup.tsx` | Ticker v2 buyer popup + shared Dialog shell. base-ui Dialog (focus trap, ESC, focus return). Bottom sheet mobile / centered modal desktop. Branches on `data.isOwner` — buyer gets Ticker view, seller gets SellerView. Buyer components: TickerHeader (live dot, clickable title → item page, refresh, close), TickerHero (rolling digits, emerald flash, delta badge), TickerYourBid, TickerTimeStrip, TickerBidForm (stepper + optional segmented switch for Buy Now when instantBuyPrice exists), TickerExpandedBids (active + instant buy pills + denied bids). Instant buy: segmented "Place offer / ⚡ Buy now" tabs, 2-tap confirm, disabled when pending IB exists, buyer's form hidden when own IB pending. |
+| SellerView | `components/seller-offers-popup.tsx` | Seller popup view. Live state: SellerSummaryLine + BidderCards (clickable avatar/name → profile, crown for top, hot pill, deny button hidden when sold) + DenyReasonModal. Sold state: SoldHero (SOLD stamp + emerald price + winner name) + SoldActionArea (chat + manage/cancel) + ManageSaleDrawer (pass-to-next + close auction, only for ended timed auctions). Instant buy: SellerInstantBuyCard (accept/decline with clickable buyer profile). |
+| SellerInstantBuyCard | `components/instant-buy/seller-instant-buy-card.tsx` | Seller accept/decline card for pending instant buy. Emerald gradient border, buyer avatar + name (clickable), amount, Accept/Decline buttons with loading states. |
+| SoldHero | `components/sold-state/sold-hero.tsx` | Diagonal SOLD stamp (rotated 8deg, anchored top-right) + emerald price + clickable winner name. Replaces SellerSummaryLine when sold. |
+| SoldActionArea | `components/sold-state/sold-action-area.tsx` | Chat button + manage/cancel. End date passed → "Manage" opens drawer. Otherwise → "Cancel deal" with confirmation dialog. |
+| ManageSaleDrawer | `components/sold-state/manage-sale-drawer.tsx` | Pass to next bidder (if runners exist) + Close auction (red, denies all bids). Only shown for ended timed auctions. |
 | OffersPage | `app/items/[id]/offers/page.tsx` | Full-page offers view — renders OffersPopup as Dialog overlay. Tab title blink hook (useTabBlink). Fetches item detail for title/image. Close navigates back to item page. |
 | useRealtime | `hooks/use-realtime.ts` | Merged SignalR hook — single connection to `/hubs/app`, listens for `UnreadCountChanged` + `NotificationCountChanged`. Returns `{ messageCount, notificationCount, setNotificationCount, refetch }`. Polling fallback (30s) if SignalR fails. Replaces deleted `use-unread-count.ts`. |
 | useOffersBids | `hooks/use-offers-bids.ts` | Core bidding hook: polling (10s/3s retry), Web Audio API sound (bid-ding.wav), slide-in animations, reliability tracking (stale/connection lost), manual refresh with spin state, sound toggle with localStorage, paginated expand (loadMore in batches of 5, collapseAll resets), onNewExternalBid callback for delta badge. Fixed: visibilitychange listener leak. |
@@ -588,7 +616,7 @@ Composable pricing rules:
 - **Phase 2** (Auth): mostly complete — forgot/reset password, unique usernames, login by username, change email with rate limiting, bilingual emails, password/username checklists. Remaining: phone verification, OAuth
 - **Phase 3** (Stalls): mostly done — stall CRUD, background images, stall items page with activity badges, attention filter, drag-and-drop reorder. Remaining: public stall page, contact details
 - **Phase 4** (Items): nearly complete — composable pricing (replaced PricingType enum), 5-condition enum, unified item form (3 tabs, add+edit), 2-step add wizard, countdown delete dialog, field-based card indicators. Remaining: public item detail SSR improvements
-- **Phase 5** (Bidding): Simplified — public offers popup (bottom sheet/modal), real-time polling with sound notifications, anti-snipe, full offers page with tab blink, image gallery, two-tap confirm, reliability indicators. Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers. Timed auctions auto-sell. Seller contacts bidders via messaging. Item subscription system: bell icon toggle in offers popup, auto-subscribe on bid, seller default-subscribed, subscriber fan-out for new bids/auction end/item deletion. Buyer popup simplified: form + card-style bid list (matching seller view), denied bids always visible.
+- **Phase 5** (Bidding): Complete — offers popup (bottom sheet/modal), real-time polling with sound, anti-snipe, full offers page, two-tap confirm. **Instant Buy**: segmented switch (Place offer / Buy now), 2-tap confirm, seller accept/decline card, Buy Now disabled when pending. **Sold state**: SoldHero (SOLD stamp + emerald price + winner), manage actions (cancel deal for non-timed, pass-to-next + close auction for ended timed). **Bid deny**: seller can deny bidders with reasons. **Notifications**: 12 event types including InstantBuy + AuctionReopened/Closed. Item subscriptions with bell toggle + auto-subscribe on bid.
 - **Phase 7** (Browse): Homepage feed with category chips + infinite scroll, public item detail page, **unified `/search` page** with Items|Stalls tabs and `?q=` text search (server-side ILIKE on title + description + tag name + stall name + owner display name, Postgres `unaccent` extension for diacritic folding so `riga` matches `Rīga`), debounced 300ms input with min 2 chars, hint chips, Load more pagination. Lighthouse mobile a11y/best-practices/agentic 100/100/100. Remaining: standalone browse-all-items page, category/tag filters as facets, public stall detail page (`/search` stall card currently links to `/user/{displayName}` profile)
 - **Phase 8** (Polish): Instagram-style sidebar redesign, More menu, avatar in sidebar, collapse state persistence
 - **Phase 6** (Notifications): In-app notifications done — Notification model (7 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed, BidDenied, ItemDeleted, BidWon), NotificationService with follower throttling + subscriber fan-out, AuctionEndedService (60s polling), NotificationCleanupService (90-day retention), AppHub (consolidated from ChatHub), bell icon + dropdown + full page with load-more pagination, ItemSubscription model for opt-in/out. Remaining: email notification on new offer (Resend)

@@ -11,13 +11,14 @@ import {
   Minus,
   Plus,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "@/components/user-avatar";
 import { SellerView } from "@/components/seller-offers-popup";
 import { formatPrice, isEnded } from "@/components/item-card-shared";
-import { placeBid } from "@/lib/items";
+import { placeBid, placeInstantBuy } from "@/lib/items";
 import type { BidListResponse, BidResponse } from "@/lib/items";
 import { useOffersBids, INITIAL_LIMIT } from "@/hooks/use-offers-bids";
 
@@ -184,6 +185,7 @@ function BellOn({ className }: { className?: string }) {
 
 function TickerHeader({
   itemTitle,
+  itemId,
   manualRefreshing,
   connectionLost,
   urgency,
@@ -191,10 +193,12 @@ function TickerHeader({
   isLoggedIn,
   onRefresh,
   onToggleSubscription,
+  onItemClick,
   onClose,
   t,
 }: {
   itemTitle: string;
+  itemId: string;
   manualRefreshing: boolean;
   connectionLost: boolean;
   urgency: UrgencyState;
@@ -202,6 +206,7 @@ function TickerHeader({
   isLoggedIn: boolean;
   onRefresh: () => void;
   onToggleSubscription: () => void;
+  onItemClick: () => void;
   onClose: () => void;
   t: (key: string) => string;
 }) {
@@ -245,10 +250,15 @@ function TickerHeader({
         />
       )}
 
-      {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-ticker-mid" title={itemTitle}>
+      {/* Title — clickable */}
+      <button
+        type="button"
+        onClick={onItemClick}
+        className="min-w-0 flex-1 cursor-pointer truncate text-left text-sm font-medium text-ticker-mid hover:text-ticker-text"
+        title={itemTitle}
+      >
         {itemTitle}
-      </span>
+      </button>
 
       {/* Action cluster */}
       <div className="flex flex-none items-center gap-0.5">
@@ -551,6 +561,8 @@ function TickerBidForm({
   t,
   onBidPlaced,
   inputFocusedRef,
+  instantBuyPrice,
+  pendingInstantBuy,
 }: {
   data: BidListResponse;
   derived: ReturnType<typeof useDerivedBidData>;
@@ -558,6 +570,8 @@ function TickerBidForm({
   t: (key: string, values?: Record<string, string | number>) => string;
   onBidPlaced: () => void;
   inputFocusedRef: React.MutableRefObject<boolean>;
+  instantBuyPrice?: number | null;
+  pendingInstantBuy?: BidListResponse["pendingInstantBuy"];
 }) {
   const { isLoggedIn, openLoginDialog } = useAuth();
   const [amount, setAmount] = useState("");
@@ -566,8 +580,15 @@ function TickerBidForm({
   const [success, setSuccess] = useState("");
   const [confirming, setConfirming] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeTab, setActiveTab] = useState<"offer" | "buy">("offer");
+  const [ibConfirming, setIbConfirming] = useState(false);
+  const [ibLoading, setIbLoading] = useState(false);
+  const [ibError, setIbError] = useState("");
 
   const hasBid = derived.myBid != null;
+  const isOwnIb = pendingInstantBuy?.isOwnInstantBuy === true;
+  const showSwitch = instantBuyPrice != null && !isOwnIb;
+  const ibDisabled = pendingInstantBuy != null;
 
   useEffect(() => {
     if (data.minNextBid != null) setAmount(data.minNextBid.toFixed(2));
@@ -596,6 +617,11 @@ function TickerBidForm({
         </p>
       </div>
     );
+  }
+
+  // User has a pending instant buy — can't also bid
+  if (isOwnIb) {
+    return null;
   }
 
   const minBid = data.minNextBid ?? 0.01;
@@ -650,8 +676,90 @@ function TickerBidForm({
     }
   };
 
+  const handleInstantBuy = async () => {
+    if (!ibConfirming) {
+      setIbConfirming(true);
+      return;
+    }
+    setIbLoading(true);
+    setIbError("");
+    try {
+      await placeInstantBuy(itemId);
+      onBidPlaced(); // triggers refresh — popup updates with new instant buy state
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "instant_buy_failed";
+      setIbError(t(`error_${code}` as Parameters<typeof t>[0]));
+      setIbConfirming(false);
+    } finally {
+      setIbLoading(false);
+    }
+  };
+
   return (
     <div className="flex-none border-t border-ticker-line px-4 pb-4 pt-3.5">
+      {/* Segmented switch — only when instant buy price is available */}
+      {showSwitch && (
+        <div className="mb-3 grid grid-cols-2 gap-0 rounded-[10px] border border-ticker-line bg-ticker-bg-2 p-[3px]">
+          <button
+            type="button"
+            onClick={() => { setActiveTab("offer"); setIbConfirming(false); setIbError(""); }}
+            className={cn(
+              "rounded-[7px] py-2.5 font-[family-name:var(--font-ticker)] text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors",
+              activeTab === "offer" ? "bg-ticker-bg-3 text-ticker-text" : "text-ticker-dim hover:text-ticker-mid"
+            )}
+          >
+            {t("placeOfferTab")}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab("buy"); setError(""); }}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-[7px] py-2.5 font-[family-name:var(--font-ticker)] text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors",
+              activeTab === "buy" ? "bg-ticker-bg-3 text-ticker-amber" : "text-ticker-dim hover:text-ticker-mid"
+            )}
+          >
+            <Zap className="size-3" />
+            {t("buyNowTab")}
+          </button>
+        </div>
+      )}
+
+      {/* Buy Now panel */}
+      {showSwitch && activeTab === "buy" ? (
+        <>
+          {/* Listed price summary card */}
+          <div className="mb-3 flex items-center justify-between rounded-[10px] border border-ticker-line bg-ticker-bg-2 px-3.5 py-2.5">
+            <div className="min-w-0">
+              <div className="font-[family-name:var(--font-ticker)] text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ticker-dim">
+                {t("listedPriceLabel")}
+              </div>
+              <div className="mt-0.5 text-xs text-ticker-mid">{t("skipBiddingHint")}</div>
+            </div>
+            <span className="font-[family-name:var(--font-ticker)] text-[22px] font-bold tabular-nums tracking-[-0.01em] text-ticker-text">
+              &euro;{instantBuyPrice.toFixed(2)}
+            </span>
+          </div>
+
+          {ibError && <p className="mb-2 text-xs font-medium text-ticker-red">{ibError}</p>}
+
+          <button
+            type="button"
+            onClick={handleInstantBuy}
+            disabled={ibLoading || ibDisabled}
+            className="flex h-13 w-full items-center justify-center rounded-xl bg-ticker-amber text-[15px] font-semibold text-[oklch(0.15_0_0)] transition-colors hover:opacity-90 disabled:opacity-50"
+            style={{ boxShadow: ibDisabled ? "none" : "0 0 0 1px oklch(0.82 0.16 80 / 0.40), 0 8px 20px oklch(0.82 0.16 80 / 0.18)" }}
+          >
+            {ibLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : ibConfirming ? (
+              t("buyNowConfirm", { amount: instantBuyPrice.toFixed(2) })
+            ) : (
+              t("buyNowCta", { amount: instantBuyPrice.toFixed(2) })
+            )}
+          </button>
+        </>
+      ) : (
+      <>
       {/* Feedback */}
       {error && (
         <p className="mb-2 text-xs font-medium text-ticker-red">{error}</p>
@@ -677,7 +785,7 @@ function TickerBidForm({
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex h-13 flex-1 items-center justify-center rounded-xl bg-ticker-amber text-[15px] font-semibold text-[oklch(0.15_0_0)] transition-colors hover:opacity-90 disabled:opacity-50"
+            className="flex h-13 flex-1 items-center justify-center rounded-xl bg-ticker-emer text-[15px] font-semibold text-[oklch(0.15_0_0)] transition-colors hover:opacity-90 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="size-4 animate-spin" />
@@ -757,6 +865,8 @@ function TickerBidForm({
       <div className="mt-2 text-[11.5px] text-ticker-dim">
         {t("minimumOffer", { amount: minBid.toFixed(2) })}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -853,16 +963,19 @@ function TickerExpandedBids({
   const hasMyBid = myBid != null && myBidRank != null;
   const hasDenied = data.bids.some(b => b.status === "Denied");
 
-  if (data.totalBids === 0 && !hasDenied && !hasMyBid) return null;
+  const hasInstantBuy = data.bids.some(b => b.status === "InstantBuy");
+
+  if (data.totalBids === 0 && !hasDenied && !hasMyBid && !hasInstantBuy) return null;
 
   const activeBids = data.bids.filter(b => b.status === "Active");
+  const instantBuyBids = data.bids.filter(b => b.status === "InstantBuy");
   const deniedBids = data.bids.filter(b => b.status === "Denied");
 
   return (
     <div className="flex-none">
       {/* Your active bid — always visible at top */}
       {hasMyBid && (
-        <div className="flex flex-col gap-2 px-4 pt-3">
+        <div className="flex flex-col gap-2 px-4 py-3">
           <button
             onClick={() => onUserClick(myBid.bidderName)}
             className={cn(
@@ -995,6 +1108,47 @@ function TickerExpandedBids({
         </button>
       )}
 
+      {/* Instant buy bid cards — shown with special amber pill */}
+      {instantBuyBids.length > 0 && (
+        <div className="flex flex-col gap-2 px-4 py-2">
+          {instantBuyBids.map((bid) => (
+            <button
+              key={bid.id}
+              onClick={() => onUserClick(bid.bidderName)}
+              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl border border-ticker-amber/[0.22] bg-ticker-amber/[0.06] p-[12px_12px_12px_14px] text-left"
+            >
+              <UserAvatar
+                displayName={bid.bidderName}
+                avatarUrl={bid.bidderAvatarUrl}
+                size="base"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[14.5px] font-medium text-ticker-text">
+                    {bid.bidderName}
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ticker-amber/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-amber">
+                    <Zap className="size-2.5" />
+                    {t("buyNowTab")}
+                  </span>
+                  {bid.isOwnBid && (
+                    <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
+                      {t("you").toLowerCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[12px] text-ticker-dim">
+                  {timeAgo(bid.createdAt)}
+                </div>
+              </div>
+              <span className="font-[family-name:var(--font-ticker)] text-[20px] font-bold tracking-[-0.01em] tabular-nums text-ticker-amber">
+                {formatPrice(bid.amount)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Denied bid cards — always visible at the bottom */}
       {deniedBids.length > 0 && (
         <div className={cn(
@@ -1104,6 +1258,7 @@ export function OffersPopup({
           {/* Header */}
           <TickerHeader
             itemTitle={itemTitle}
+            itemId={itemId}
             manualRefreshing={bids.manualRefreshing}
             connectionLost={bids.connectionLost}
             urgency={urgency}
@@ -1111,6 +1266,10 @@ export function OffersPopup({
             isLoggedIn={isLoggedIn}
             onRefresh={bids.manualRefresh}
             onToggleSubscription={bids.toggleSubscription}
+            onItemClick={() => {
+              router.push(`/items/${itemId}`);
+              onClose();
+            }}
             onClose={onClose}
             t={t}
           />
@@ -1145,6 +1304,8 @@ export function OffersPopup({
                     t={t}
                     onBidPlaced={() => bids.loadBids(bids.currentLimit)}
                     inputFocusedRef={bids.inputFocusedRef}
+                    instantBuyPrice={bids.data.instantBuyPrice}
+                    pendingInstantBuy={bids.data.pendingInstantBuy}
                   />
                 )}
 

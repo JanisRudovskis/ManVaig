@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-05-15 (rev 16 — Notification System: 4 event types, AppHub consolidation, background services, bell icon + dropdown + full page)
-> **Status:** 🟢 Phase 4 items nearly complete, Phase 5 bidding done, Phase 6 notifications in-app done
+> **Last updated:** 2026-05-19 (rev 17 — Instant Buy, sold state management, bid deny, auction reopen/close/pass-to-next, 12 notification types)
+> **Status:** 🟢 Phase 5 bidding complete (instant buy + sold state + manage), Phase 6 notifications in-app done
 
 ---
 
@@ -76,24 +76,23 @@
 - 💡 Advanced filters (price range, condition, location)
 
 ### Bidding / Offer System
-- ✅ Public bid list — anyone can see bids (GET /api/v1/items/{id}/bids, no auth). All bidders identified (registered users only).
-- ✅ Place bid (auth required) — amount > highest active, respects minOfferPrice + offerStep. Update-in-place (1 active bid per user).
+- ✅ Public bid list — anyone can see bids (no auth). All bidders identified (registered users only).
+- ✅ Place bid (auth required) — amount > highest active, respects minOfferPrice + offerStep. Update-in-place (1 active bid per user). OfferStep enforced for all bidders including top bidder.
+- ✅ **Instant Buy** — buyer can purchase at listed price via segmented "Place offer / ⚡ Buy now" switch. 2-tap confirm. Seller accepts/declines. Bidding continues while pending (not locked). Buy Now disabled when any instant buy is pending. Buyer who placed IB can't also bid.
+- ✅ **Seller bid management** — deny bidders with reasons (fake/accidental, don't trust, other with detail). Deny button hidden when item is sold.
+- ✅ **Sold state** — SoldHero with diagonal SOLD stamp + emerald price + clickable winner name. Action area: Chat with winner + manage options.
+- ✅ **Sold state: non-timed / time remaining** → "Cancel deal" button with confirmation dialog (denies winner, reopens bidding)
+- ✅ **Sold state: end date passed** → "Manage" drawer with Pass to next bidder + Close auction (denies all bids, sets AcceptOffers=false)
 - ✅ Anti-snipe — bids in last 10 min extend EndDate by 10 min
 - ✅ Timed auctions auto-complete — AuctionEndedService sets IsSold + notifies winner
-- ✅ IsSold on Item — auto for timed auctions with bids, seller deletes for non-timed
-- ✅ Sold items hidden from public feeds (browse, search, homepage, profile listings)
-- ✅ Offers popup — bottom sheet (mobile) / centered modal (desktop) with bid list + place bid form
-- ✅ Full offers page — /items/{id}/offers route, openable in new tab
-- ✅ Real-time polling (10s, 3s retry on failure) + tab focus refresh
-- ✅ Sound notification (Web Audio API coin drop) on new external bids
-- ✅ Tab title blink when new bid in background tab
-- ✅ Two-tap confirm on bid submission (prevents accidental bids)
-- ✅ Image gallery — click thumbnail to browse item photos during auction
+- ✅ Sold items hidden from public feeds
+- ✅ Offers popup — bottom sheet mobile / centered modal desktop. Clickable item title in header → item page.
+- ✅ Full offers page — /items/{id}/offers, notification links open here
+- ✅ Real-time polling (10s, 3s retry) + tab focus refresh + sound notification + tab title blink
 - ✅ Reliability indicators — stale data warning, connection lost detection
-- ✅ "Message" button on bid rows — seller can message any bidder via existing messaging system. Timed items: only after auction ends. Non-timed: always visible.
-- ~~Removed: accept/deny/complete/fail workflow, anonymous bidding, guest offers, contact info reveal. Simplified: bids are price signals, communication via messaging.~~
-- 💡 Auto-bidding (proxy bids) — premium users set max limit, system bids for them
-- 💡 Auction audit log — track all bid events for dispute resolution
+- ✅ "Message" button on bid rows — seller messages bidders via platform messaging
+- 💡 Auto-bidding (proxy bids) — premium users set max limit
+- 💡 Auction audit log
 - 💡 Buyer bid tracking dashboard ("My Bids" page)
 
 ### Discovery
@@ -107,7 +106,7 @@
 - 💡 Trending items algorithm
 
 ### Notifications
-- ✅ In-app real-time notifications (SignalR via AppHub) — 4 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed
+- ✅ In-app real-time notifications (SignalR via AppHub) — 12 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed, BidDenied, ItemDeleted, BidWon, InstantBuyRequested/Accepted/Declined, AuctionReopened, AuctionClosed
 - ✅ Bell icon + dropdown in TopBar (mark-all-read on open, item thumbnails, relative time)
 - ✅ Full notifications page (/notifications) with load-more pagination
 - ✅ Follower notification throttling (1hr dedup window — same actor → increment GroupCount)
@@ -263,19 +262,23 @@ Bid
   - ItemId → Item
   - UserId → User
   - Amount (decimal)
-  - Status (enum: Active=0)                  ← simplified, only Active state
+  - Status (enum: Active=0, Denied=1, InstantBuy=2)
+  - IsInstantBuy (bool, default false)       ← persists through status changes (tracks origin)
+  - DenyReason (string, nullable)            ← reason code when denied
+  - DenyDetail (string, nullable)            ← free text detail (for "other" reason)
+  - DeniedAt (DateTime, nullable)
   - CreatedAt
   RULE: 1 active bid per user per item (update-in-place — new bid replaces old)
-  NOTE: All bidders are registered users (no anonymous bidding, no guest offers)
+  NOTE: All bidders are registered users
+  NOTE: InstantBuy: buyer pays listed price, seller accepts/declines. Bid stays InstantBuy status after acceptance.
   NOTE: Timed auctions: highest bid wins when EndDate passes (AuctionEndedService auto-sells)
-  NOTE: Non-timed items: bids are price signals, seller contacts bidders via messaging, deletes item when done
   NOTE: Anti-snipe: bids in last 10 min of timed auction extend EndDate by 10 min
-  NOTE: No contact info reveal — seller uses in-app messaging to reach bidders
+  NOTE: Deny reasons: fake_or_accidental, dont_trust, other, instant_buy_declined, sale_reopened, passed_to_next, auction_closed
 
 Notification
   - Id (uuid)
   - UserId → User                        ← notification recipient (Cascade delete)
-  - Type (enum: NewBid=0 / AuctionEnded=1 / BidAccepted=2 / NewItemFromFollowed=3)
+  - Type (enum: NewBid=0 / AuctionEnded=1 / BidAccepted=2 / NewItemFromFollowed=3 / BidDenied=4 / ItemDeleted=5 / BidWon=6 / InstantBuyRequested=7 / InstantBuyAccepted=8 / InstantBuyDeclined=9 / AuctionReopened=10 / AuctionClosed=11)
   - ActorId → User (nullable)            ← who triggered it (SetNull — preserved if actor deleted)
   - ItemId → Item (nullable)             ← related item (SetNull — preserved if item deleted)
   - BidId → Bid (nullable)               ← related bid (SetNull — preserved if bid deleted)
@@ -346,10 +349,12 @@ Notification
 | 50 | SetNull FKs on Notification (Actor, Item, Bid) | Notifications survive deletion of referenced entities. User sees "deleted item" gracefully instead of losing notification history. UserId FK is Cascade (delete user → delete their notifications). | 2026-05-15 |
 | 51 | 90-day notification retention + daily cleanup | Prevents unbounded table growth. BackgroundService with EF Core batch delete (1000/batch). Acceptable for marketplace scale. | 2026-05-15 |
 | 52 | Follower notification throttling (1hr dedup) | Same seller posting multiple items quickly → single "X posted N items" notification instead of spam. Check: unread + same actor + same type + within 1 hour → increment GroupCount. | 2026-05-15 |
-| 53 | ~~Accept/deny/complete/fail~~ → Simplified bid system | Removed 6-state workflow. Bids are price signals. Timed auctions auto-sell (highest wins). Non-timed: seller messages bidders, deletes item when done. Platform doesn't handle payments → no need for deal management. | 2026-05-15 |
-| 54 | ~~Anonymous bidding + guest offers~~ → All bidders registered | Removed IsAnonymous toggle and AllowGuestOffers. Every bidder has an account and is identified. Simplifies messaging (seller can always reach bidder via platform). | 2026-05-15 |
-| 55 | No contact info reveal | Seller contacts bidders via in-app messaging, never sees their email/phone. Privacy by default. | 2026-05-15 |
-| 56 | IsSold auto-set by AuctionEndedService | Timed items: IsSold=true when EndDate passes + has bids. Non-timed: seller deletes (no IsSold). Sold items filtered from all public feeds. | 2026-05-15 |
+| 53 | ~~Accept/deny/complete/fail~~ → Bid deny + Instant Buy | Replaced 6-state workflow. Seller can deny bidders (with reasons). Instant Buy for immediate purchase at listed price. Timed auctions auto-sell. Sold state has manage actions (cancel deal / pass to next / close auction). | 2026-05-19 |
+| 54 | ~~Anonymous bidding + guest offers~~ → All bidders registered | Every bidder has an account and is identified. Simplifies messaging. | 2026-05-15 |
+| 55 | No contact info reveal | Seller contacts bidders via in-app messaging, never sees their email/phone. | 2026-05-15 |
+| 56 | IsSold lifecycle | Timed: auto-set by AuctionEndedService. Instant Buy: set when seller accepts. Reversible via reopen (IB with time left) or close-auction (denies all). | 2026-05-19 |
+| 57 | Instant Buy = item.Price | No separate InstantBuyPrice field. If item has Price + AcceptOffers, buyer sees Buy Now. Hidden when bids exceed the price. | 2026-05-19 |
+| 58 | Sold state manage rules | No end date / time remaining → cancel deal (simple reopen). End date passed → manage drawer (pass to next + close auction). No reopen for ended timed auctions. | 2026-05-19 |
 
 ---
 

@@ -63,6 +63,16 @@ export default function NotificationsPage() {
         return n.groupCount > 1
           ? t("newItems", { actor: n.actorDisplayName ?? "?", count: n.groupCount })
           : t("newItem", { actor: n.actorDisplayName ?? "?" });
+      case "InstantBuyRequested":
+        return t("instantBuyRequested", { actor: n.actorDisplayName ?? "?", itemTitle: n.itemTitle ?? "" });
+      case "InstantBuyAccepted":
+        return t("instantBuyAccepted", { itemTitle: n.itemTitle ?? "" });
+      case "InstantBuyDeclined":
+        return t("instantBuyDeclined", { itemTitle: n.itemTitle ?? "" });
+      case "AuctionReopened":
+        return t("auctionReopened", { itemTitle: n.itemTitle ?? "" });
+      case "AuctionClosed":
+        return t("auctionClosed", { itemTitle: n.itemTitle ?? "" });
       default:
         return "";
     }
@@ -75,7 +85,12 @@ export default function NotificationsPage() {
       case "BidAccepted":
       case "BidWon":
       case "BidDenied":
-        return n.itemId ? `/items/${n.itemId}` : "/notifications";
+      case "InstantBuyRequested":
+      case "InstantBuyAccepted":
+      case "InstantBuyDeclined":
+      case "AuctionReopened":
+      case "AuctionClosed":
+        return n.itemId ? `/items/${n.itemId}/offers` : "/notifications";
       case "ItemDeleted":
         return "/notifications";
       case "NewItemFromFollowed":

@@ -341,7 +341,7 @@ export interface BidResponse {
   bidderId: string;
   amount: number;
   isOwnBid: boolean;
-  status: "Active" | "Denied";
+  status: "Active" | "Denied" | "InstantBuy";
   denyReason: string | null;
   denyDetail: string | null;
   createdAt: string;
@@ -373,6 +373,23 @@ export interface BidListResponse {
   isOwner: boolean;
   isSold: boolean;
   isSubscribed: boolean | null;
+  instantBuyPrice: number | null;
+  soldTo: {
+    buyerId: string;
+    buyerDisplayName: string;
+    buyerAvatarUrl: string | null;
+    amount: number;
+    isInstantBuy: boolean;
+  } | null;
+  canReopen: boolean;
+  pendingInstantBuy: {
+    buyerId: string;
+    buyerDisplayName: string;
+    buyerAvatarUrl: string | null;
+    amount: number;
+    createdAt: string;
+    isOwnInstantBuy: boolean;
+  } | null;
   uniqueBidders?: UniqueBidder[];
 }
 
@@ -437,6 +454,68 @@ export async function denyBidder(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "deny_failed");
+  }
+  return res.json();
+}
+
+// === Instant Buy API ===
+
+export async function placeInstantBuy(itemId: string): Promise<{ id: string; amount: number }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/instant-buy`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "instant_buy_failed");
+  }
+  return res.json();
+}
+
+export async function acceptInstantBuy(itemId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/instant-buy/accept`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "instant_buy_accept_failed");
+  }
+}
+
+export async function declineInstantBuy(itemId: string): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/instant-buy/decline`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "instant_buy_decline_failed");
+  }
+}
+
+// === Sold state / manage sale API ===
+
+export async function reopenItem(itemId: string): Promise<{ reopened: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/reopen`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "reopen_failed");
+  }
+  return res.json();
+}
+
+export async function passToNextBidder(itemId: string, bidderId: string): Promise<{ passedTo: string }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/pass-to/${bidderId}`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "assign_failed");
+  }
+  return res.json();
+}
+
+export async function closeAuction(itemId: string): Promise<{ closed: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/close-auction`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "close_failed");
   }
   return res.json();
 }

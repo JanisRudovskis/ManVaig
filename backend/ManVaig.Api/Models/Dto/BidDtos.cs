@@ -41,8 +41,35 @@ public class BidListResponse
     // Subscription state (null if not authenticated)
     public bool? IsSubscribed { get; set; }
 
+    // Instant buy
+    public decimal? InstantBuyPrice { get; set; }
+    public PendingInstantBuyResponse? PendingInstantBuy { get; set; }
+
+    // Sold state
+    public SoldToResponse? SoldTo { get; set; }
+    public bool CanReopen { get; set; }
+
     // Seller view: unique bidders with aggregated stats
     public List<UniqueBidderResponse>? UniqueBidders { get; set; }
+}
+
+public class SoldToResponse
+{
+    public string BuyerId { get; set; } = default!;
+    public string BuyerDisplayName { get; set; } = default!;
+    public string? BuyerAvatarUrl { get; set; }
+    public decimal Amount { get; set; }
+    public bool IsInstantBuy { get; set; }
+}
+
+public class PendingInstantBuyResponse
+{
+    public string BuyerId { get; set; } = default!;
+    public string BuyerDisplayName { get; set; } = default!;
+    public string? BuyerAvatarUrl { get; set; }
+    public decimal Amount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public bool IsOwnInstantBuy { get; set; }
 }
 
 public class UniqueBidderResponse

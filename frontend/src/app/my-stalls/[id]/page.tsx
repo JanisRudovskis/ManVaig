@@ -21,7 +21,6 @@ import {
 import { ItemForm } from "@/components/item-form";
 import { OffersPopup } from "@/components/offers-popup";
 import { ImageLightbox } from "@/components/image-lightbox";
-import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { StallFormDialog } from "@/components/stall-form-dialog";
 import {
   timeAgo,
@@ -43,12 +42,17 @@ import {
   Loader2,
   Trash2,
   Upload,
+  UploadCloud,
   ArrowLeftRight,
   AlertCircle,
   Clock,
   Gavel,
   Palette,
+  Check,
+  Undo2,
+  X,
 } from "lucide-react";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 
 // === Helpers ===
 
@@ -501,6 +505,18 @@ export default function StallItemsPage() {
   // Stall edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
+  // Background edit state
+  const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
+  const [bgCropFile, setBgCropFile] = useState<File | null>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const [bgError, setBgError] = useState<string | null>(null);
+  const [bgUndoPrev, setBgUndoPrev] = useState<string | null | undefined>(undefined); // undefined = no toast
+  const [draggingFile, setDraggingFile] = useState(false);
+  const [bgPopoverOpen, setBgPopoverOpen] = useState(false);
+  const [bgRemoveConfirm, setBgRemoveConfirm] = useState(false);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+
+  const tb = useTranslations("stalls.bg");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -604,6 +620,110 @@ export default function StallItemsPage() {
     setStall(updated);
   };
 
+  // Background inline edit helpers
+  const validateBgFile = (file: File): boolean => {
+    if (!file.type.startsWith("image/")) {
+      setBgError(tb("notAnImage"));
+      return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setBgError(tb("fileTooLarge"));
+      return false;
+    }
+    return true;
+  };
+
+  const openBgCropper = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBgCropSrc(reader.result as string);
+      setBgCropFile(file);
+      setBgPopoverOpen(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleBgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (bgFileRef.current) bgFileRef.current.value = "";
+    if (!file) return;
+    setBgError(null);
+    if (!validateBgFile(file)) return;
+    openBgCropper(file);
+  };
+
+  const handleBgDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDraggingFile(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    setBgError(null);
+    if (!validateBgFile(file)) return;
+    openBgCropper(file);
+  };
+
+  const handleBgCropped = async (blob: Blob) => {
+    setBgCropSrc(null);
+    setBgCropFile(null);
+    setBgUploading(true);
+    setBgError(null);
+    const previousUrl = stall?.backgroundImageUrl ?? null;
+    try {
+      const file = new File([blob], "background.webp", { type: "image/webp" });
+      const result = await uploadStallBackground(stallId, file);
+      setStall((prev) => prev ? { ...prev, backgroundImageUrl: result.backgroundImageUrl } : prev);
+      setBgUndoPrev(previousUrl);
+      // Auto-dismiss undo toast after 5s
+      setTimeout(() => setBgUndoPrev(undefined), 5000);
+    } catch {
+      setBgError(tb("uploadFailed"));
+    } finally {
+      setBgUploading(false);
+    }
+  };
+
+  const handleBgRemove = async () => {
+    setBgRemoveConfirm(false);
+    setBgPopoverOpen(false);
+    setBgUploading(true);
+    const previousUrl = stall?.backgroundImageUrl ?? null;
+    try {
+      await deleteStallBackground(stallId);
+      setStall((prev) => prev ? { ...prev, backgroundImageUrl: null } : prev);
+      setBgUndoPrev(previousUrl);
+      setTimeout(() => setBgUndoPrev(undefined), 5000);
+    } catch {
+      setBgError(tb("uploadFailed"));
+    } finally {
+      setBgUploading(false);
+    }
+  };
+
+  const handleBgUndo = async () => {
+    if (bgUndoPrev === undefined) return;
+    setBgUndoPrev(undefined);
+    if (bgUndoPrev) {
+      // Restore previous background — re-upload from URL
+      try {
+        const resp = await fetch(bgUndoPrev);
+        const blob = await resp.blob();
+        const file = new File([blob], "background-undo.webp", { type: blob.type });
+        const result = await uploadStallBackground(stallId, file);
+        setStall((prev) => prev ? { ...prev, backgroundImageUrl: result.backgroundImageUrl } : prev);
+      } catch {
+        // Silently fail undo
+      }
+    } else {
+      // Previous was null — delete the current
+      try {
+        await deleteStallBackground(stallId);
+        setStall((prev) => prev ? { ...prev, backgroundImageUrl: null } : prev);
+      } catch {
+        // Silently fail
+      }
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-6 md:px-6 md:py-8">
@@ -619,18 +739,179 @@ export default function StallItemsPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
-      {/* Background image — fills entire page content area */}
-      {stall?.backgroundImageUrl && (
-        <div
-          className="absolute inset-0 rounded-xl overflow-hidden"
-          style={{ backgroundImage: `url(${stall.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
-        >
-          <div className="absolute inset-0 bg-background/85" />
+    <div
+      className="group relative min-h-screen"
+      onDragOver={(e) => { e.preventDefault(); setDraggingFile(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) setDraggingFile(false); }}
+      onDrop={handleBgDrop}
+    >
+      {/* Background image layer */}
+      <div className="absolute inset-0 overflow-hidden">
+        {stall?.backgroundImageUrl ? (
+          <>
+            <img
+              src={stall.backgroundImageUrl}
+              alt=""
+              className="absolute inset-0 size-full object-cover"
+            />
+            <div className="absolute inset-0 bg-background/85" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,_var(--ticker-bg-2)_0_12px,_var(--ticker-bg)_12px_24px)] opacity-30" />
+        )}
+      </div>
+
+      {/* Drag-and-drop overlay */}
+      {draggingFile && (
+        <div className="absolute inset-2 z-30 rounded-xl border-2 border-dashed border-ticker-emer bg-[radial-gradient(circle_at_center,oklch(0.78_0.18_165/0.20)_0%,transparent_70%)] flex items-center justify-center pointer-events-none">
+          <div className="inline-flex items-center gap-3.5 bg-black/65 backdrop-blur-md text-white px-5 py-4 rounded-2xl shadow-[0_12px_36px_rgba(0,0,0,0.4),0_0_0_1px_var(--ticker-emer)]">
+            <UploadCloud className="size-6 text-ticker-emer" />
+            <div>
+              <div className="text-sm font-semibold">{tb("dropToSetBackground")}</div>
+              <div className="font-mono text-[10.5px] text-white/60 mt-0.5">{tb("dropHint")}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input for background */}
+      <input
+        ref={bgFileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={handleBgFileChange}
+        className="hidden"
+      />
+
+      {/* Background uploading overlay */}
+      {bgUploading && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-3 bg-card rounded-xl px-5 py-4 shadow-xl border border-border">
+            <Loader2 className="size-5 animate-spin text-ticker-emer" />
+            <span className="text-sm font-medium">{ts("saving")}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Background popover (Replace / Remove) */}
+      {bgPopoverOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setBgPopoverOpen(false); setBgRemoveConfirm(false); }} />
+          <div className="relative z-10 w-full max-w-xs rounded-2xl border border-border bg-card p-4 shadow-2xl mx-4">
+            {bgRemoveConfirm ? (
+              <>
+                <p className="text-sm font-semibold mb-1">{tb("removeConfirmTitle")}</p>
+                <p className="text-xs text-muted-foreground mb-4">{tb("removeConfirmBody")}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => setBgRemoveConfirm(false)}>
+                    {ts("cancel")}
+                  </Button>
+                  <Button variant="destructive" size="sm" className="flex-1" onClick={handleBgRemove}>
+                    <Trash2 className="size-3.5 mr-1" />
+                    {tb("removeBackground")}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Preview */}
+                {stall?.backgroundImageUrl && (
+                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border mb-3">
+                    <img src={stall.backgroundImageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+                  </div>
+                )}
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1" onClick={() => { setBgPopoverOpen(false); bgFileRef.current?.click(); }}>
+                    <Upload className="size-3.5 mr-1" />
+                    {tb("replace")}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="flex-1 text-destructive hover:text-destructive" onClick={() => setBgRemoveConfirm(true)}>
+                    <Trash2 className="size-3.5 mr-1" />
+                    {tb("removeBackground")}
+                  </Button>
+                </div>
+                <p className="mt-2 text-center text-[10px] text-muted-foreground">JPG, PNG, WebP · up to 5 MB</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Background crop dialog */}
+      {bgCropSrc && (
+        <ImageCropDialog
+          open
+          imageSrc={bgCropSrc}
+          aspectRatio={16 / 10}
+          title={ts("cropImage")}
+          onCrop={handleBgCropped}
+          onClose={() => { setBgCropSrc(null); setBgCropFile(null); }}
+        />
+      )}
+
+      {/* Background error toast */}
+      {bgError && (
+        <div className="fixed bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-[360px] z-40 flex items-center gap-3 bg-card border border-destructive/30 rounded-xl px-4 py-3 shadow-xl">
+          <AlertCircle className="size-5 text-destructive shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">{bgError}</p>
+          </div>
+          <button onClick={() => { setBgError(null); bgFileRef.current?.click(); }} className="text-xs font-medium text-primary hover:underline shrink-0">
+            {tb("tryAnotherFile")}
+          </button>
+          <button onClick={() => setBgError(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Background success + undo toast */}
+      {bgUndoPrev !== undefined && (
+        <div className="fixed bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-[360px] z-40 flex items-center gap-3 bg-card border border-ticker-emer/30 rounded-xl px-4 py-3 shadow-xl">
+          <span className="flex size-8 items-center justify-center rounded-full bg-ticker-emer/15 shrink-0">
+            <Check className="size-4 text-ticker-emer" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">{tb("backgroundUpdated")}</p>
+            <p className="text-xs text-muted-foreground">{tb("liveForVisitors")}</p>
+          </div>
+          <button
+            onClick={handleBgUndo}
+            className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/80 shrink-0"
+          >
+            <Undo2 className="size-3" />
+            {tb("undo")}
+          </button>
         </div>
       )}
 
       <div className="relative z-10 mx-auto max-w-[1100px] px-4 py-4 md:px-6 md:py-6">
+
+      {/* Background edit pill */}
+      {stall && (
+        <button
+          type="button"
+          onClick={() => {
+            if (stall.backgroundImageUrl) {
+              setBgPopoverOpen(true);
+            } else {
+              bgFileRef.current?.click();
+            }
+          }}
+          className={`absolute top-3 right-4 md:right-6 z-20 inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium text-white bg-black/70 backdrop-blur-md shadow-lg transition-opacity duration-200 hover:bg-black/85 ${
+            stall.backgroundImageUrl
+              ? "opacity-0 group-hover:opacity-100 focus:opacity-100"
+              : "opacity-100"
+          }`}
+        >
+          <ImageIcon className="size-3.5 text-ticker-emer" />
+          <span>
+            {stall.backgroundImageUrl ? tb("changeBackground") : tb("addBackground")}
+          </span>
+        </button>
+      )}
+
       {/* Back button */}
       <Link
         href="/my-stalls?view=all"
@@ -710,18 +991,7 @@ export default function StallItemsPage() {
                 onDelete: handleHeaderDelete,
               }}
             />
-            <AppearanceImageControl
-              config={{
-                label: ts("backgroundImage"),
-                hint: ta("backgroundHint"),
-                url: stall.backgroundImageUrl,
-                uploadCta: ta("uploadCta"),
-                removeCta: ta("removeCta"),
-                noImage: ta("noImage"),
-                onUpload: handleBackgroundUpload,
-                onDelete: handleBackgroundDelete,
-              }}
-            />
+            {/* Background image now managed via inline edit pill */}
             <AppearanceAccentControl
               value={stall.accentColor}
               onSave={handleAccentSave}

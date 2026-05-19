@@ -14,6 +14,7 @@ public class Bid
 
     public decimal Amount { get; set; }
     public BidStatus Status { get; set; } = BidStatus.Active;
+    public bool IsInstantBuy { get; set; }
 
     // Deny fields (populated when Status == Denied)
     public string? DenyReason { get; set; }
