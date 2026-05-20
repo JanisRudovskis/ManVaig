@@ -45,6 +45,9 @@ public class BidListResponse
     public decimal? InstantBuyPrice { get; set; }
     public PendingInstantBuyResponse? PendingInstantBuy { get; set; }
 
+    // Engagement
+    public int WatcherCount { get; set; }
+
     // Sold state
     public SoldToResponse? SoldTo { get; set; }
     public bool CanReopen { get; set; }

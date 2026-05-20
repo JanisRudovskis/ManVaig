@@ -1,8 +1,8 @@
 # ManVaig — Living Project Spec
 
 > **Working directory:** `C:\GIT\ManVaig`
-> **Last updated:** 2026-05-19 (rev 17 — Instant Buy, sold state management, bid deny, auction reopen/close/pass-to-next, 12 notification types)
-> **Status:** 🟢 Phase 5 bidding complete (instant buy + sold state + manage), Phase 6 notifications in-app done
+> **Last updated:** 2026-05-20 (rev 18 — Sell-to-bidder inline expander, sold state BUYER/RUNNERS-UP, close auction footer, notification simplification, dead code cleanup)
+> **Status:** 🟢 Phase 5 bidding complete (instant buy + sell-to-bidder + sold state + close auction), Phase 6 notifications simplified
 
 ---
 
@@ -81,8 +81,8 @@
 - ✅ **Instant Buy** — buyer can purchase at listed price via segmented "Place offer / ⚡ Buy now" switch. 2-tap confirm. Seller accepts/declines. Bidding continues while pending (not locked). Buy Now disabled when any instant buy is pending. Buyer who placed IB can't also bid.
 - ✅ **Seller bid management** — deny bidders with reasons (fake/accidental, don't trust, other with detail). Deny button hidden when item is sold.
 - ✅ **Sold state** — SoldHero with diagonal SOLD stamp + emerald price + clickable winner name. Action area: Chat with winner + manage options.
-- ✅ **Sold state: non-timed / time remaining** → "Cancel deal" button with confirmation dialog (denies winner, reopens bidding)
-- ✅ **Sold state: end date passed** → "Manage" drawer with Pass to next bidder + Close auction (denies all bids, sets AcceptOffers=false)
+- ✅ **Sell to bidder** — inline expandable bidder cards with Sell/Message/Deny, 2-tap sell confirm, reversible (deny winner → unsells)
+- ✅ **Close auction** — footer button: amber (with winner) / red (without winner) + confirmation modal. Denies all bids, sets AcceptOffers=false
 - ✅ Anti-snipe — bids in last 10 min extend EndDate by 10 min
 - ✅ Timed auctions auto-complete — AuctionEndedService sets IsSold + notifies winner
 - ✅ Sold items hidden from public feeds
@@ -106,7 +106,7 @@
 - 💡 Trending items algorithm
 
 ### Notifications
-- ✅ In-app real-time notifications (SignalR via AppHub) — 12 event types: NewBid, AuctionEnded, BidAccepted, NewItemFromFollowed, BidDenied, ItemDeleted, BidWon, InstantBuyRequested/Accepted/Declined, AuctionReopened, AuctionClosed
+- ✅ In-app real-time notifications (SignalR via AppHub) — minimal model: personal (Outbid, BidDenied, BidWon, InstantBuyAccepted/Declined), seller-only (NewBid, InstantBuyRequested), broadcast only on final close (AuctionEnded, AuctionClosed). Plus: NewItemFromFollowed, ItemDeleted
 - ✅ Bell icon + dropdown in TopBar (mark-all-read on open, item thumbnails, relative time)
 - ✅ Full notifications page (/notifications) with load-more pagination
 - ✅ Follower notification throttling (1hr dedup window — same actor → increment GroupCount)
@@ -354,7 +354,8 @@ Notification
 | 55 | No contact info reveal | Seller contacts bidders via in-app messaging, never sees their email/phone. | 2026-05-15 |
 | 56 | IsSold lifecycle | Timed: auto-set by AuctionEndedService. Instant Buy: set when seller accepts. Reversible via reopen (IB with time left) or close-auction (denies all). | 2026-05-19 |
 | 57 | Instant Buy = item.Price | No separate InstantBuyPrice field. If item has Price + AcceptOffers, buyer sees Buy Now. Hidden when bids exceed the price. | 2026-05-19 |
-| 58 | Sold state manage rules | No end date / time remaining → cancel deal (simple reopen). End date passed → manage drawer (pass to next + close auction). No reopen for ended timed auctions. | 2026-05-19 |
+| 58 | Sell-to-bidder = reversible sale | Seller sells to bidder via inline card expander (not auction close). Sale is reversible: deny winner → unsells → sell to another. Auction truly closes only via explicit "Close auction" footer button. | 2026-05-20 |
+| 59 | Minimal notification model | Personal notifications only for bid events (Outbid, BidDenied, BidWon, IB accept/decline). Seller-only for NewBid/IBRequested. Broadcast only on final close (AuctionEnded/AuctionClosed). No fan-out on every bid. | 2026-05-20 |
 
 ---
 

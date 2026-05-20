@@ -50,6 +50,18 @@ public class AuctionEndedService : BackgroundService
 
                 foreach (var item in endedItems)
                 {
+                    // Auto-deny any pending InstantBuy bids (timer won, IB lost)
+                    var pendingIbs = await db.Bids
+                        .Where(b => b.ItemId == item.Id && b.Status == BidStatus.InstantBuy)
+                        .ToListAsync(stoppingToken);
+                    foreach (var ib in pendingIbs)
+                    {
+                        ib.Status = BidStatus.Denied;
+                        ib.DenyReason = "auction_ended";
+                        ib.DeniedAt = DateTime.UtcNow;
+                        await notificationService.NotifyInstantBuyDeclined(ib.UserId, item.Id);
+                    }
+
                     // Notify seller + all subscribers that auction ended
                     await notificationService.NotifyAuctionEndedToSubscribers(item.Id, item.UserId);
 
@@ -71,6 +83,10 @@ public class AuctionEndedService : BackgroundService
 
                         // Notify winner that their bid won
                         await notificationService.NotifyBidWon(winningBid.UserId, item.Id, winningBid.Id);
+                    }
+                    else if (pendingIbs.Count > 0)
+                    {
+                        await db.SaveChangesAsync(stoppingToken);
                     }
                 }
 

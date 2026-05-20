@@ -73,6 +73,8 @@ export default function NotificationsPage() {
         return t("auctionReopened", { itemTitle: n.itemTitle ?? "" });
       case "AuctionClosed":
         return t("auctionClosed", { itemTitle: n.itemTitle ?? "" });
+      case "Outbid":
+        return t("outbid", { itemTitle: n.itemTitle ?? "", amount: n.bidAmount ?? 0 });
       default:
         return "";
     }
@@ -90,6 +92,7 @@ export default function NotificationsPage() {
       case "InstantBuyDeclined":
       case "AuctionReopened":
       case "AuctionClosed":
+      case "Outbid":
         return n.itemId ? `/items/${n.itemId}/offers` : "/notifications";
       case "ItemDeleted":
         return "/notifications";

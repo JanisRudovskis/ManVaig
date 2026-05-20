@@ -14,4 +14,5 @@ public enum NotificationType
     InstantBuyDeclined = 9,
     AuctionReopened = 10,
     AuctionClosed = 11,
+    Outbid = 12,
 }

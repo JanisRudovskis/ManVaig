@@ -373,6 +373,7 @@ export interface BidListResponse {
   isOwner: boolean;
   isSold: boolean;
   isSubscribed: boolean | null;
+  watcherCount: number;
   instantBuyPrice: number | null;
   soldTo: {
     buyerId: string;
@@ -493,29 +494,22 @@ export async function declineInstantBuy(itemId: string): Promise<void> {
 
 // === Sold state / manage sale API ===
 
-export async function reopenItem(itemId: string): Promise<{ reopened: boolean }> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/reopen`, { method: "POST" });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "reopen_failed");
-  }
-  return res.json();
-}
 
-export async function passToNextBidder(itemId: string, bidderId: string): Promise<{ passedTo: string }> {
-  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/pass-to/${bidderId}`, { method: "POST" });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "assign_failed");
-  }
-  return res.json();
-}
 
 export async function closeAuction(itemId: string): Promise<{ closed: boolean }> {
   const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/close-auction`, { method: "POST" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "close_failed");
+  }
+  return res.json();
+}
+
+export async function sellToBidder(itemId: string, bidderId: string): Promise<{ sold: boolean }> {
+  const res = await authFetch(`${API_URL}/api/v1/items/${itemId}/sell-to/${bidderId}`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "sell_failed");
   }
   return res.json();
 }

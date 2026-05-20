@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -12,6 +12,7 @@ import {
   Plus,
   ChevronDown,
   Zap,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -181,6 +182,57 @@ function BellOn({ className }: { className?: string }) {
   );
 }
 
+// ─── Toggle bell with tooltip ────────────────────────────────────────
+
+function ToggleBell({
+  subscribed,
+  onToggle,
+  t,
+}: {
+  subscribed: boolean;
+  onToggle: () => void;
+  t: (key: string) => string;
+}) {
+  const [tooltip, setTooltip] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleClick = () => {
+    onToggle();
+    const newState = !subscribed;
+    setTooltip(newState ? t("subscribed") : t("unsubscribed"));
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setTooltip(null), 1500);
+  };
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleClick}
+        className={cn(
+          "flex size-10 items-center justify-center rounded-[10px] transition-colors md:size-9",
+          subscribed
+            ? "text-ticker-emer hover:bg-ticker-emer/10"
+            : "text-ticker-mid hover:bg-ticker-bg-2 hover:text-ticker-text"
+        )}
+      >
+        {subscribed ? <BellOn /> : <BellOff />}
+      </button>
+      <span
+        className={cn(
+          "pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ticker-bg-3 px-2 py-1 font-[family-name:var(--font-ticker)] text-[10px] text-ticker-text shadow-lg transition-opacity duration-200",
+          tooltip ? "opacity-100" : "opacity-0",
+        )}
+      >
+        {tooltip}
+      </span>
+    </div>
+  );
+}
+
 // ─── 6. Header ───────────────────────────────────────────────────────
 
 function TickerHeader({
@@ -264,18 +316,11 @@ function TickerHeader({
       <div className="flex flex-none items-center gap-0.5">
         {/* Bell — subscription toggle (only for logged-in users) */}
         {isLoggedIn && subscribed != null && (
-          <button
-            onClick={onToggleSubscription}
-            className={cn(
-              "flex size-10 items-center justify-center rounded-[10px] transition-colors md:size-9",
-              subscribed
-                ? "text-ticker-emer hover:bg-ticker-emer/10"
-                : "text-ticker-mid hover:bg-ticker-bg-2 hover:text-ticker-text"
-            )}
-            title={subscribed ? t("subscribed") : t("unsubscribed")}
-          >
-            {subscribed ? <BellOn /> : <BellOff />}
-          </button>
+          <ToggleBell
+            subscribed={subscribed}
+            onToggle={onToggleSubscription}
+            t={t}
+          />
         )}
 
         {/* Refresh — always available (audit T8) */}
@@ -412,7 +457,7 @@ function TickerYourBid({
             {t("yourOffer").toUpperCase()}
           </span>
           <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-red">
-            {t("deny")}
+            {t("deniedPill")}
           </span>
         </div>
         <div className="flex items-baseline justify-between gap-3">
@@ -460,6 +505,47 @@ function TickerYourBid({
   );
 }
 
+// ─── Watcher segment (inline in time strip) ─────────────────────────
+
+function WatcherSegment({
+  count,
+  t,
+}: {
+  count: number;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [hideIcon, setHideIcon] = useState(false);
+
+  useLayoutEffect(() => {
+    setHideIcon(false);
+    if (!ref.current) return;
+    const raf = requestAnimationFrame(() => {
+      const parent = ref.current?.parentElement;
+      if (parent && parent.getBoundingClientRect().height > 20) {
+        setHideIcon(true);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [count]);
+
+  if (count <= 0) return null;
+
+  return (
+    <span ref={ref} className="inline-flex items-center">
+      <span aria-hidden="true">{" · "}</span>
+      {!hideIcon && (
+        <Eye
+          aria-hidden="true"
+          className="mr-1 inline-block"
+          style={{ width: 11, height: 11, strokeWidth: 2.25, verticalAlign: "-1px" }}
+        />
+      )}
+      <span className="tabular-nums">{t("watchingCount", { count })}</span>
+    </span>
+  );
+}
+
 // ─── 9. Time strip / Promoted countdown ──────────────────────────────
 
 function TickerTimeStrip({
@@ -490,8 +576,9 @@ function TickerTimeStrip({
     return (
       <div className="flex flex-none items-center gap-3.5 px-7 pb-5 pt-2">
         <span className="h-px flex-1 bg-ticker-line" />
-        <span className="text-[12.5px] tracking-[0.02em] text-ticker-dim">
+        <span className="inline-flex items-center whitespace-nowrap text-[12.5px] tracking-[0.02em] text-ticker-dim">
           {t("openForOffersBuyer")}
+          <WatcherSegment count={data.watcherCount} t={t} />
         </span>
         <span className="h-px flex-1 bg-ticker-line" />
       </div>
@@ -544,8 +631,9 @@ function TickerTimeStrip({
   return (
     <div className="flex flex-none items-center gap-3.5 px-7 pb-5 pt-2">
       <span className="h-px flex-1 bg-ticker-line" />
-      <span className="text-[12.5px] tracking-[0.02em] text-ticker-dim">
+      <span className="inline-flex items-center whitespace-nowrap text-[12.5px] tracking-[0.02em] text-ticker-dim">
         {t("endsInPhrase", { value: formatEndsIn(data.endDate) })}
+        <WatcherSegment count={data.watcherCount} t={t} />
       </span>
       <span className="h-px flex-1 bg-ticker-line" />
     </div>
@@ -895,7 +983,7 @@ function DeniedBidCard({
             {bid.bidderName}
           </span>
           <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-red">
-            {t("deny")}
+            {t("deniedPill")}
           </span>
           {bid.isOwnBid && (
             <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
@@ -996,7 +1084,11 @@ function TickerExpandedBids({
                 <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
                   {t("you").toLowerCase()}
                 </span>
-                {myBidRank === 1 && (
+                {data.isSold && data.soldTo?.buyerId === myBid.bidderId ? (
+                  <span className="shrink-0 rounded-[3px] bg-ticker-emer px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-[oklch(0.15_0_0)]">
+                    {t("buyer").toUpperCase()}
+                  </span>
+                ) : myBidRank === 1 ? (
                   <span
                     className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md bg-ticker-emer/15 text-ticker-emer"
                     aria-label={t("topBidder")}
@@ -1004,7 +1096,7 @@ function TickerExpandedBids({
                   >
                     <CrownIcon className="size-4" />
                   </span>
-                )}
+                ) : null}
               </div>
               <div className="text-[12px] text-ticker-dim">
                 #{myBidRank} · {timeAgo(myBid.createdAt)}
@@ -1051,7 +1143,11 @@ function TickerExpandedBids({
                         {t("you").toLowerCase()}
                       </span>
                     )}
-                    {isTop && (
+                    {data.isSold && data.soldTo?.buyerId === bid.bidderId ? (
+                      <span className="shrink-0 rounded-[3px] bg-ticker-emer px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-[oklch(0.15_0_0)]">
+                        {t("buyer").toUpperCase()}
+                      </span>
+                    ) : isTop && !data.isSold ? (
                       <span
                         className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md bg-ticker-emer/15 text-ticker-emer"
                         aria-label={t("topBidder")}
@@ -1059,7 +1155,7 @@ function TickerExpandedBids({
                       >
                         <CrownIcon className="size-4" />
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="text-[12px] text-ticker-dim">
                     #{index + 1} · {timeAgo(bid.createdAt)}
@@ -1289,6 +1385,7 @@ export function OffersPopup({
                 urgency={urgency}
                 bids={bids}
                 onUserClick={handleUserClick}
+                onClose={onClose}
                 t={t}
               />
             ) : (

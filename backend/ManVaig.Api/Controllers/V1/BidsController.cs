@@ -140,9 +140,13 @@ public class BidsController : ControllerBase
 
         // Instant buy price: item.Price when AcceptOffers is on and price exists
         decimal? instantBuyPrice = (item.AcceptOffers && item.Price.HasValue) ? item.Price : null;
-        // Hide instant buy if highest bid already meets or exceeds the price
-        if (instantBuyPrice.HasValue && highestBid.HasValue && highestBid.Value >= instantBuyPrice.Value)
+        // Hide instant buy when bids reach 70% of the listed price (bidding is competitive enough)
+        if (instantBuyPrice.HasValue && highestBid.HasValue && highestBid.Value >= instantBuyPrice.Value * 0.7m)
             instantBuyPrice = null;
+
+        // Watcher count: active subscribers (excluding owner)
+        var watcherCount = await _db.ItemSubscriptions
+            .CountAsync(s => s.ItemId == itemId && s.IsActive && s.UserId != item.UserId);
 
         // Sold state: identify winner and determine if reopen is available
         SoldToResponse? soldTo = null;
@@ -159,7 +163,7 @@ public class BidsController : ControllerBase
                     BuyerDisplayName = winnerBid.User.DisplayName ?? "User",
                     BuyerAvatarUrl = winnerBid.User.AvatarUrl,
                     Amount = winnerBid.Amount,
-                    IsInstantBuy = winnerBid.IsInstantBuy,
+                    IsInstantBuy = winnerBid.IsInstantBuy || winnerBid.Status == BidStatus.InstantBuy,
                 };
             }
 
@@ -184,17 +188,21 @@ public class BidsController : ControllerBase
             IsSubscribed = isSubscribed,
             InstantBuyPrice = instantBuyPrice,
             PendingInstantBuy = pendingIbResponse,
+            WatcherCount = watcherCount,
             SoldTo = soldTo,
             CanReopen = canReopen,
             Bids = bidResponses,
         };
 
-        // Seller view: unique bidders (active first, then denied)
+        // Seller view: unique bidders (active + instant buy first, then denied-only)
         if (isOwner)
         {
-            var topBidAmount = activeBids.FirstOrDefault()?.Amount ?? 0;
+            // Combine active + instant buy bids for the "live" section
+            var liveBids = activeBids.Concat(instantBuyBids).ToList();
+            var topBidAmount = liveBids.OrderByDescending(b => b.Amount).FirstOrDefault()?.Amount ?? 0;
+            var liveUserIds = new HashSet<Guid>(liveBids.Select(b => b.UserId));
 
-            var activeUnique = activeBids
+            var activeUnique = liveBids
                 .GroupBy(b => b.UserId)
                 .Select(g => new UniqueBidderResponse
                 {
@@ -210,7 +218,9 @@ public class BidsController : ControllerBase
                 .OrderByDescending(ub => ub.BestAmount)
                 .ToList();
 
+            // Denied: only users who don't also have a live bid
             var deniedUnique = deniedBids
+                .Where(b => !liveUserIds.Contains(b.UserId))
                 .GroupBy(b => b.UserId)
                 .Select(g => new UniqueBidderResponse
                 {
@@ -361,8 +371,14 @@ public class BidsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        // Notify seller + subscribers about new bid
-        await _notificationService.NotifyNewBidToSubscribers(item.UserId, userId.Value, itemId, bid.Id);
+        // Notify seller only about new bid
+        await _notificationService.NotifyNewBidToSeller(item.UserId, userId.Value, itemId, bid.Id);
+
+        // Notify previous top bidder they've been outbid
+        if (highestActiveBid != null && highestActiveBid.UserId != userId.Value)
+        {
+            await _notificationService.NotifyOutbid(highestActiveBid.UserId, userId.Value, itemId, bid.Id);
+        }
 
         return Ok(new { id = bid.Id, amount = bid.Amount, antiSnipe, updated = canUpdate });
     }
@@ -390,13 +406,29 @@ public class BidsController : ControllerBase
         if (!validReasons.Contains(request.Reason))
             return BadRequest(new { error = "INVALID_DENY_REASON" });
 
-        // Find all active bids from this bidder on this item
+        // Find all active + instant buy bids from this bidder on this item
         var bidderBids = await _db.Bids
-            .Where(b => b.ItemId == itemId && b.UserId == bidderId && b.Status == BidStatus.Active)
+            .Where(b => b.ItemId == itemId && b.UserId == bidderId
+                && (b.Status == BidStatus.Active || b.Status == BidStatus.InstantBuy))
             .ToListAsync();
 
         if (bidderBids.Count == 0)
             return NotFound(new { error = "NO_ACTIVE_BIDS" });
+
+        // Check if this bidder is the winner before denying
+        var isWinner = false;
+        if (item.IsSold)
+        {
+            // Winner = InstantBuy bid, or highest active bid
+            var winnerBid = await _db.Bids
+                .Where(b => b.ItemId == itemId && b.Status == BidStatus.InstantBuy)
+                .FirstOrDefaultAsync()
+                ?? await _db.Bids
+                    .Where(b => b.ItemId == itemId && b.Status == BidStatus.Active)
+                    .OrderByDescending(b => b.Amount)
+                    .FirstOrDefaultAsync();
+            isWinner = winnerBid != null && winnerBid.UserId == bidderId;
+        }
 
         // Mark all as denied
         var now = DateTime.UtcNow;
@@ -408,13 +440,21 @@ public class BidsController : ControllerBase
             bid.DeniedAt = now;
         }
 
+        // If this bidder was the winner → unsell
+        var unsold = false;
+        if (isWinner)
+        {
+            item.IsSold = false;
+            unsold = true;
+        }
+
         await _db.SaveChangesAsync();
 
-        // Notify the bidder (use the highest bid for the notification)
+        // Notify the denied bidder
         var highestDeniedBid = bidderBids.OrderByDescending(b => b.Amount).First();
         await _notificationService.NotifyBidDenied(bidderId, itemId, highestDeniedBid.Id, request.Reason);
 
-        return Ok(new { denied = bidderBids.Count });
+        return Ok(new { denied = bidderBids.Count, unsold });
     }
 
     /// <summary>
@@ -575,6 +615,9 @@ public class BidsController : ControllerBase
         if (item.UserId != userId.Value)
             return BadRequest(new { error = "INSTANT_BUY_NOT_SELLER" });
 
+        if (item.IsSold)
+            return BadRequest(new { error = "ITEM_SOLD" });
+
         var pendingBid = await _db.Bids
             .FirstOrDefaultAsync(b => b.ItemId == itemId && b.Status == BidStatus.InstantBuy);
         if (pendingBid == null)
@@ -585,8 +628,6 @@ public class BidsController : ControllerBase
 
         // Notify the buyer that their instant buy was accepted
         await _notificationService.NotifyInstantBuyAccepted(pendingBid.UserId, itemId);
-        // Notify all subscribers (other bidders) that bidding is over
-        await _notificationService.NotifyAuctionEndedToSubscribers(itemId, item.UserId);
 
         return Ok(new { sold = true });
     }
@@ -680,57 +721,8 @@ public class BidsController : ControllerBase
 
         // Notify the winner their bid was cancelled
         await _notificationService.NotifyInstantBuyDeclined(winnerBid.UserId, itemId);
-        // Notify all other subscribers that bidding is back
-        await _notificationService.NotifyAuctionReopenedToSubscribers(itemId, userId.Value);
 
         return Ok(new { reopened = true });
-    }
-
-    /// <summary>
-    /// Pass the sale to a different bidder. The current winner's bid is denied,
-    /// the new bidder becomes the winner and item stays sold.
-    /// </summary>
-    [HttpPost("~/api/v1/items/{itemId:guid}/pass-to/{bidderId:guid}")]
-    [Authorize]
-    public async Task<IActionResult> PassToNextBidder(Guid itemId, Guid bidderId)
-    {
-        var userId = GetCurrentUserId();
-        if (userId == null) return Unauthorized();
-
-        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
-        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
-
-        if (item.UserId != userId.Value)
-            return BadRequest(new { error = "NOT_SELLER" });
-
-        if (!item.IsSold)
-            return BadRequest(new { error = "ITEM_NOT_SOLD" });
-
-        // Find the new bidder's active bid
-        var newWinnerBid = await _db.Bids
-            .FirstOrDefaultAsync(b => b.ItemId == itemId
-                && b.UserId == bidderId
-                && b.Status == BidStatus.Active);
-        if (newWinnerBid == null)
-            return BadRequest(new { error = "BIDDER_NOT_FOUND" });
-
-        // Deny the current winner (InstantBuy or top Active bid)
-        var currentWinner = await _db.Bids
-            .FirstOrDefaultAsync(b => b.ItemId == itemId && b.Status == BidStatus.InstantBuy);
-        if (currentWinner != null)
-        {
-            currentWinner.Status = BidStatus.Denied;
-            currentWinner.DenyReason = "passed_to_next";
-            currentWinner.DeniedAt = DateTime.UtcNow;
-        }
-
-        // Item stays sold — new winner is now the top active bidder
-        await _db.SaveChangesAsync();
-
-        // Notify all subscribers about the change
-        await _notificationService.NotifyAuctionEndedToSubscribers(itemId, item.UserId);
-
-        return Ok(new { passedTo = bidderId });
     }
 
     /// <summary>
@@ -773,6 +765,41 @@ public class BidsController : ControllerBase
         await _notificationService.NotifyAuctionClosedToSubscribers(itemId, userId.Value);
 
         return Ok(new { closed = true });
+    }
+
+    /// <summary>
+    /// Seller explicitly sells the item to a specific bidder.
+    /// Sets IsSold=true, notifies winner + all subscribers.
+    /// </summary>
+    [HttpPost("~/api/v1/items/{itemId:guid}/sell-to/{bidderId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> SellToBidder(Guid itemId, Guid bidderId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return NotFound(new { error = "ITEM_NOT_FOUND" });
+
+        if (item.UserId != userId.Value)
+            return BadRequest(new { error = "NOT_SELLER" });
+
+        if (item.IsSold)
+            return BadRequest(new { error = "ITEM_SOLD" });
+
+        var winnerBid = await _db.Bids
+            .FirstOrDefaultAsync(b => b.ItemId == itemId
+                && b.UserId == bidderId
+                && b.Status == BidStatus.Active);
+        if (winnerBid == null)
+            return BadRequest(new { error = "BIDDER_NOT_FOUND" });
+
+        item.IsSold = true;
+        await _db.SaveChangesAsync();
+
+        await _notificationService.NotifyBidWon(bidderId, itemId, winnerBid.Id);
+
+        return Ok(new { sold = true, soldTo = bidderId });
     }
 
     private Guid? GetCurrentUserId()
