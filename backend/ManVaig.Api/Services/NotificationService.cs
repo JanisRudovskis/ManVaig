@@ -91,7 +91,7 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task NotifyAuctionEndedToSubscribers(Guid itemId, Guid sellerId)
+    public async Task NotifyAuctionEndedToSubscribers(Guid itemId, Guid sellerId, Guid? winnerId = null, Guid? winningBidId = null)
     {
         // Get explicitly subscribed users (IsActive = true)
         var subscriberIds = await _db.ItemSubscriptions
@@ -114,7 +114,9 @@ public class NotificationService : INotificationService
                 Id = Guid.NewGuid(),
                 UserId = subscriberId,
                 Type = NotificationType.AuctionEnded,
+                ActorId = winnerId,
                 ItemId = itemId,
+                BidId = winningBidId,
             });
         }
 

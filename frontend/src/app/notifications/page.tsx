@@ -50,7 +50,9 @@ export default function NotificationsPage() {
       case "NewBid":
         return t("newBid", { actor: n.actorDisplayName ?? "?", amount: n.bidAmount ?? 0, itemTitle: n.itemTitle ?? "" });
       case "AuctionEnded":
-        return t("auctionEnded", { itemTitle: n.itemTitle ?? "" });
+        return n.actorDisplayName
+          ? t("auctionEndedWithWinner", { actor: n.actorDisplayName, itemTitle: n.itemTitle ?? "", amount: n.bidAmount ?? 0 })
+          : t("auctionEnded", { itemTitle: n.itemTitle ?? "" });
       case "BidAccepted":
         return t("bidAccepted", { itemTitle: n.itemTitle ?? "" });
       case "BidWon":

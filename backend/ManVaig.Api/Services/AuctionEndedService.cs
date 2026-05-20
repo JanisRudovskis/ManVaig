@@ -62,9 +62,6 @@ public class AuctionEndedService : BackgroundService
                         await notificationService.NotifyInstantBuyDeclined(ib.UserId, item.Id);
                     }
 
-                    // Notify seller + all subscribers that auction ended
-                    await notificationService.NotifyAuctionEndedToSubscribers(item.Id, item.UserId);
-
                     // Find winning bid (highest active)
                     var winningBid = await db.Bids
                         .Where(b => b.ItemId == item.Id && b.Status == BidStatus.Active)
@@ -80,14 +77,16 @@ public class AuctionEndedService : BackgroundService
                             dbItem.IsSold = true;
                             await db.SaveChangesAsync(stoppingToken);
                         }
-
-                        // Notify winner that their bid won
-                        await notificationService.NotifyBidWon(winningBid.UserId, item.Id, winningBid.Id);
                     }
                     else if (pendingIbs.Count > 0)
                     {
                         await db.SaveChangesAsync(stoppingToken);
                     }
+
+                    // Notify all subscribers that auction ended (with winner info if any)
+                    await notificationService.NotifyAuctionEndedToSubscribers(
+                        item.Id, item.UserId,
+                        winningBid?.UserId, winningBid?.Id);
                 }
 
                 if (endedItems.Count > 0)

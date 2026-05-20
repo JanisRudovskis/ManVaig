@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { X, Loader2, ChevronDown, Check, ShoppingBag, MessageCircle, XCircle } from "lucide-react";
+import { X, Loader2, ChevronDown, Check, ShoppingBag, MessageCircle, XCircle, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatPrice, isEnded } from "@/components/item-card-shared";
-import { denyBidder, sellToBidder, closeAuction } from "@/lib/items";
+import { denyBidder, sellToBidder, closeAuction, acceptInstantBuy, declineInstantBuy } from "@/lib/items";
 import type { BidListResponse, UniqueBidder } from "@/lib/items";
-import { SellerInstantBuyCard } from "@/components/instant-buy/seller-instant-buy-card";
 import { SoldHero } from "@/components/sold-state/sold-hero";
 import { useOffersBids, INITIAL_LIMIT } from "@/hooks/use-offers-bids";
 
@@ -47,6 +46,210 @@ function CrownIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
       <path d="M3 19 L5.5 4 L9 13 L12 8 L15 13 L18.5 4 L21 19 Z" />
     </svg>
+  );
+}
+
+// ─── Section divider ─────────────────────────────────────────────────
+
+function SectionDivider({
+  kind,
+  count,
+  t,
+}: {
+  kind: "ib" | "bidders" | "cancelled";
+  count?: number;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  if (kind === "ib") {
+    return (
+      <div className="flex items-center gap-2.5 px-1 pb-1.5 pt-2">
+        <span className="flex items-center gap-1.5 flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-amber">
+          <Zap className="size-[11px]" strokeWidth={2.4} />
+          {t("instantBuyDivider")}
+        </span>
+        <span className="flex-1 h-px bg-[oklch(0.82_0.16_80/0.20)]" />
+      </div>
+    );
+  }
+  if (kind === "cancelled") {
+    return (
+      <div className="flex items-center gap-2.5 px-1 pb-1.5 pt-2">
+        <span className="flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-dim">
+          {t("cancelledBids", { count: count ?? 0 })}
+        </span>
+        <span className="h-px flex-1 bg-ticker-line" />
+      </div>
+    );
+  }
+  // bidders
+  return (
+    <div className="flex items-center gap-2.5 px-1 pb-1.5 pt-2">
+      <span className="flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-dim">
+        {t("topOfBidders", { count: count ?? 0 })}
+      </span>
+      <span className="h-px flex-1 bg-ticker-line" />
+    </div>
+  );
+}
+
+// ─── Instant buy card (in-list) ─────────────────────────────────────
+
+function InstantBuyCard({
+  buyer,
+  isSeller,
+  isOpen,
+  sellPending,
+  loading,
+  onToggle,
+  startAccept,
+  cancelAccept,
+  confirmAccept,
+  onDecline,
+  onUserClick,
+  t,
+}: {
+  buyer: NonNullable<BidListResponse["pendingInstantBuy"]>;
+  isSeller: boolean;
+  isOpen: boolean;
+  sellPending: boolean;
+  loading: boolean;
+  onToggle: () => void;
+  startAccept: () => void;
+  cancelAccept: () => void;
+  confirmAccept: () => void;
+  onDecline: () => void;
+  onUserClick: (displayName: string) => void;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div
+      data-open={isOpen}
+      className={cn(
+        "grid grid-rows-[auto_0fr] rounded-xl border border-ticker-amber/30 bg-[oklch(0.82_0.16_80/0.06)]",
+        "transition-[grid-template-rows] duration-[240ms] ease-[cubic-bezier(0.2,0.7,0.2,1)]",
+        "overflow-hidden",
+        "data-[open=true]:grid-rows-[auto_1fr]",
+      )}
+    >
+      <div
+        role={isSeller ? "button" : undefined}
+        onClick={isSeller ? onToggle : undefined}
+        className={cn(
+          "grid items-center gap-3 p-[10px_10px_10px_12px]",
+          isSeller
+            ? "grid-cols-[auto_minmax(0,1fr)_auto_auto] cursor-pointer"
+            : "grid-cols-[auto_minmax(0,1fr)_auto]",
+        )}
+      >
+        <span
+          onClick={(e) => { e.stopPropagation(); onUserClick(buyer.buyerDisplayName); }}
+          className="cursor-pointer"
+        >
+          <UserAvatar displayName={buyer.buyerDisplayName} avatarUrl={buyer.buyerAvatarUrl} size="base" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              onClick={(e) => { e.stopPropagation(); onUserClick(buyer.buyerDisplayName); }}
+              className="cursor-pointer truncate text-[14px] font-medium text-ticker-text hover:underline"
+            >
+              {buyer.buyerDisplayName}
+            </span>
+            <span className="inline-flex flex-none items-center gap-[3px] rounded-[3px] bg-ticker-amber/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-amber">
+              <Zap className="size-[9px]" strokeWidth={2.4} />
+              {t("buyNowPill")}
+            </span>
+            {buyer.isOwnInstantBuy && (
+              <span className="flex-none rounded-[3px] bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
+                {t("you").toLowerCase()}
+              </span>
+            )}
+          </div>
+          <div className="mt-[2px] text-[11.5px] font-medium text-ticker-amber">
+            {isSeller ? t("awaitingYourResponse") : (buyer.isOwnInstantBuy ? t("yourBuyNowAwaitingSeller") : t("awaitingSellerResponse"))}
+          </div>
+        </div>
+        <span className="font-[family-name:var(--font-ticker)] text-[17px] font-bold tabular-nums leading-none text-ticker-amber">
+          {formatPrice(buyer.amount)}
+        </span>
+        {isSeller && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex size-6 items-center justify-center text-ticker-dim transition-transform duration-[240ms]",
+              isOpen && "rotate-180",
+            )}
+          >
+            <ChevronDown className="size-[14px]" strokeWidth={2.2} />
+          </span>
+        )}
+      </div>
+
+      {/* Expansion — seller only */}
+      {isSeller && (
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              "px-2.5 pb-2.5 pt-1 opacity-0 -translate-y-1 transition-[opacity,transform] duration-200 delay-[60ms]",
+              isOpen && "opacity-100 translate-y-0",
+            )}
+          >
+            {sellPending ? (
+              <div className="grid grid-cols-[1fr_1.6fr] gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); cancelAccept(); }}
+                  className="h-[42px] rounded-[10px] border border-ticker-line text-ticker-mid font-semibold text-[13.5px] hover:text-ticker-text hover:bg-ticker-bg-3"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); confirmAccept(); }}
+                  disabled={loading}
+                  className="h-[42px] rounded-[10px] bg-ticker-emer text-[oklch(0.15_0_0)] font-bold text-[13.5px] inline-flex items-center justify-center gap-1.5 shadow-[0_6px_18px_oklch(0.78_0.18_165/0.28)] disabled:opacity-60"
+                >
+                  {loading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Check className="size-[14px]" strokeWidth={2.4} />
+                      {t("confirmSaleAmount", { amount: formatPrice(buyer.amount) })}
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-[1.4fr_1fr] gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); startAccept(); }}
+                  className="h-[42px] rounded-[10px] bg-ticker-emer text-[oklch(0.15_0_0)] font-semibold text-[13.5px] inline-flex items-center justify-center gap-1.5 hover:opacity-90"
+                >
+                  <Check className="size-[14px]" strokeWidth={2.4} />
+                  {t("acceptSale")}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDecline(); }}
+                  disabled={loading}
+                  className="h-[42px] rounded-[10px] border border-ticker-line text-ticker-mid font-semibold text-[13.5px] inline-flex items-center justify-center gap-1.5 hover:text-ticker-red hover:bg-ticker-red/[0.08] hover:border-ticker-red/35 disabled:opacity-60"
+                >
+                  {loading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <>
+                      <XCircle className="size-[14px]" strokeWidth={1.7} />
+                      {t("declineSale")}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -534,9 +737,17 @@ export function SellerView({
   const [closeWinnerModalOpen, setCloseWinnerModalOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const sellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Instant buy state
+  const [ibOpen, setIbOpen] = useState(false);
+  const [ibAcceptPending, setIbAcceptPending] = useState(false);
+  const [ibLoading, setIbLoading] = useState(false);
+  const ibAcceptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const uniqueBidders = data.uniqueBidders ?? [];
   const auctionEnded = urgency === "sold" || urgency === "ended";
   const isSold = data.isSold && data.soldTo != null;
+  const soldViaIb = isSold && (data.soldTo?.isInstantBuy === true);
 
   // Cards expandable: no end date, or end date has passed (timed auctions: only after bidding ends)
   const endDatePassed = data.endDate != null && new Date(data.endDate).getTime() <= Date.now();
@@ -550,6 +761,42 @@ export function SellerView({
     }
     return () => { if (sellTimerRef.current) clearTimeout(sellTimerRef.current); };
   }, [sellPendingBidderId]);
+
+  // Auto-reset IB accept confirm after 3s
+  useEffect(() => {
+    if (ibAcceptTimerRef.current) clearTimeout(ibAcceptTimerRef.current);
+    if (ibAcceptPending) {
+      ibAcceptTimerRef.current = setTimeout(() => setIbAcceptPending(false), 3000);
+    }
+    return () => { if (ibAcceptTimerRef.current) clearTimeout(ibAcceptTimerRef.current); };
+  }, [ibAcceptPending]);
+
+  const handleIbConfirmAccept = async () => {
+    setIbLoading(true);
+    try {
+      await acceptInstantBuy(itemId);
+      bids.manualRefresh();
+    } catch {
+      // error surfaced by refresh
+    } finally {
+      setIbLoading(false);
+      setIbAcceptPending(false);
+      setIbOpen(false);
+    }
+  };
+
+  const handleIbDecline = async () => {
+    setIbLoading(true);
+    try {
+      await declineInstantBuy(itemId);
+      bids.manualRefresh();
+    } catch {
+      // error surfaced by refresh
+    } finally {
+      setIbLoading(false);
+      setIbOpen(false);
+    }
+  };
 
   const handleConfirmSale = async (bidder: UniqueBidder) => {
     setConfirming(true);
@@ -589,29 +836,20 @@ export function SellerView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Instant buy card — seller needs to accept/decline */}
-      {ibPending && (
-        <SellerInstantBuyCard
-          itemId={itemId}
-          pending={ibPending}
-          onResolved={bids.manualRefresh}
-          onUserClick={onUserClick}
-        />
-      )}
-
       {/* Sold hero — replaces summary line when sold */}
       {isSold ? (
         <SoldHero
           amount={data.soldTo!.amount}
           winnerDisplayName={data.soldTo!.buyerDisplayName}
+          isInstantBuy={soldViaIb}
           onUserClick={onUserClick}
         />
       ) : (
         <SellerSummaryLine data={data} t={t} />
       )}
 
-      {/* Empty state */}
-      {uniqueBidders.length === 0 ? (
+      {/* Empty state — only when no bidders AND no pending IB */}
+      {uniqueBidders.length === 0 && !ibPending ? (
         <div className="flex flex-1 items-center justify-center py-12">
           <span className="text-[13px] text-ticker-dim">
             {t("noBidsYet")}
@@ -623,7 +861,7 @@ export function SellerView({
           {isSold ? (() => {
             const buyerId = data.soldTo?.buyerId ?? null;
             const buyerBidder = uniqueBidders.find((b) => b.bidderId === buyerId);
-            const runners = uniqueBidders.filter((b) => b.bidderId !== buyerId && !b.isDenied);
+            const activeBidders = uniqueBidders.filter((b) => b.bidderId !== buyerId && !b.isDenied);
             const denied = uniqueBidders.filter((b) => b.isDenied);
 
             return (
@@ -659,17 +897,47 @@ export function SellerView({
                   </>
                 )}
 
-                {/* Runners-up section */}
-                {runners.length > 0 && (
+                {/* Cancelled bids section — when sold via IB, active bids shown dimmed with strike-through */}
+                {soldViaIb && activeBidders.length > 0 && (
+                  <>
+                    <SectionDivider kind="cancelled" count={activeBidders.length} t={t} />
+                    <div className="space-y-2 pb-2">
+                      {activeBidders.map((bidder) => (
+                        <div key={bidder.bidderId} className="opacity-55">
+                          <BidderCard
+                            bidder={bidder}
+                            isOpen={false}
+                            sellPending={false}
+                            confirming={false}
+                            expandable={false}
+                            showSell={false}
+                            isBuyer={false}
+                            onToggle={() => {}}
+                            onDeny={() => {}}
+                            onSellTap={() => {}}
+                            onSellCancel={() => {}}
+                            onSellConfirm={() => {}}
+                            onMessage={() => {}}
+                            onUserClick={onUserClick}
+                            t={t}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Runners-up section — when sold via regular sell-to-bidder */}
+                {!soldViaIb && activeBidders.length > 0 && (
                   <>
                     <div className="flex items-center gap-2.5 px-[6px] pb-1.5 pt-2">
                       <span className="flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-dim">
-                        {t("runnersUp", { count: runners.length })}
+                        {t("runnersUp", { count: activeBidders.length })}
                       </span>
                       <span className="h-px flex-1 bg-ticker-line" />
                     </div>
                     <div className="space-y-2 pb-2">
-                      {runners.map((bidder) => (
+                      {activeBidders.map((bidder) => (
                         <div key={bidder.bidderId} className="opacity-55">
                           <BidderCard
                             bidder={bidder}
@@ -722,7 +990,33 @@ export function SellerView({
               </div>
             );
           })() : (
-          <div className="space-y-2 px-3 py-3">
+          <div className="space-y-1.5 px-3.5 pb-2.5 pt-1.5">
+            {/* IB section — above bidders */}
+            {ibPending && (
+              <>
+                <SectionDivider kind="ib" t={t} />
+                <InstantBuyCard
+                  buyer={ibPending}
+                  isSeller={true}
+                  isOpen={ibOpen}
+                  sellPending={ibAcceptPending}
+                  loading={ibLoading}
+                  onToggle={() => setIbOpen((v) => !v)}
+                  startAccept={() => setIbAcceptPending(true)}
+                  cancelAccept={() => setIbAcceptPending(false)}
+                  confirmAccept={handleIbConfirmAccept}
+                  onDecline={handleIbDecline}
+                  onUserClick={onUserClick}
+                  t={t}
+                />
+              </>
+            )}
+
+            {/* Bidders divider — only when there are bidders */}
+            {uniqueBidders.filter((b) => !b.isDenied).length > 0 && (
+              <SectionDivider kind="bidders" count={uniqueBidders.filter((b) => !b.isDenied).length} t={t} />
+            )}
+
             {visibleBidders.map((bidder) => (
               <div key={`${bidder.bidderId}-${bidder.isDenied ? "denied" : "active"}`}>
                 <BidderCard

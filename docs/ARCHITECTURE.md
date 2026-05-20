@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-20 (Sell-to-bidder: inline expandable cards with Sell/Message/Deny + 2-tap confirm. Sold state: BUYER/RUNNERS-UP grouping, buyer pill, close auction footer. Notification simplification: seller-only NewBid, personal-only Outbid/BidDenied/BidWon/IB, broadcast only on final close. Removed: pass-to-next, AuctionReopened broadcast, dead notification methods. Watcher count with eye icon.)
+> Last updated: 2026-05-20 (Instant buy redesign: IB shown as expandable card in bid list under INSTANT BUY divider (seller + buyer views), removed floating SellerInstantBuyCard. SoldHero shows amber IB kicker when sold via instant buy. Sold-via-IB shows CANCELLED BIDS section. AuctionEnded notification now carries winner info. Denied IB bids hidden from buyer view.)
 
 ---
 
@@ -192,18 +192,19 @@ Valid combinations: price-only, price+offers, offers-only, any with end date (wh
 - Cards expandable: non-timed = always, timed = only after end date passes
 
 **Sold state** (seller popup):
-- SoldHero with diagonal SOLD stamp + emerald price + clickable winner name
-- Bidder list split: BUYER section (emerald card, BUYER pill, "Sold for €X") + RUNNERS-UP section (dimmed, no expansion)
+- SoldHero with diagonal SOLD stamp + emerald price + clickable winner name. Shows amber ⚡ INSTANT BUY kicker when sold via IB.
+- Sold via IB: BUYER section + CANCELLED BIDS section (dimmed, strike-through, no expansion)
+- Sold via sell-to-bidder: BUYER section + RUNNERS-UP section (dimmed, no expansion)
 - Winner card expandable with Message + Deny (deny unsells)
 - Close auction footer: amber "Close auction" (sold) / red "Close without winner" (not sold) with confirmation modal
 
 **Notification model** (minimal):
 - **Personal only**: Outbid, BidDenied, BidWon, InstantBuyAccepted/Declined
 - **Seller only**: NewBid, InstantBuyRequested
-- **Broadcast (all subscribers)**: only on final close — AuctionEnded (timer) or AuctionClosed (manual)
+- **Broadcast (all subscribers)**: AuctionEnded (timer, carries winner ActorId + BidId) or AuctionClosed (manual)
 
 **Item sold lifecycle**:
-- **Timed items**: `AuctionEndedService` detects EndDate passed → sets `IsSold=true` → notifies all subscribers + winner
+- **Timed items**: `AuctionEndedService` detects EndDate passed → sets `IsSold=true` → sends AuctionEnded to all subscribers (with winner info embedded, no separate BidWon)
 - **Instant buy**: buyer initiates, seller accepts → `IsSold=true` (reversible — seller can deny winner)
 - **Sell to bidder**: seller picks a bidder → `IsSold=true` (reversible)
 - **Sold items**: hidden from public feeds, seller sees SoldHero + expandable winner card
@@ -255,12 +256,9 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 **Model: `Models/ItemSubscription.cs`** — Id, ItemId (FK → Item, Cascade), UserId (FK → User, Cascade), IsActive (bool, default true), CreatedAt. Unique index on (ItemId, UserId). Tracks notification opt-in/out per user per item. Owners subscribed by default (no row = subscribed). Unsubscribe sets IsActive=false (keeps row to distinguish "never subscribed" from "explicitly unsubscribed").
 
 **Service: `Services/NotificationService.cs`** — Scoped service implementing `INotificationService`. Methods:
-- `NotifyNewBid(sellerId, bidderId, itemId, bidId)` — direct seller notification
-- `NotifyNewBidToSubscribers(sellerId, bidderId, itemId, bidId)` — fan-out: notifies active subscribers + seller (if no explicit opt-out). Excludes bidder.
-- `NotifyAuctionEnded(sellerId, itemId)` — direct seller notification
-- `NotifyAuctionEndedToSubscribers(itemId, sellerId)` — fan-out: notifies active subscribers + seller (if no explicit opt-out)
-- `NotifyBidAccepted(bidderId, itemId, bidId)` — legacy winner notification
-- `NotifyBidWon(winnerId, itemId, bidId)` — new: winning bidder notification (BidWon type)
+- `NotifyNewBidToSeller(sellerId, bidderId, itemId, bidId)` — seller only: new bid placed
+- `NotifyAuctionEndedToSubscribers(itemId, sellerId, winnerId?, winningBidId?)` — fan-out: notifies active subscribers + seller. Stores winner as ActorId + BidId on notification (frontend shows winner name + amount or "no bids").
+- `NotifyBidWon(winnerId, itemId, bidId)` — winning bidder notification (used by SellToBidder only, NOT by AuctionEndedService)
 - `NotifyNewItemFromFollowed(sellerId, itemId)` — queries UserFollows for followers, **throttle check**: unread + same actor + within 1 hour → increment GroupCount instead of creating new notification. Broadcasts `NotificationCountChanged` via SignalR per follower.
 - `NotifyBidDenied(bidderId, itemId, bidId, reason)` — denied bidder notification
 - `NotifyItemDeleted(itemId, sellerId, itemTitle)` — notifies active subscribers (excl seller). Stores item title in DenyReason field since item FK will be nulled by cascade.
@@ -270,7 +268,7 @@ ProfileController extended: `followerCount`, `followingCount`, `isFollowedByMe`,
 - `NotifyOutbid(prevTopBidderId, newBidderId, itemId, newBidId)` — previous top bidder only: you've been outbid
 - `NotifyAuctionClosedToSubscribers(itemId, sellerId)` — all subscribers: auction closed, no winner
 
-**BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Uses subscriber fan-out (NotifyAuctionEndedToSubscribers) + NotifyBidWon for winning bidder. Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
+**BackgroundService: `Services/AuctionEndedService.cs`** — Polls every 60s for items with EndDate ≤ now + AcceptOffers + no existing AuctionEnded notification (NOT EXISTS subquery). Auto-denies pending IBs, finds winner, sets IsSold=true, then calls NotifyAuctionEndedToSubscribers with winner info (no separate BidWon). Uses `IServiceScopeFactory` (Singleton needing Scoped DbContext). `SemaphoreSlim(1,1)` non-blocking guard prevents tick overlap. 10s startup delay.
 
 **BackgroundService: `Services/NotificationCleanupService.cs`** — Runs every 24h. Deletes notifications older than 90 days using EF Core LINQ (RemoveRange + SaveChanges in batches of 1000).
 
@@ -450,10 +448,9 @@ All `required`, `minLength`, `type="email"` removed. Custom `validate()` functio
 | ConfirmDialog | `components/confirm-dialog.tsx` | Generic confirmation dialog (title, message, confirm/cancel). |
 | ItemCardShared | `components/item-card-shared.tsx` | Shared helpers: PriceDisplay, EndDateCountdown, timeAgo, isEnded. Field-based indicators (no TypeTag). |
 | ItemDetailModal | `components/item-detail-modal.tsx` | Quick-view modal for item details from seller's stall page. |
-| OffersPopup | `components/offers-popup.tsx` | Ticker v2 buyer popup + shared Dialog shell. base-ui Dialog (focus trap, ESC, focus return). Bottom sheet mobile / centered modal desktop. Branches on `data.isOwner` — buyer gets Ticker view, seller gets SellerView. Buyer components: TickerHeader (live dot, clickable title → item page, refresh, close), TickerHero (rolling digits, emerald flash, delta badge), TickerYourBid, TickerTimeStrip, TickerBidForm (stepper + optional segmented switch for Buy Now when instantBuyPrice exists), TickerExpandedBids (active + instant buy pills + denied bids). Instant buy: segmented "Place offer / ⚡ Buy now" tabs, 2-tap confirm, disabled when pending IB exists, buyer's form hidden when own IB pending. |
-| SellerView | `components/seller-offers-popup.tsx` | Seller popup view. Live state: SellerSummaryLine + expandable BidderCards (Sell/Message/Deny buttons, 2-tap sell confirm, clickable avatar/name → profile) + close auction footer. Sold state: SoldHero + BUYER/RUNNERS-UP card grouping + winner card expandable (Message/Deny). Instant buy: SellerInstantBuyCard (accept/decline). |
-| SellerInstantBuyCard | `components/instant-buy/seller-instant-buy-card.tsx` | Seller accept/decline card for pending instant buy. Emerald gradient border, buyer avatar + name (clickable), amount, Accept/Decline buttons with loading states. |
-| SoldHero | `components/sold-state/sold-hero.tsx` | Diagonal SOLD stamp (rotated 8deg, anchored top-right) + emerald price + clickable winner name. Replaces SellerSummaryLine when sold. |
+| OffersPopup | `components/offers-popup.tsx` | Ticker v2 buyer popup + shared Dialog shell. base-ui Dialog (focus trap, ESC, focus return). Bottom sheet mobile / centered modal desktop. Branches on `data.isOwner` — buyer gets Ticker view, seller gets SellerView. Buyer components: TickerHeader (live dot, clickable title → item page, refresh, close), TickerHero (rolling digits, emerald flash, delta badge), TickerYourBid, TickerTimeStrip, TickerBidForm (stepper + optional segmented switch for Buy Now when instantBuyPrice exists), TickerExpandedBids (IB section at top under INSTANT BUY ⚡ divider + active bids + denied bids; denied IB bids filtered out). Instant buy: segmented "Place offer / ⚡ Buy now" tabs, 2-tap confirm, disabled when pending IB exists, buyer's form hidden when own IB pending. |
+| SellerView | `components/seller-offers-popup.tsx` | Seller popup view. Live state: SellerSummaryLine + IB section (INSTANT BUY ⚡ divider + expandable InstantBuyCard with Accept/Decline, 2-tap accept confirm) + BIDDERS divider + expandable BidderCards (Sell/Message/Deny buttons, 2-tap sell confirm) + close auction footer. Sold state: SoldHero (amber IB kicker when sold via IB) + BUYER/CANCELLED BIDS (IB) or RUNNERS-UP (regular) grouping + winner card expandable (Message/Deny). |
+| SoldHero | `components/sold-state/sold-hero.tsx` | Diagonal SOLD stamp (rotated 8deg, anchored top-right) + emerald price + clickable winner name. Optional `isInstantBuy` prop → amber ⚡ kicker above price. Replaces SellerSummaryLine when sold. |
 | OffersPage | `app/items/[id]/offers/page.tsx` | Full-page offers view — renders OffersPopup as Dialog overlay. Tab title blink hook (useTabBlink). Fetches item detail for title/image. Close navigates back to item page. |
 | useRealtime | `hooks/use-realtime.ts` | Merged SignalR hook — single connection to `/hubs/app`, listens for `UnreadCountChanged` + `NotificationCountChanged`. Returns `{ messageCount, notificationCount, setNotificationCount, refetch }`. Polling fallback (30s) if SignalR fails. Replaces deleted `use-unread-count.ts`. |
 | useOffersBids | `hooks/use-offers-bids.ts` | Core bidding hook: polling (10s/3s retry), Web Audio API sound (bid-ding.wav), slide-in animations, reliability tracking (stale/connection lost), manual refresh with spin state, sound toggle with localStorage, paginated expand (loadMore in batches of 5, collapseAll resets), onNewExternalBid callback for delta badge. Fixed: visibilitychange listener leak. |

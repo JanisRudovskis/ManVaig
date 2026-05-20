@@ -1057,10 +1057,61 @@ function TickerExpandedBids({
 
   const activeBids = data.bids.filter(b => b.status === "Active");
   const instantBuyBids = data.bids.filter(b => b.status === "InstantBuy");
-  const deniedBids = data.bids.filter(b => b.status === "Denied");
+  // Filter out denied IB bids — only show denied regular bids
+  const ibDenyReasons = new Set(["instant_buy_declined", "sale_reopened", "auction_ended"]);
+  const deniedBids = data.bids.filter(b => b.status === "Denied" && !ibDenyReasons.has(b.denyReason ?? ""));
 
   return (
     <div className="flex-none">
+      {/* Instant buy section — at the top, read-only amber card */}
+      {instantBuyBids.length > 0 && (
+        <div className="flex flex-col gap-1.5 px-4 pt-3 pb-2">
+          {/* Section divider */}
+          <div className="flex items-center gap-2.5 px-1 pb-1 pt-1">
+            <span className="flex items-center gap-1.5 flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-amber">
+              <Zap className="size-[11px]" strokeWidth={2.4} />
+              {t("instantBuyDivider")}
+            </span>
+            <span className="flex-1 h-px bg-[oklch(0.82_0.16_80/0.20)]" />
+          </div>
+          {instantBuyBids.map((bid) => (
+            <button
+              key={bid.id}
+              onClick={() => onUserClick(bid.bidderName)}
+              className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-ticker-amber/30 bg-[oklch(0.82_0.16_80/0.06)] p-[10px_10px_10px_12px] text-left"
+            >
+              <UserAvatar
+                displayName={bid.bidderName}
+                avatarUrl={bid.bidderAvatarUrl}
+                size="base"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="truncate text-[14px] font-medium text-ticker-text">
+                    {bid.bidderName}
+                  </span>
+                  <span className="inline-flex flex-none items-center gap-[3px] rounded-[3px] bg-ticker-amber/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-amber">
+                    <Zap className="size-[9px]" strokeWidth={2.4} />
+                    {t("buyNowPill")}
+                  </span>
+                  {bid.isOwnBid && (
+                    <span className="flex-none rounded-[3px] bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
+                      {t("you").toLowerCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-[2px] text-[11.5px] font-medium text-ticker-amber">
+                  {bid.isOwnBid ? t("yourBuyNowAwaitingSeller") : t("awaitingSellerResponse")}
+                </div>
+              </div>
+              <span className="font-[family-name:var(--font-ticker)] text-[17px] font-bold tabular-nums leading-none text-ticker-amber">
+                {formatPrice(bid.amount)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Your active bid — always visible at top */}
       {hasMyBid && (
         <div className="flex flex-col gap-2 px-4 py-3">
@@ -1202,47 +1253,6 @@ function TickerExpandedBids({
           {t("showAllOffers")}
           <ChevronDown className="size-3" />
         </button>
-      )}
-
-      {/* Instant buy bid cards — shown with special amber pill */}
-      {instantBuyBids.length > 0 && (
-        <div className="flex flex-col gap-2 px-4 py-2">
-          {instantBuyBids.map((bid) => (
-            <button
-              key={bid.id}
-              onClick={() => onUserClick(bid.bidderName)}
-              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl border border-ticker-amber/[0.22] bg-ticker-amber/[0.06] p-[12px_12px_12px_14px] text-left"
-            >
-              <UserAvatar
-                displayName={bid.bidderName}
-                avatarUrl={bid.bidderAvatarUrl}
-                size="base"
-              />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[14.5px] font-medium text-ticker-text">
-                    {bid.bidderName}
-                  </span>
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ticker-amber/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-amber">
-                    <Zap className="size-2.5" />
-                    {t("buyNowTab")}
-                  </span>
-                  {bid.isOwnBid && (
-                    <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
-                      {t("you").toLowerCase()}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[12px] text-ticker-dim">
-                  {timeAgo(bid.createdAt)}
-                </div>
-              </div>
-              <span className="font-[family-name:var(--font-ticker)] text-[20px] font-bold tracking-[-0.01em] tabular-nums text-ticker-amber">
-                {formatPrice(bid.amount)}
-              </span>
-            </button>
-          ))}
-        </div>
       )}
 
       {/* Denied bid cards — always visible at the bottom */}

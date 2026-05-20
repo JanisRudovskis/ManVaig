@@ -1,14 +1,16 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Zap } from "lucide-react";
 
 interface SoldHeroProps {
   amount: number;
   winnerDisplayName: string;
+  isInstantBuy?: boolean;
   onUserClick: (displayName: string) => void;
 }
 
-export function SoldHero({ amount, winnerDisplayName, onUserClick }: SoldHeroProps) {
+export function SoldHero({ amount, winnerDisplayName, isInstantBuy, onUserClick }: SoldHeroProps) {
   const t = useTranslations("offers");
   const [whole, frac] = amount.toFixed(2).split(".");
 
@@ -25,6 +27,14 @@ export function SoldHero({ amount, winnerDisplayName, onUserClick }: SoldHeroPro
       >
         {t("soldStamp")}
       </div>
+
+      {/* Instant buy kicker */}
+      {isInstantBuy && (
+        <div className="mb-2 inline-flex items-center gap-1 font-[family-name:var(--font-ticker)] text-[10.5px] font-bold uppercase tracking-[0.22em] text-ticker-amber">
+          <Zap className="size-[12px]" strokeWidth={2.4} />
+          {t("instantBuyDivider")}
+        </div>
+      )}
 
       <div className="mt-0.5 font-[family-name:var(--font-ticker)] text-[56px] font-bold leading-[0.95] tracking-[-0.025em] tabular-nums text-ticker-emer">
         <span className="mr-px align-[16px] text-[30px] font-medium">&euro;</span>
