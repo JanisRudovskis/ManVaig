@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X, Loader2, ChevronDown, Check, ShoppingBag, MessageCircle, XCircle, Zap } from "lucide-react";
@@ -51,7 +51,7 @@ function CrownIcon({ className }: { className?: string }) {
 
 // ─── Section divider ─────────────────────────────────────────────────
 
-function SectionDivider({
+export function SectionDivider({
   kind,
   count,
   t,
@@ -302,7 +302,7 @@ function SellerSummaryLine({
 
 // ─── Bidder card (expandable) ────────────────────────────────────────
 
-function BidderCard({
+export function BidderCard({
   bidder,
   isOpen,
   sellPending,
@@ -744,10 +744,50 @@ export function SellerView({
   const [ibLoading, setIbLoading] = useState(false);
   const ibAcceptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Tab state: "active" (default) or "all" (active + denied) — shared with buyer view
+  const STORAGE_KEY = "offers-popup.showDenied";
+  const [tab, setTabState] = useState<"active" | "all">(() => {
+    if (typeof window === "undefined") return "active";
+    return window.localStorage.getItem(STORAGE_KEY) === "1" ? "all" : "active";
+  });
+  const setTab = (next: "active" | "all") => {
+    setTabState(next);
+    try { window.localStorage.setItem(STORAGE_KEY, next === "all" ? "1" : "0"); } catch {}
+  };
+
   const uniqueBidders = data.uniqueBidders ?? [];
   const auctionEnded = urgency === "sold" || urgency === "ended";
   const isSold = data.isSold && data.soldTo != null;
   const soldViaIb = isSold && (data.soldTo?.isInstantBuy === true);
+
+  // Split bidders — denied bids from data.bids (same IB filter as buyer view)
+  const ibDenyReasons = new Set(["instant_buy_declined", "sale_reopened", "auction_ended"]);
+  const activeBidders = useMemo(() => uniqueBidders.filter(b => !b.isDenied), [uniqueBidders]);
+  const nonIbDeniedBids = useMemo(() =>
+    (data.bids ?? []).filter(b => b.status === "Denied" && !ibDenyReasons.has(b.denyReason ?? "")),
+    [data.bids],
+  );
+  const hasDenied = nonIbDeniedBids.length > 0;
+  // Map individual denied bids to UniqueBidder shape for BidderCard reuse
+  const deniedAsBidders: UniqueBidder[] = useMemo(() =>
+    nonIbDeniedBids.map(bid => ({
+      bidderId: bid.bidderId,
+      bidderName: bid.bidderName,
+      bidderAvatarUrl: bid.bidderAvatarUrl,
+      bestAmount: bid.amount,
+      bidCount: 1,
+      lastBidAt: bid.createdAt,
+      isTop: false,
+      isDenied: true,
+      denyReason: bid.denyReason,
+      denyDetail: bid.denyDetail,
+    })),
+    [nonIbDeniedBids],
+  );
+  const visibleBidders = useMemo(() => {
+    if (tab !== "all") return activeBidders;
+    return [...activeBidders, ...deniedAsBidders].sort((a, b) => new Date(b.lastBidAt).getTime() - new Date(a.lastBidAt).getTime());
+  }, [activeBidders, deniedAsBidders, tab]);
 
   // Cards expandable: no end date, or end date has passed (timed auctions: only after bidding ends)
   const endDatePassed = data.endDate != null && new Date(data.endDate).getTime() <= Date.now();
@@ -826,16 +866,16 @@ export function SellerView({
     }
   };
 
-  const visibleBidders = bids.expanded
-    ? uniqueBidders
-    : uniqueBidders.slice(0, INITIAL_LIMIT);
+  const slicedBidders = bids.expanded
+    ? visibleBidders
+    : visibleBidders.slice(0, INITIAL_LIMIT);
   const hasMoreBidders =
-    !bids.expanded && uniqueBidders.length > INITIAL_LIMIT;
+    !bids.expanded && visibleBidders.length > INITIAL_LIMIT;
 
   const ibPending = data.pendingInstantBuy;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Sold hero — replaces summary line when sold */}
       {isSold ? (
         <SoldHero
@@ -848,6 +888,8 @@ export function SellerView({
         <SellerSummaryLine data={data} t={t} />
       )}
 
+      {/* ── Scrollable bid area ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {/* Empty state — only when no bidders AND no pending IB */}
       {uniqueBidders.length === 0 && !ibPending ? (
         <div className="flex flex-1 items-center justify-center py-12">
@@ -1012,13 +1054,43 @@ export function SellerView({
               </>
             )}
 
-            {/* Bidders divider — only when there are bidders */}
-            {uniqueBidders.filter((b) => !b.isDenied).length > 0 && (
-              <SectionDivider kind="bidders" count={uniqueBidders.filter((b) => !b.isDenied).length} t={t} />
+            {/* Active / All tabs — only when there are denied bids */}
+            {hasDenied && (
+              <div className="flex flex-none items-center gap-0 px-0.5 pt-2 pb-0">
+                <button
+                  type="button"
+                  onClick={() => setTab("active")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                    tab === "active"
+                      ? "bg-ticker-bg-2 text-ticker-text"
+                      : "text-ticker-mid hover:text-ticker-text",
+                  )}
+                >
+                  {t("activeTab", { count: activeBidders.length })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab("all")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                    tab === "all"
+                      ? "bg-ticker-bg-2 text-ticker-text"
+                      : "text-ticker-mid hover:text-ticker-text",
+                  )}
+                >
+                  {t("allTab", { count: activeBidders.length + nonIbDeniedBids.length })}
+                </button>
+              </div>
             )}
 
-            {visibleBidders.map((bidder) => (
-              <div key={`${bidder.bidderId}-${bidder.isDenied ? "denied" : "active"}`}>
+            {/* Bidders divider — only when there are visible bidders */}
+            {visibleBidders.length > 0 && (
+              <SectionDivider kind="bidders" count={activeBidders.length} t={t} />
+            )}
+
+            {slicedBidders.map((bidder) => (
+              <div key={`${bidder.bidderId}-${bidder.isDenied ? `denied-${bidder.bestAmount}` : "active"}`}>
                 <BidderCard
                   bidder={bidder}
                   isOpen={openBidderId === bidder.bidderId}
@@ -1051,13 +1123,15 @@ export function SellerView({
               className="flex w-full items-center justify-center gap-1.5 py-3 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
             >
               {t("showMoreBidders", {
-                count: uniqueBidders.length - INITIAL_LIMIT,
+                count: visibleBidders.length - INITIAL_LIMIT,
               })}
               <ChevronDown className="size-3" />
             </button>
           )}
         </>
       )}
+
+      </div>{/* end scrollable bid area */}
 
       {/* Footer — close auction (hidden when instant buy pending) */}
       {cardsExpandable && !ibPending && (

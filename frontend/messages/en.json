@@ -903,6 +903,8 @@
     "cancelledBids": "Cancelled bids · {count}",
     "error_instant_buy_accept_failed": "Couldn't accept the instant buy. Try again.",
     "error_instant_buy_decline_failed": "Couldn't decline the instant buy. Try again.",
+    "activeTab": "Active · {count}",
+    "allTab": "All · {count}",
 
     "soldStamp": "Sold",
     "soldToPrefix": "to",

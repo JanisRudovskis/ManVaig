@@ -17,10 +17,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "@/components/user-avatar";
-import { SellerView } from "@/components/seller-offers-popup";
+import { SellerView, BidderCard, SectionDivider } from "@/components/seller-offers-popup";
 import { formatPrice, isEnded } from "@/components/item-card-shared";
 import { placeBid, placeInstantBuy } from "@/lib/items";
-import type { BidListResponse, BidResponse } from "@/lib/items";
+import type { BidListResponse, BidResponse, UniqueBidder } from "@/lib/items";
 import { useOffersBids, INITIAL_LIMIT } from "@/hooks/use-offers-bids";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -959,114 +959,76 @@ function TickerBidForm({
   );
 }
 
-// ─── Denied bid card (buyer view) ───────────────────────────────────
-
-function DeniedBidCard({
-  bid,
-  t,
-}: {
-  bid: BidResponse;
-  t: (key: string, values?: Record<string, string | number>) => string;
-}) {
-  const [detailExpanded, setDetailExpanded] = useState(false);
-
-  return (
-    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl bg-ticker-bg-2 p-[12px_12px_12px_14px] opacity-50">
-      <UserAvatar
-        displayName={bid.bidderName}
-        avatarUrl={bid.bidderAvatarUrl}
-        size="base"
-      />
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[14.5px] font-medium text-ticker-dim">
-            {bid.bidderName}
-          </span>
-          <span className="shrink-0 rounded-full bg-ticker-red/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-red">
-            {t("deniedPill")}
-          </span>
-          {bid.isOwnBid && (
-            <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
-              {t("you").toLowerCase()}
-            </span>
-          )}
-        </div>
-        <div className="text-[12px] text-ticker-dim">
-          {bid.denyReason ? (
-            <>
-              {t(`denyReason_${bid.denyReason}` as Parameters<typeof t>[0])}
-              {bid.denyDetail && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDetailExpanded((v) => !v);
-                  }}
-                  className="ml-1 inline text-[11px] text-ticker-mid underline decoration-ticker-dim/40 underline-offset-2 hover:text-ticker-text"
-                >
-                  {detailExpanded ? t("seeLess") : t("seeMore")}
-                </button>
-              )}
-            </>
-          ) : (
-            timeAgo(bid.createdAt)
-          )}
-        </div>
-      </div>
-      <span className="font-[family-name:var(--font-ticker)] text-[20px] font-bold tracking-[-0.01em] tabular-nums text-ticker-dim line-through">
-        {formatPrice(bid.amount)}
-      </span>
-
-      {/* Expanded deny detail */}
-      {detailExpanded && bid.denyDetail && (
-        <div className="col-span-full mt-1 break-all rounded-lg bg-ticker-bg-3 px-3 py-2 text-[12px] italic text-ticker-mid opacity-75">
-          &ldquo;{bid.denyDetail}&rdquo;
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 12. Show-all expand ─────────────────────────────────────────────
+// ─── 12. Bid list with Active/All tabs ──────────────────────────────
 
 function TickerExpandedBids({
   data,
-  derived,
-  expanded,
-  hasMore,
-  onLoadMore,
-  onCollapse,
   onUserClick,
   t,
 }: {
   data: BidListResponse;
-  derived: ReturnType<typeof useDerivedBidData>;
-  expanded: boolean;
-  hasMore: boolean;
-  onLoadMore: () => void;
-  onCollapse: () => void;
   onUserClick: (displayName: string) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
-  const { myBid, myBidRank } = derived;
-  const hasMyBid = myBid != null && myBidRank != null;
-  const hasDenied = data.bids.some(b => b.status === "Denied");
-
   const hasInstantBuy = data.bids.some(b => b.status === "InstantBuy");
 
-  if (data.totalBids === 0 && !hasDenied && !hasMyBid && !hasInstantBuy) return null;
+  // ── Tab state: "active" (default) or "all" (active + denied) ──
+  const STORAGE_KEY = "offers-popup.showDenied";
+  const [tab, setTabState] = useState<"active" | "all">(() => {
+    if (typeof window === "undefined") return "active";
+    return window.localStorage.getItem(STORAGE_KEY) === "1" ? "all" : "active";
+  });
+  const setTab = (next: "active" | "all") => {
+    setTabState(next);
+    try { window.localStorage.setItem(STORAGE_KEY, next === "all" ? "1" : "0"); } catch {}
+  };
 
+  // ── Bid lists ──
   const activeBids = data.bids.filter(b => b.status === "Active");
   const instantBuyBids = data.bids.filter(b => b.status === "InstantBuy");
-  // Filter out denied IB bids — only show denied regular bids
   const ibDenyReasons = new Set(["instant_buy_declined", "sale_reopened", "auction_ended"]);
   const deniedBids = data.bids.filter(b => b.status === "Denied" && !ibDenyReasons.has(b.denyReason ?? ""));
+  const hasDenied = deniedBids.length > 0;
+
+  if (data.totalBids === 0 && !hasDenied && !hasInstantBuy) return null;
+
+  // ── Map individual bids → UniqueBidder shape for BidderCard ──
+  const bidToBidder = (bid: BidResponse): UniqueBidder => ({
+    bidderId: bid.bidderId,
+    bidderName: bid.bidderName,
+    bidderAvatarUrl: bid.bidderAvatarUrl,
+    bestAmount: bid.amount,
+    bidCount: 1,
+    lastBidAt: bid.createdAt,
+    isTop: bid.status === "Active" && activeBids.indexOf(bid) === 0,
+    isDenied: bid.status === "Denied",
+    denyReason: bid.denyReason,
+    denyDetail: bid.denyDetail,
+  });
+
+  // Active tab: only active bids, sorted by amount desc (same as seller)
+  const activeBidders = activeBids.map(bidToBidder);
+  // All tab: active + denied, sorted by amount desc
+  const allBidders = [...activeBids, ...deniedBids]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map(bidToBidder);
+
+  const currentList = tab === "all" ? allBidders : activeBidders;
+  const [listExpanded, setListExpanded] = useState(false);
+  // Reset expansion when switching tabs
+  const prevTab = useRef(tab);
+  if (prevTab.current !== tab) { prevTab.current = tab; if (listExpanded) setListExpanded(false); }
+
+  const slicedList = listExpanded ? currentList : currentList.slice(0, INITIAL_LIMIT);
+  const hasMoreInList = !listExpanded && currentList.length > INITIAL_LIMIT;
+
+  const noop = () => {};
 
   return (
-    <div className="flex-none">
-      {/* Instant buy section — at the top, read-only amber card */}
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Instant buy section — read-only amber card */}
       {instantBuyBids.length > 0 && (
         <div className="flex flex-col gap-1.5 px-4 pt-3 pb-2">
-          {/* Section divider */}
           <div className="flex items-center gap-2.5 px-1 pb-1 pt-1">
             <span className="flex items-center gap-1.5 flex-none font-[family-name:var(--font-ticker)] text-[10px] font-bold uppercase tracking-[0.24em] text-ticker-amber">
               <Zap className="size-[11px]" strokeWidth={2.4} />
@@ -1112,159 +1074,76 @@ function TickerExpandedBids({
         </div>
       )}
 
-      {/* Your active bid — always visible at top */}
-      {hasMyBid && (
-        <div className="flex flex-col gap-2 px-4 py-3">
+      {/* ── Active / All tabs — only show when there are denied bids ── */}
+      {hasDenied && (
+        <div className="flex flex-none items-center gap-0 px-3.5 pt-2.5 pb-1">
           <button
-            onClick={() => onUserClick(myBid.bidderName)}
+            type="button"
+            onClick={() => setTab("active")}
             className={cn(
-              "grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl bg-ticker-bg-2 p-[12px_12px_12px_14px] text-left",
-              myBidRank === 1 && "border border-ticker-emer/[0.22] bg-[oklch(0.78_0.18_165/0.08)]"
+              "rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              tab === "active"
+                ? "bg-ticker-bg-2 text-ticker-text"
+                : "text-ticker-mid hover:text-ticker-text",
             )}
           >
-            <UserAvatar
-              displayName={myBid.bidderName}
-              avatarUrl={myBid.bidderAvatarUrl}
-              size="base"
-            />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[14.5px] font-medium text-ticker-text">
-                  {myBid.bidderName}
-                </span>
-                <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
-                  {t("you").toLowerCase()}
-                </span>
-                {data.isSold && data.soldTo?.buyerId === myBid.bidderId ? (
-                  <span className="shrink-0 rounded-[3px] bg-ticker-emer px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-[oklch(0.15_0_0)]">
-                    {t("buyer").toUpperCase()}
-                  </span>
-                ) : myBidRank === 1 ? (
-                  <span
-                    className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md bg-ticker-emer/15 text-ticker-emer"
-                    aria-label={t("topBidder")}
-                    title={t("topBidder")}
-                  >
-                    <CrownIcon className="size-4" />
-                  </span>
-                ) : null}
-              </div>
-              <div className="text-[12px] text-ticker-dim">
-                #{myBidRank} · {timeAgo(myBid.createdAt)}
-              </div>
-            </div>
-            <span
-              className={cn(
-                "font-[family-name:var(--font-ticker)] text-[20px] font-bold tracking-[-0.01em] tabular-nums",
-                myBidRank === 1 ? "text-ticker-emer" : "text-ticker-text"
-              )}
-            >
-              {formatPrice(myBid.amount)}
-            </span>
+            {t("activeTab", { count: activeBids.length })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("all")}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              tab === "all"
+                ? "bg-ticker-bg-2 text-ticker-text"
+                : "text-ticker-mid hover:text-ticker-text",
+            )}
+          >
+            {t("allTab", { count: activeBids.length + deniedBids.length })}
           </button>
         </div>
       )}
 
-      {/* Active bid cards — shown when expanded */}
-      {expanded && (
-        <div className="flex flex-col gap-2 border-t border-ticker-line px-4 pt-3">
-          {activeBids.map((bid, index) => {
-            const isTop = index === 0;
-            return (
-              <button
-                key={bid.id}
-                onClick={() => onUserClick(bid.bidderName)}
-                className={cn(
-                  "grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl bg-ticker-bg-2 p-[12px_12px_12px_14px] text-left",
-                  isTop && "border border-ticker-emer/[0.22] bg-[oklch(0.78_0.18_165/0.08)]"
-                )}
-              >
-                <UserAvatar
-                  displayName={bid.bidderName}
-                  avatarUrl={bid.bidderAvatarUrl}
-                  size="base"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[14.5px] font-medium text-ticker-text">
-                      {bid.bidderName}
-                    </span>
-                    {bid.isOwnBid && (
-                      <span className="shrink-0 rounded-full bg-ticker-emer/15 px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-ticker-emer">
-                        {t("you").toLowerCase()}
-                      </span>
-                    )}
-                    {data.isSold && data.soldTo?.buyerId === bid.bidderId ? (
-                      <span className="shrink-0 rounded-[3px] bg-ticker-emer px-1.5 py-[2px] font-[family-name:var(--font-ticker)] text-[9.5px] font-bold uppercase tracking-[0.14em] text-[oklch(0.15_0_0)]">
-                        {t("buyer").toUpperCase()}
-                      </span>
-                    ) : isTop && !data.isSold ? (
-                      <span
-                        className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md bg-ticker-emer/15 text-ticker-emer"
-                        aria-label={t("topBidder")}
-                        title={t("topBidder")}
-                      >
-                        <CrownIcon className="size-4" />
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-[12px] text-ticker-dim">
-                    #{index + 1} · {timeAgo(bid.createdAt)}
-                  </div>
-                </div>
-                <span
-                  className={cn(
-                    "font-[family-name:var(--font-ticker)] text-[20px] font-bold tracking-[-0.01em] tabular-nums",
-                    isTop ? "text-ticker-emer" : "text-ticker-text"
-                  )}
-                >
-                  {formatPrice(bid.amount)}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Load more */}
-          {hasMore && (
+      {/* ── Bid list — BidderCard for all entries, matches seller 1:1 ── */}
+      {currentList.length > 0 && (
+        <div className="space-y-1.5 px-3.5 pb-2.5 pt-1.5">
+          <SectionDivider kind="bidders" count={activeBids.length} t={t} />
+          {slicedList.map((bidder) => (
+            <BidderCard
+              key={`${bidder.bidderId}-${bidder.isDenied ? `denied-${bidder.bestAmount}` : "active"}`}
+              bidder={bidder}
+              isOpen={false}
+              sellPending={false}
+              confirming={false}
+              expandable={false}
+              showSell={false}
+              isBuyer={false}
+              onToggle={noop}
+              onDeny={noop}
+              onSellTap={noop}
+              onSellCancel={noop}
+              onSellConfirm={noop}
+              onMessage={noop}
+              onUserClick={onUserClick}
+              t={t}
+            />
+          ))}
+          {hasMoreInList && (
             <button
-              onClick={onLoadMore}
-              className="flex w-full items-center justify-center gap-1.5 py-2.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
+              onClick={() => setListExpanded(true)}
+              className="flex w-full items-center justify-center gap-1.5 py-3 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
             >
-              {t("loadMoreOffers", { count: data.totalBids - activeBids.length })}
+              {t("showMoreBidders", { count: currentList.length - INITIAL_LIMIT })}
               <ChevronDown className="size-3" />
             </button>
           )}
-          {/* Collapse */}
-          <button
-            onClick={onCollapse}
-            className="flex w-full items-center justify-center gap-1.5 py-2.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
-          >
-            {t("showLess")}
-          </button>
         </div>
       )}
 
-      {/* "Show all offers" link — collapsed state */}
-      {!expanded && data.totalBids > 1 && (
-        <button
-          onClick={onLoadMore}
-          className="flex w-full items-center justify-center gap-1.5 py-3.5 text-[12.5px] text-ticker-mid transition-colors hover:text-ticker-text"
-        >
-          {t("showAllOffers")}
-          <ChevronDown className="size-3" />
-        </button>
-      )}
-
-      {/* Denied bid cards — always visible at the bottom */}
-      {deniedBids.length > 0 && (
-        <div className={cn(
-          "flex flex-col gap-2 px-4 pb-2",
-          !expanded && data.totalBids <= 1 && "border-t border-ticker-line pt-3",
-          expanded && "pt-0"
-        )}>
-          {deniedBids.map((bid) => (
-            <DeniedBidCard key={bid.id} bid={bid} t={t} />
-          ))}
+      {/* Empty state */}
+      {currentList.length === 0 && !hasInstantBuy && (
+        <div className="flex items-center justify-center py-8">
+          <span className="text-[13px] text-ticker-dim">{t("noBidsYet")}</span>
         </div>
       )}
     </div>
@@ -1400,7 +1279,7 @@ export function OffersPopup({
               />
             ) : (
               /* ── Buyer view ── */
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div className="flex min-h-0 flex-1 flex-col">
 
                 {/* Bid form — hidden when auction ended */}
                 {!auctionEnded && (
@@ -1419,11 +1298,6 @@ export function OffersPopup({
                 {/* Show all / expanded list */}
                 <TickerExpandedBids
                   data={bids.data}
-                  derived={derived}
-                  expanded={bids.expanded}
-                  hasMore={bids.hasMore}
-                  onLoadMore={bids.loadMore}
-                  onCollapse={bids.collapseAll}
                   onUserClick={handleUserClick}
                   t={t}
                 />

@@ -903,6 +903,8 @@
     "cancelledBids": "Atceltie piedāvājumi · {count}",
     "error_instant_buy_accept_failed": "Neizdevās apstiprināt tūlītējo pirkumu. Mēģiniet vēlreiz.",
     "error_instant_buy_decline_failed": "Neizdevās noraidīt tūlītējo pirkumu. Mēģiniet vēlreiz.",
+    "activeTab": "Aktīvie · {count}",
+    "allTab": "Visi · {count}",
 
     "soldStamp": "Pārdots",
     "soldToPrefix": "pircējs",

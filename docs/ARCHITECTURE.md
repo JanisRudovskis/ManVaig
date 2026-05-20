@@ -1,7 +1,7 @@
 # ManVaig — Architecture Guide
 
 > How the project works. Updated after every completed feature.
-> Last updated: 2026-05-20 (Instant buy redesign: IB shown as expandable card in bid list under INSTANT BUY divider (seller + buyer views), removed floating SellerInstantBuyCard. SoldHero shows amber IB kicker when sold via instant buy. Sold-via-IB shows CANCELLED BIDS section. AuctionEnded notification now carries winner info. Denied IB bids hidden from buyer view.)
+> Last updated: 2026-05-20 (Denied bids: Active/All tabs in both seller + buyer offer popups. Active tab shows active bidders only, All tab interleaves active + denied bids sorted by date desc. Both views use shared BidderCard component. Denied bids from data.bids with IB deny-reason filter. Bid list scrolls independently — summary/footer stay pinned. Tab state persisted in localStorage.)
 
 ---
 
